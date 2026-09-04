@@ -490,7 +490,16 @@ export function getMediaRoot(
 ): MediaBrowseResult {
     const available = Object.keys(services || {});
     const used = new Set<string>();
-    const items: MediaBrowseItem[] = [mediaItem({ id: 'R:0', title: labels.radio, folder: true })];
+    const items: MediaBrowseItem[] = [
+        mediaItem({
+            id: 'tv',
+            title: labels.tv,
+            artist: labels.tvHdmi,
+            uri: playerUuid ? tvStreamUri(playerUuid) : '',
+            folder: false,
+        }),
+        mediaItem({ id: 'R:0', title: labels.radio, folder: true }),
+    ];
 
     const addService = (name: string): void => {
         const key = name.toLowerCase();
@@ -513,13 +522,6 @@ export function getMediaRoot(
     items.push(
         mediaItem({ id: 'A:', title: labels.library, folder: true }),
         mediaItem({ id: 'S:', title: labels.shares, folder: true }),
-        mediaItem({
-            id: 'tv',
-            title: labels.tv,
-            artist: labels.tvHdmi,
-            uri: playerUuid ? tvStreamUri(playerUuid) : '',
-            folder: false,
-        }),
         mediaItem({ id: 'AI:', title: labels.lineIn, folder: true }),
     );
 

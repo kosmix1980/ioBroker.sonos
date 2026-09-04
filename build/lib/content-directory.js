@@ -447,7 +447,16 @@ function nowPlayingLabels(track, labels, extra) {
 function getMediaRoot(services, labels, playerUuid) {
     const available = Object.keys(services || {});
     const used = new Set();
-    const items = [mediaItem({ id: 'R:0', title: labels.radio, folder: true })];
+    const items = [
+        mediaItem({
+            id: 'tv',
+            title: labels.tv,
+            artist: labels.tvHdmi,
+            uri: playerUuid ? tvStreamUri(playerUuid) : '',
+            folder: false,
+        }),
+        mediaItem({ id: 'R:0', title: labels.radio, folder: true }),
+    ];
     const addService = (name) => {
         const key = name.toLowerCase();
         if (used.has(key)) {
@@ -464,13 +473,7 @@ function getMediaRoot(services, labels, playerUuid) {
             addService(match);
         }
     });
-    items.push(mediaItem({ id: 'A:', title: labels.library, folder: true }), mediaItem({ id: 'S:', title: labels.shares, folder: true }), mediaItem({
-        id: 'tv',
-        title: labels.tv,
-        artist: labels.tvHdmi,
-        uri: playerUuid ? tvStreamUri(playerUuid) : '',
-        folder: false,
-    }), mediaItem({ id: 'AI:', title: labels.lineIn, folder: true }));
+    items.push(mediaItem({ id: 'A:', title: labels.library, folder: true }), mediaItem({ id: 'S:', title: labels.shares, folder: true }), mediaItem({ id: 'AI:', title: labels.lineIn, folder: true }));
     available.sort((a, b) => a.localeCompare(b)).forEach(name => addService(name));
     return { id: 'root', title: '', items };
 }

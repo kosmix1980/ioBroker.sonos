@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.9',
+        version: '4.3.10',
         _bound: {},
         _tickers: {},
         words: {
@@ -761,12 +761,12 @@ vis.binds = vis.binds || {};
 
         defaultRootItems: function () {
             return [
+                { id: 'tv', title: vis.binds.sonos.t('tv'), artist: vis.binds.sonos.t('tvHdmi') },
                 { id: 'R:0', title: vis.binds.sonos.t('radio'), folder: true },
                 { id: 'service:Spotify', title: 'Spotify', folder: true, service: true },
                 { id: 'service:YouTube Music', title: 'YouTube Music', folder: true, service: true },
                 { id: 'A:', title: vis.binds.sonos.t('library'), folder: true },
                 { id: 'S:', title: vis.binds.sonos.t('shares'), folder: true },
-                { id: 'tv', title: vis.binds.sonos.t('tv'), artist: vis.binds.sonos.t('tvHdmi') },
                 { id: 'AI:', title: vis.binds.sonos.t('lineIn'), folder: true },
             ];
         },
@@ -1045,8 +1045,7 @@ vis.binds = vis.binds || {};
                 : '<div class="sonos-ctrl-cover"' + (cover ? ' style="background-image:url(\'' + vis.binds.sonos.esc(cover) + '\')"' : '') + '>' +
                     (cover ? '' : 'SONOS') + '</div>';
             var buttonsHtml = now.isTv
-                ? '<button type="button" class="sonos-ctrl-btn sonos-ctrl-btn-play" data-cmd="' + (playing ? 'pause' : 'play') + '" title="Play/Pause">' + (playing ? '&#10073;&#10073;' : '&#9654;') + '</button>' +
-                    '<button type="button" class="sonos-ctrl-btn' + (muted ? ' is-on' : '') + '" data-cmd="mute" title="Mute">' + (muted ? '&#128263;' : '&#128266;') + '</button>'
+                ? '<button type="button" class="sonos-ctrl-btn' + (muted ? ' is-on' : '') + '" data-cmd="mute" title="Mute">' + (muted ? '&#128263;' : '&#128266;') + '</button>'
                 : '<button type="button" class="sonos-ctrl-btn" data-cmd="prev" title="Prev">&#9198;</button>' +
                     '<button type="button" class="sonos-ctrl-btn sonos-ctrl-btn-play" data-cmd="' + (playing ? 'pause' : 'play') + '" title="Play/Pause">' + (playing ? '&#10073;&#10073;' : '&#9654;') + '</button>' +
                     '<button type="button" class="sonos-ctrl-btn" data-cmd="next" title="Next">&#9197;</button>' +

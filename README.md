@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.10 (2026-09-04)
+* (kosmix1980) VIS widget: hide play/pause on TV HDMI (mute stays); TV HDMI is first in Sources
+
 ### 4.3.9 (2026-09-04)
 * (kosmix1980) VIS widget: Night sound and speech enhancement on TV HDMI; audio format via HTAudioIn; remember last room
 
