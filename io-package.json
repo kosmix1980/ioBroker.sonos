@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.12",
+    "version": "4.3.13",
     "news": {
+      "4.3.13": {
+        "en": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it.",
+        "de": "Favoriten, Playlists, Warteschlange, Zuletzt und Quellen sind Buttons oben. Ein Klick öffnet ein Popup unter den Buttons über dem Player; Titel oder Klick daneben schließt es.",
+        "ru": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it.",
+        "pt": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it.",
+        "nl": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it.",
+        "fr": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it.",
+        "it": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it.",
+        "es": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it.",
+        "pl": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it.",
+        "uk": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it.",
+        "zh-cn": "Library tabs are buttons at the top. They open a popup below the buttons that covers the player; a title or an outside click closes it."
+      },
       "4.3.12": {
         "en": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
         "de": "Die HDMI-Kompression wird geleert, wenn das TV-Signal endet, wie in der Sonos-App.",
@@ -249,19 +262,6 @@
         "pl": "Naprawiono TTS: bez podania głośności w nazwie pliku, komunikat był odtwarzany z głośnością 0\nNaprawiono natychmiastowe zatrzymanie TTS: stan sprzed TTS nie został przywrócony, a TTS pozostał zablokowany\nWyciszony gracz zostaje teraz wyciszony na czas ogłoszenia, a następnie wyciszony ponownie\nPusta wartość w stanie `tts` zatrzymuje uruchomione ogłoszenie\nAdapter został przeniesiony do TypeScript i teraz opiera się na klasach\nObiekt urządzenia „root” jest teraz tworzony przez js-controller z pliku io-package.json\nBrakujące stany już istniejących urządzeń zostaną utworzone na początku\nNaprawiono błąd występujący, gdy `favorites_set` został wywołany z pustą wartością\nDodano obsługę informacji o tonach wysokich i niskich\nprzechowuje pliki tts w plikach zamiast stanów binarnych",
         "uk": "Виправлено TTS: без гучності в назві файлу оголошення відтворювалося з гучністю 0\nВиправлено негайну зупинку TTS: стан до TTS не відновлювався, і TTS залишався заблокованим.\nЗвук гравця, у якого вимкнено звук, тепер увімкнено під час оголошення, а потім знову ввімкнено.\nПусте значення у стані `tts` зупиняє виконання оголошення\nАдаптер було перенесено на TypeScript і тепер базується на класах\nОб'єкт пристрою \"root\" тепер створюється js-controller з io-package.json\nВідсутні стани вже існуючих пристроїв будуть створені на початку.\nВиправлено помилку, якщо `favorites_set` викликався з пустим значенням\nДодано підтримку інформації про високі та низькі частоти\nзберігає файли tts у файлах, а не у двійкових станах",
         "zh-cn": "已修复TTS问题：文件名中未包含音量信息时，语音提示会以0音量播放。\n修复了 TTS 立即停止的问题：TTS 停止前的状态无法恢复，TTS 一直处于阻塞状态。\n一名被静音的玩家现在被解除静音以进行公告，公告结束后再次被静音。\n`tts` 状态中的空值会停止正在播放的公告\n适配器已迁移到 TypeScript，现在基于类。\n现在，js-controller 会根据 io-package.json 创建“root”设备对象。\n启动时将创建已存在设备的缺失状态。\n修复了当 `favorites_set` 调用时传入空值时出现的错误。\n增加了对高音和低音信息的支持\n将 tts 文件存储在文件中，而不是二进制状态中。"
-      },
-      "3.0.0": {
-        "en": "Added support for the playing Sonos playlists (added new state `playlist_set`)\nThe minimal node.js version is 16",
-        "de": "Unterstützung für das Spielen Sonos Playlists (zusätzliche neue Zustand playlist_set)\nDie minimal node.js Version ist 16",
-        "ru": "Добавлена поддержка плейлистов Sonos (добавлена новая государственная playlist_set)\nМинимальная версия node.js 16",
-        "pt": "Adicionado suporte para o jogo Sonos playlists (adicionado novo estado playlist_set)\nA versão node.js mínima é 16",
-        "nl": "Gevoegd ondersteuning voor de spelende Sonos playlists (aded new State playlistset)\nDe minimale node is 16",
-        "fr": "Ajout du support pour le jeu Sonos playlists (added new state playlist_set)\nLa version minimale node.js est 16",
-        "it": "Aggiunto supporto per la riproduzione di playlist Sonos (aggiunto nuovo stato playlist_set)\nLa versione minimal node.js è 16",
-        "es": "Añadido soporte para las listas de reproducción Sonos (added new state list_set)\nLa versión mínima node.js es 16",
-        "pl": "Dodany wsparcie dla odtwarzania Sonos (zamówionej przez nową listę playlistów stanu)\nWersja minimalna jest 16",
-        "uk": "Додана підтримка ігрових списків Sonos (зробила новий державний список_сет)\nВерсія Mini node.js 16",
-        "zh-cn": "增加对女企业家的支持(新的国名录_set)\n最小的字样为16。"
       }
     },
     "titleLang": {

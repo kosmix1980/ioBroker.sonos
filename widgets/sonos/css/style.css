@@ -17,6 +17,7 @@
     font-size: 13px;
     border-radius: 12px;
     overflow: hidden;
+    position: relative;
 }
 
 .sonos-ctrl *,
@@ -100,11 +101,20 @@
     opacity: 0.45;
 }
 
+.sonos-ctrl-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
 .sonos-ctrl-main {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     display: grid;
     grid-template-columns: 148px 1fr;
     gap: 14px;
+    align-content: start;
     min-height: 148px;
 }
 
@@ -257,22 +267,52 @@
 .sonos-ctrl-tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 6px;
+    gap: 6px;
+    flex: 0 0 auto;
 }
 
 .sonos-ctrl-tab {
     border: 0;
-    background: transparent;
-    color: #9a9a9a;
-    padding: 6px 8px;
+    background: #2a2a2a;
+    color: #f3f3f3;
+    padding: 7px 12px;
     cursor: pointer;
-    border-bottom: 2px solid transparent;
+    border-radius: 999px;
     flex: 0 0 auto;
+    font: inherit;
+}
+
+.sonos-ctrl-tab:hover {
+    background: #3a3a3a;
 }
 
 .sonos-ctrl-tab.is-active {
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
     color: #fff;
-    border-bottom-color: #f15b2a;
+    font-weight: 600;
+}
+
+.sonos-ctrl-sheet-dismiss {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: rgba(0, 0, 0, 0.35);
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+.sonos-ctrl-sheet {
+    position: absolute;
+    inset: 6px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: #1b1b1b;
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
 }
 
 .sonos-ctrl-list {
@@ -280,7 +320,7 @@
     min-height: 0;
     overflow: auto;
     background: #1b1b1b;
-    border-radius: 10px;
+    border-radius: 0 0 10px 10px;
 }
 
 .sonos-ctrl-item {

@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.12',
+        version: '4.3.13',
         _bound: {},
         _tickers: {},
         words: {
@@ -107,6 +107,7 @@ vis.binds = vis.binds || {};
 
             var instance = vis.binds.sonos.resolveInstance(oid);
             $div.data('sonos-tab', $div.data('sonos-tab') || 'favorites');
+            $div.data('sonos-sheet', !!$div.data('sonos-sheet'));
             $div.data('sonos-player', $div.data('sonos-player') || vis.binds.sonos.loadRoom(widgetID, instance) || '');
 
             vis.binds.sonos.unbind(widgetID);
@@ -499,6 +500,7 @@ vis.binds = vis.binds || {};
                 }
             });
             vis.binds.sonos._bound[widgetID] = [];
+            $(document).off('mousedown.sonosSheet' + widgetID);
         },
 
         bindStates: function (widgetID, instance) {
@@ -769,6 +771,38 @@ vis.binds = vis.binds || {};
             ];
         },
 
+        filterQuery: function (items, query, textFn) {
+            var q = String(query || '').trim().toLowerCase();
+            if (!q) {
+                return items;
+            }
+            return items.filter(function (item) {
+                return String(textFn(item) || '').toLowerCase().indexOf(q) !== -1;
+            });
+        },
+
+        applySheetFilter: function ($div) {
+            var q = String($div.data('sonos-sheet-query') || '').trim().toLowerCase();
+            var visible = 0;
+            $div.find('.sonos-ctrl-sheet .sonos-ctrl-item').each(function () {
+                var ok = !q || ($(this).text() || '').toLowerCase().indexOf(q) !== -1;
+                $(this).toggle(ok);
+                if (ok) {
+                    visible += 1;
+                }
+            });
+            var $empty = $div.find('.sonos-ctrl-sheet-filter-empty');
+            if ($empty.length) {
+                $empty.toggle(Boolean(q && !visible));
+            }
+        },
+
+        closeLibrary: function ($div, instance) {
+            $div.data('sonos-sheet', false);
+            $div.data('sonos-sheet-query', '');
+            vis.binds.sonos.render($div.attr('id'), instance);
+        },
+
         browseItemButton: function (item) {
             var payload = encodeURIComponent(JSON.stringify({
                 id: item.id || '',
@@ -876,6 +910,9 @@ vis.binds = vis.binds || {};
             $div.data('sonos-player', selected.ip);
             vis.binds.sonos.saveRoom(widgetID, instance, selected.ip);
             var tab = $div.data('sonos-tab') || 'favorites';
+            var sheetOpen = !!$div.data('sonos-sheet');
+            var query = String($div.data('sonos-sheet-query') || '');
+            var searchHadFocus = $div.find('.sonos-ctrl-search-input').is(':focus');
             var mediaId = vis.binds.sonos.mediaPlayerId(selected);
             var playing = vis.binds.sonos.state(mediaId, 'state') === 'play';
             var now = vis.binds.sonos.nowPlaying(mediaId);
@@ -939,27 +976,32 @@ vis.binds = vis.binds || {};
             }
 
             var listHtml = '';
-            if (tab === 'favorites') {
-                var favorites = vis.binds.sonos.parseFavorites(mediaId);
+            var serviceName = '';
+            if (sheetOpen && tab === 'favorites') {
+                var favorites = vis.binds.sonos.filterQuery(vis.binds.sonos.parseFavorites(mediaId), query, function (item) {
+                    return item.title;
+                });
                 listHtml = favorites.length
                     ? favorites.map(function (item) {
                         return '<button type="button" class="sonos-ctrl-item" data-favorite="' + vis.binds.sonos.esc(item.title) + '">' +
                             (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
                             '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div></div></button>';
                     }).join('')
-                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptyFavorites')) + '</div>';
-            } else if (tab === 'playlists') {
-                var playlists = vis.binds.sonos.parseList(
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyFavorites')) + '</div>';
+            } else if (sheetOpen && tab === 'playlists') {
+                var playlists = vis.binds.sonos.filterQuery(vis.binds.sonos.parseList(
                     vis.binds.sonos.state(mediaId, 'playlist_list_array') || vis.binds.sonos.state(mediaId, 'playlist_list')
-                );
+                ), query, function (name) { return name; });
                 listHtml = playlists.length
                     ? playlists.map(function (name) {
                         return '<button type="button" class="sonos-ctrl-item" data-playlist="' + vis.binds.sonos.esc(name) + '">' +
                             '<div class="sonos-ctrl-thumb"></div><div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(name) + '</div></div></button>';
                     }).join('')
-                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptyPlaylists')) + '</div>';
-            } else if (tab === 'recent') {
-                var recent = vis.binds.sonos.parseRecent(selected.id);
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyPlaylists')) + '</div>';
+            } else if (sheetOpen && tab === 'recent') {
+                var recent = vis.binds.sonos.filterQuery(vis.binds.sonos.parseRecent(selected.id), query, function (item) {
+                    return [item.title, item.artist, item.album, item.station].join(' ');
+                });
                 listHtml = recent.length
                     ? recent.map(function (item) {
                         return '<button type="button" class="sonos-ctrl-item" data-recent-uri="' + vis.binds.sonos.esc(item.uri || '') + '" data-recent-title="' + vis.binds.sonos.esc(item.title) + '">' +
@@ -967,8 +1009,8 @@ vis.binds = vis.binds || {};
                             '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || item.station || '') + '</div></div></button>';
                     }).join('')
-                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptyRecent')) + '</div>';
-            } else if (tab === 'sources') {
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyRecent')) + '</div>';
+            } else if (sheetOpen && tab === 'sources') {
                 var browse = vis.binds.sonos.parseBrowse(mediaId);
                 var path = $div.data('sonos-browse-path') || [];
                 var atRoot = !path.length;
@@ -985,9 +1027,12 @@ vis.binds = vis.binds || {};
                 if (atRoot && (browse.id !== 'root' || !items.length)) {
                     items = vis.binds.sonos.defaultRootItems();
                 }
-                var serviceName = (!atRoot || browse.id === 'root')
+                serviceName = (!atRoot || browse.id === 'root')
                     ? vis.binds.sonos.serviceNameFromBrowse($div, browse)
                     : '';
+                items = vis.binds.sonos.filterQuery(items, query, function (item) {
+                    return [item.title, item.artist, item.album].join(' ');
+                });
                 var backHtml = path.length
                     ? '<button type="button" class="sonos-ctrl-item" data-browse-back="1">' +
                         '<div class="sonos-ctrl-thumb"></div>' +
@@ -1003,17 +1048,13 @@ vis.binds = vis.binds || {};
                             : '') +
                         '</div>';
                 }
-                if (serviceName) {
-                    extraHtml += '<form class="sonos-ctrl-search" data-smapi-search="' + vis.binds.sonos.esc(serviceName) + '">' +
-                        '<input type="search" class="sonos-ctrl-search-input" placeholder="' + vis.binds.sonos.esc(t('search')) + '" enterkeyhint="search">' +
-                        '<button type="submit" class="sonos-ctrl-search-btn">' + vis.binds.sonos.esc(t('searchGo')) + '</button>' +
-                        '</form>';
-                }
                 listHtml = extraHtml + backHtml + (items.length
                     ? items.map(vis.binds.sonos.browseItemButton).join('')
-                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(path.length ? t('noSearchHits') : t('emptySources')) + '</div>');
-            } else {
-                var queue = vis.binds.sonos.parseQueue(mediaId);
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(path.length || query ? t('noSearchHits') : t('emptySources')) + '</div>');
+            } else if (sheetOpen) {
+                var queue = vis.binds.sonos.filterQuery(vis.binds.sonos.parseQueue(mediaId), query, function (item) {
+                    return [item.title, item.artist, item.album].join(' ');
+                });
                 var currentNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
                 listHtml = queue.length
                     ? queue.map(function (item) {
@@ -1024,7 +1065,7 @@ vis.binds = vis.binds || {};
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || '') + '</div></div>' +
                             '<div>' + item.no + '</div></button>';
                     }).join('')
-                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptyQueue')) + '</div>';
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyQueue')) + '</div>';
             }
 
             var sub = [artist, album].filter(Boolean).join(' — ');
@@ -1064,6 +1105,28 @@ vis.binds = vis.binds || {};
                     '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(duration) + '</span>' +
                 '</div>';
 
+            var tabsHtml =
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'favorites' ? ' is-active' : '') + '" data-tab="favorites">' + vis.binds.sonos.esc(t('favorites')) + '</button>' +
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'playlists' ? ' is-active' : '') + '" data-tab="playlists">' + vis.binds.sonos.esc(t('playlists')) + '</button>' +
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'queue' ? ' is-active' : '') + '" data-tab="queue">' + vis.binds.sonos.esc(t('queue')) + '</button>' +
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'recent' ? ' is-active' : '') + '" data-tab="recent">' + vis.binds.sonos.esc(t('recent')) + '</button>' +
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'sources' ? ' is-active' : '') + '" data-tab="sources">' + vis.binds.sonos.esc(t('sources')) + '</button>';
+            var searchHtml = '<form class="sonos-ctrl-search"' +
+                (serviceName ? ' data-smapi-search="' + vis.binds.sonos.esc(serviceName) + '"' : '') + '>' +
+                '<input type="search" class="sonos-ctrl-search-input" value="' + vis.binds.sonos.esc(query) + '" placeholder="' + vis.binds.sonos.esc(t('search')) + '" enterkeyhint="search">' +
+                (serviceName ? '<button type="submit" class="sonos-ctrl-search-btn">' + vis.binds.sonos.esc(t('searchGo')) + '</button>' : '') +
+                '</form>';
+            var sheetHtml = sheetOpen
+                ? '<button type="button" class="sonos-ctrl-sheet-dismiss" aria-label="Close"></button>' +
+                    '<div class="sonos-ctrl-sheet">' +
+                        searchHtml +
+                        '<div class="sonos-ctrl-list">' +
+                            listHtml +
+                            '<div class="sonos-ctrl-empty sonos-ctrl-sheet-filter-empty" style="display:none">' + vis.binds.sonos.esc(t('noSearchHits')) + '</div>' +
+                        '</div>' +
+                    '</div>'
+                : '';
+
             $div.html(
                 '<div class="sonos-ctrl">' +
                     '<div class="sonos-ctrl-header">' +
@@ -1071,45 +1134,48 @@ vis.binds = vis.binds || {};
                         '<span class="sonos-ctrl-ver">' + vis.binds.sonos.esc(vis.binds.sonos.version) + '</span>' +
                         '<div class="sonos-ctrl-rooms">' + roomsHtml + '</div>' +
                     '</div>' +
-                    '<div class="sonos-ctrl-main">' +
-                        coverHtml +
-                        '<div class="sonos-ctrl-meta">' +
-                            '<div class="sonos-ctrl-title">' + vis.binds.sonos.esc(title) + '</div>' +
-                            '<div class="sonos-ctrl-sub">' + vis.binds.sonos.esc(sub) + '</div>' +
-                            '<div class="sonos-ctrl-buttons">' + buttonsHtml + '</div>' +
-                            seekHtml +
-                            '<div class="sonos-ctrl-volume">' +
-                                '<span>Vol</span>' +
-                                '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-volume-input" value="' + volume + '">' +
-                                '<span class="sonos-ctrl-time">' + volume + '</span>' +
+                    '<div class="sonos-ctrl-tabs">' + tabsHtml + '</div>' +
+                    '<div class="sonos-ctrl-body">' +
+                        '<div class="sonos-ctrl-main">' +
+                            coverHtml +
+                            '<div class="sonos-ctrl-meta">' +
+                                '<div class="sonos-ctrl-title">' + vis.binds.sonos.esc(title) + '</div>' +
+                                '<div class="sonos-ctrl-sub">' + vis.binds.sonos.esc(sub) + '</div>' +
+                                '<div class="sonos-ctrl-buttons">' + buttonsHtml + '</div>' +
+                                seekHtml +
+                                '<div class="sonos-ctrl-volume">' +
+                                    '<span>Vol</span>' +
+                                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-volume-input" value="' + volume + '">' +
+                                    '<span class="sonos-ctrl-time">' + volume + '</span>' +
+                                '</div>' +
+                                htHtml +
+                                '<div class="sonos-ctrl-groups">' + groupHtml + '</div>' +
                             '</div>' +
-                            htHtml +
-                            '<div class="sonos-ctrl-groups">' + groupHtml + '</div>' +
                         '</div>' +
+                        sheetHtml +
                     '</div>' +
-                    '<div class="sonos-ctrl-tabs">' +
-                        '<button type="button" class="sonos-ctrl-tab' + (tab === 'favorites' ? ' is-active' : '') + '" data-tab="favorites">' + vis.binds.sonos.esc(t('favorites')) + '</button>' +
-                        '<button type="button" class="sonos-ctrl-tab' + (tab === 'playlists' ? ' is-active' : '') + '" data-tab="playlists">' + vis.binds.sonos.esc(t('playlists')) + '</button>' +
-                        '<button type="button" class="sonos-ctrl-tab' + (tab === 'queue' ? ' is-active' : '') + '" data-tab="queue">' + vis.binds.sonos.esc(t('queue')) + '</button>' +
-                        '<button type="button" class="sonos-ctrl-tab' + (tab === 'recent' ? ' is-active' : '') + '" data-tab="recent">' + vis.binds.sonos.esc(t('recent')) + '</button>' +
-                        '<button type="button" class="sonos-ctrl-tab' + (tab === 'sources' ? ' is-active' : '') + '" data-tab="sources">' + vis.binds.sonos.esc(t('sources')) + '</button>' +
-                    '</div>' +
-                    '<div class="sonos-ctrl-list">' + listHtml + '</div>' +
                 '</div>'
             );
 
             vis.binds.sonos.bindUi($div, selected, players, coordinator, mediaId);
             vis.binds.sonos.startTicker(widgetID, instance);
+            if (sheetOpen && searchHadFocus) {
+                $div.find('.sonos-ctrl-search-input').trigger('focus');
+            }
         },
 
         bindUi: function ($div, selected, players, coordinator, mediaId) {
             mediaId = mediaId || selected.id;
+            var instance = vis.binds.sonos.resolveInstance(selected.id);
+            var widgetID = $div.attr('id');
             $div.find('.sonos-ctrl-chip').on('click', function () {
                 var ip = String($(this).data('ip') || '');
                 $div.data('sonos-player', ip);
                 $div.data('sonos-browse-path', []);
-                vis.binds.sonos.saveRoom($div.attr('id'), vis.binds.sonos.resolveInstance(selected.id), ip);
-                vis.binds.sonos.render($div.attr('id'), vis.binds.sonos.resolveInstance(selected.id));
+                $div.data('sonos-sheet', false);
+                $div.data('sonos-sheet-query', '');
+                vis.binds.sonos.saveRoom(widgetID, instance, ip);
+                vis.binds.sonos.render(widgetID, instance);
             });
 
             $div.find('[data-cmd]').on('click', function () {
@@ -1163,19 +1229,54 @@ vis.binds = vis.binds || {};
                 }
             });
 
-            $div.find('[data-tab]').on('click', function () {
-                $div.data('sonos-tab', $(this).data('tab'));
-                vis.binds.sonos.render($div.attr('id'), vis.binds.sonos.resolveInstance(selected.id));
+            $div.find('[data-tab]').on('click', function (ev) {
+                ev.stopPropagation();
+                var next = String($(this).data('tab') || '');
+                if ($div.data('sonos-sheet') && $div.data('sonos-tab') === next) {
+                    vis.binds.sonos.closeLibrary($div, instance);
+                    return;
+                }
+                $div.data('sonos-tab', next);
+                $div.data('sonos-sheet', true);
+                $div.data('sonos-sheet-query', '');
+                if (next !== 'sources') {
+                    $div.data('sonos-browse-path', []);
+                }
+                vis.binds.sonos.render(widgetID, instance);
+            });
+            $div.find('.sonos-ctrl-sheet-dismiss').on('click', function () {
+                vis.binds.sonos.closeLibrary($div, instance);
+            });
+            $(document).off('mousedown.sonosSheet' + widgetID).on('mousedown.sonosSheet' + widgetID, function (ev) {
+                if (!$div.data('sonos-sheet')) {
+                    return;
+                }
+                var $t = $(ev.target);
+                if (
+                    $t.closest('.sonos-ctrl-sheet').length ||
+                    $t.closest('[data-tab]').length ||
+                    $t.closest('.sonos-ctrl-chip').length
+                ) {
+                    return;
+                }
+                vis.binds.sonos.closeLibrary($div, instance);
+            });
+            $div.find('.sonos-ctrl-search-input').on('input', function () {
+                $div.data('sonos-sheet-query', this.value);
+                vis.binds.sonos.applySheetFilter($div);
             });
 
             $div.find('[data-favorite]').on('click', function () {
                 vis.binds.sonos.write(mediaId + '.favorites_set', String($(this).attr('data-favorite')));
+                vis.binds.sonos.closeLibrary($div, instance);
             });
             $div.find('[data-playlist]').on('click', function () {
                 vis.binds.sonos.write(mediaId + '.playlist_set', String($(this).attr('data-playlist')));
+                vis.binds.sonos.closeLibrary($div, instance);
             });
             $div.find('[data-track]').on('click', function () {
                 vis.binds.sonos.write(mediaId + '.current_track_number', parseInt($(this).data('track'), 10));
+                vis.binds.sonos.closeLibrary($div, instance);
             });
             $div.find('[data-recent-title]').on('click', function () {
                 var uri = String($(this).attr('data-recent-uri') || '');
@@ -1185,21 +1286,25 @@ vis.binds = vis.binds || {};
                 } else if (recentTitle) {
                     vis.binds.sonos.write(mediaId + '.favorites_set', recentTitle);
                 }
+                vis.binds.sonos.closeLibrary($div, instance);
             });
             $div.find('[data-browse-back]').on('click', function () {
                 var path = ($div.data('sonos-browse-path') || []).slice();
                 path.pop();
                 $div.data('sonos-browse-path', path);
+                $div.data('sonos-sheet-query', '');
                 vis.binds.sonos.write(mediaId + '.media_browse', path.length ? path[path.length - 1].id : 'root');
             });
             $div.find('[data-smapi-auth]').on('click', function () {
                 vis.binds.sonos.write(mediaId + '.media_browse', 'smapi-auth:' + encodeURIComponent(String($(this).attr('data-smapi-auth') || '')));
             });
-            $div.find('[data-smapi-search]').on('submit', function (ev) {
+            $div.find('.sonos-ctrl-search').on('submit', function (ev) {
                 ev.preventDefault();
                 var name = String($(this).attr('data-smapi-search') || '');
                 var term = String($(this).find('.sonos-ctrl-search-input').val() || '').trim();
+                $div.data('sonos-sheet-query', term);
                 if (!name || !term) {
+                    vis.binds.sonos.applySheetFilter($div);
                     return;
                 }
                 var path = ($div.data('sonos-browse-path') || []).slice();
@@ -1223,25 +1328,30 @@ vis.binds = vis.binds || {};
                 }
                 if (item.favorite) {
                     vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ favorite: item.favorite }));
+                    vis.binds.sonos.closeLibrary($div, instance);
                     return;
                 }
                 if (item.playlist) {
                     vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ playlist: item.playlist }));
+                    vis.binds.sonos.closeLibrary($div, instance);
                     return;
                 }
                 if (item.folder || item.service) {
                     var path = ($div.data('sonos-browse-path') || []).slice();
                     path.push({ id: item.id, title: item.title });
                     $div.data('sonos-browse-path', path);
+                    $div.data('sonos-sheet-query', '');
                     vis.binds.sonos.write(mediaId + '.media_browse', item.id);
                     return;
                 }
                 if (item.id === 'tv' || /^x-sonos-htastream:/i.test(item.uri || '')) {
                     vis.binds.sonos.write(selected.id + '.media_play', JSON.stringify({ tv: true }));
+                    vis.binds.sonos.closeLibrary($div, instance);
                     return;
                 }
                 if (item.uri) {
                     vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ uri: item.uri, metadata: item.metadata || '' }));
+                    vis.binds.sonos.closeLibrary($div, instance);
                 }
             });
         },

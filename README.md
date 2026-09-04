@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.13 (2026-09-04)
+* (kosmix1980) VIS widget: Favorites/Playlists/Queue/Recent/Sources are top buttons with a covering popup
+
 ### 4.3.12 (2026-09-04)
 * (kosmix1980) VIS widget: clear HDMI compression when the TV signal stops
 
