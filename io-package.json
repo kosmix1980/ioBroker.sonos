@@ -152,6 +152,10 @@
     "adminUI": {
       "config": "json"
     },
+    "restartAdapters": [
+      "vis",
+      "vis-2"
+    ],
     "extIcon": "https://raw.githubusercontent.com/ioBroker/ioBroker.sonos/master/admin/sonos.png",
     "type": "multimedia"
   },
