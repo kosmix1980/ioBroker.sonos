@@ -309,6 +309,9 @@ export function streamContentFromDidl(xml: string | undefined): string {
     return match ? decodeXml(match[1]).trim() : '';
 }
 
+/** HTAudioIn values that mean no HDMI/SPDIF audio (SoCo / Sonos community). */
+const HT_AUDIO_SILENT = new Set([0, 21, 22, 33554454]);
+
 /** DeviceProperties HTAudioIn codes (SoCo / openHAB), named like the Sonos app. */
 const HT_AUDIO_IN: Record<number, string> = {
     2: 'Stereo PCM',
@@ -332,7 +335,14 @@ const HT_AUDIO_IN: Record<number, string> = {
     118489146: 'Dolby Digital Plus 7.1',
 };
 
+export function isHtAudioSilent(code: number | null | undefined): boolean {
+    return code != null && HT_AUDIO_SILENT.has(code);
+}
+
 export function htAudioInLabel(code: number): string {
+    if (isHtAudioSilent(code)) {
+        return '';
+    }
     return HT_AUDIO_IN[code] || '';
 }
 
@@ -461,7 +471,7 @@ export function nowPlayingLabels(
             tvAudioFormat(rawTitle) || tvAudioFormat(streamContentFromDidl(extra?.metadata)) || tvAudioFormat(artist);
         return {
             title: labels.tv,
-            artist: format || labels.tvHdmi,
+            artist: format,
             album,
             station: labels.tv,
         };

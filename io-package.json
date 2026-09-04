@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.11",
+    "version": "4.3.12",
     "news": {
+      "4.3.12": {
+        "en": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
+        "de": "Die HDMI-Kompression wird geleert, wenn das TV-Signal endet, wie in der Sonos-App.",
+        "ru": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
+        "pt": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
+        "nl": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
+        "fr": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
+        "it": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
+        "es": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
+        "pl": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
+        "uk": "TV HDMI compression clears when the TV signal stops, like in the Sonos app.",
+        "zh-cn": "TV HDMI compression clears when the TV signal stops, like in the Sonos app."
+      },
       "4.3.11": {
         "en": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
         "de": "Bei TV HDMI wird kein Play mehr gesendet (das lieferte HTTP 500). Fehler nennen jetzt den Befehl und den Raum.",
@@ -249,19 +262,6 @@
         "pl": "Dodany wsparcie dla odtwarzania Sonos (zamówionej przez nową listę playlistów stanu)\nWersja minimalna jest 16",
         "uk": "Додана підтримка ігрових списків Sonos (зробила новий державний список_сет)\nВерсія Mini node.js 16",
         "zh-cn": "增加对女企业家的支持(新的国名录_set)\n最小的字样为16。"
-      },
-      "2.3.3": {
-        "en": "fixed cover url",
-        "de": "feste abdeckung url",
-        "ru": "фиксированный url крышки",
-        "pt": "tampa fixa url",
-        "nl": "vertaling:",
-        "fr": "couverture fixe url",
-        "it": "rivestimento fisso",
-        "es": "url de cubierta fija",
-        "pl": "url",
-        "uk": "фіксована кришка виворітна",
-        "zh-cn": "固定的维修费"
       }
     },
     "titleLang": {

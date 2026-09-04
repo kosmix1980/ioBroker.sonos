@@ -40,6 +40,7 @@ exports.isTvStreamUri = isTvStreamUri;
 exports.isLineInStreamUri = isLineInStreamUri;
 exports.tvAudioFormat = tvAudioFormat;
 exports.streamContentFromDidl = streamContentFromDidl;
+exports.isHtAudioSilent = isHtAudioSilent;
 exports.htAudioInLabel = htAudioInLabel;
 exports.parseHtAudioIn = parseHtAudioIn;
 exports.soapGetZoneInfo = soapGetZoneInfo;
@@ -300,6 +301,8 @@ function streamContentFromDidl(xml) {
         decoded.match(/<r:streamcontent\b[^>]*>([\s\S]*?)<\/r:streamcontent>/i);
     return match ? decodeXml(match[1]).trim() : '';
 }
+/** HTAudioIn values that mean no HDMI/SPDIF audio (SoCo / Sonos community). */
+const HT_AUDIO_SILENT = new Set([0, 21, 22, 33554454]);
 /** DeviceProperties HTAudioIn codes (SoCo / openHAB), named like the Sonos app. */
 const HT_AUDIO_IN = {
     2: 'Stereo PCM',
@@ -322,7 +325,13 @@ const HT_AUDIO_IN = {
     118489090: 'Multichannel PCM 7.1',
     118489146: 'Dolby Digital Plus 7.1',
 };
+function isHtAudioSilent(code) {
+    return code != null && HT_AUDIO_SILENT.has(code);
+}
 function htAudioInLabel(code) {
+    if (isHtAudioSilent(code)) {
+        return '';
+    }
     return HT_AUDIO_IN[code] || '';
 }
 function parseHtAudioIn(xml) {
@@ -424,7 +433,7 @@ function nowPlayingLabels(track, labels, extra) {
         const format = tvAudioFormat(rawTitle) || tvAudioFormat(streamContentFromDidl(extra?.metadata)) || tvAudioFormat(artist);
         return {
             title: labels.tv,
-            artist: format || labels.tvHdmi,
+            artist: format,
             album,
             station: labels.tv,
         };

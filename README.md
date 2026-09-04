@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.12 (2026-09-04)
+* (kosmix1980) VIS widget: clear HDMI compression when the TV signal stops
+
 ### 4.3.11 (2026-09-04)
 * (kosmix1980) Do not send Play on TV HDMI (HTTP 500); log which command failed
 

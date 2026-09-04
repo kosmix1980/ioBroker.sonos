@@ -217,6 +217,10 @@ class Sonos extends utils.Adapter {
                     clearInterval(this.channels[ip].elapsedTimer);
                     this.channels[ip].elapsedTimer = null;
                 }
+                if (this.channels[ip]?.tvFormatTimer) {
+                    clearInterval(this.channels[ip].tvFormatTimer);
+                    this.channels[ip].tvFormatTimer = null;
+                }
                 if (this.channels[ip]?.timerVolume) {
                     clearTimeout(this.channels[ip].timerVolume);
                     this.channels[ip].timerVolume = null;
@@ -900,9 +904,13 @@ class Sonos extends utils.Adapter {
         let playing = this.playbackDisplay(sonosState, meta);
         if ((0, content_directory_1.isTvStreamUri)(sonosState.currentTrack.uri)) {
             const format = await this.resolveTvFormat(player, sonosState.currentTrack, meta);
-            if (format) {
-                playing = { ...playing, artist: format };
-            }
+            playing = { ...playing, artist: format };
+            this.startTvFormatWatch(ip);
+        }
+        else {
+            this.stopTvFormatWatch(ip);
+            delete this.lastTvFormat[player.uuid];
+            delete this.lastTvFormatFetch[player.uuid];
         }
         await this.setState({ device: 'root', channel: ip, state: 'current_type' }, { val: playing.type, ack: true });
         await this.setState({ device: 'root', channel: ip, state: 'current_station' }, { val: playing.station, ack: true });
@@ -989,19 +997,64 @@ class Sonos extends utils.Adapter {
         }
         return { type: 0, title: display.title, artist: display.artist, album: display.album, station: '' };
     }
+    startTvFormatWatch(ip) {
+        const channel = this.channels[ip];
+        if (!channel || channel.tvFormatTimer) {
+            return;
+        }
+        channel.tvFormatTimer = setInterval(() => {
+            void this.refreshTvFormat(ip);
+        }, 2000);
+    }
+    stopTvFormatWatch(ip) {
+        const channel = this.channels[ip];
+        if (channel?.tvFormatTimer) {
+            clearInterval(channel.tvFormatTimer);
+            channel.tvFormatTimer = null;
+        }
+    }
+    async refreshTvFormat(ip) {
+        const channel = this.channels[ip];
+        const player = channel?.player || (channel?.uuid ? this.discovery?.getPlayerByUUID(channel.uuid) : undefined);
+        const uri = player ? transportUri(player) : '';
+        if (!player || !(0, content_directory_1.isTvStreamUri)(uri)) {
+            this.stopTvFormatWatch(ip);
+            return;
+        }
+        const meta = typeof player.avTransportUriMetadata === 'string' ? player.avTransportUriMetadata : '';
+        const format = await this.resolveTvFormat(player, player.state?.currentTrack || {}, meta);
+        const current = await this.getStateAsync(`root.${ip}.current_artist`);
+        if (String(current?.val || '') === format) {
+            return;
+        }
+        await this.setState({ device: 'root', channel: ip, state: 'current_artist' }, { val: format, ack: true });
+        for (const memberIp of this.getGroupMemberIps(ip)) {
+            if (memberIp === ip || !this.channels[memberIp]) {
+                continue;
+            }
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_artist' }, { val: format, ack: true });
+        }
+    }
     async resolveTvFormat(player, track, metadata) {
         const now = Date.now();
-        if ((this.lastTvFormatFetch[player.uuid] || 0) + 4000 > now && this.lastTvFormat[player.uuid]) {
+        if ((this.lastTvFormatFetch[player.uuid] || 0) + 1500 > now &&
+            Object.prototype.hasOwnProperty.call(this.lastTvFormat, player.uuid)) {
             return this.lastTvFormat[player.uuid];
         }
         this.lastTvFormatFetch[player.uuid] = now;
         try {
             const zoneXml = await (0, content_directory_1.soapGetZoneInfo)(player.baseUrl);
             const code = (0, content_directory_1.parseHtAudioIn)(zoneXml);
-            const fromZone = code == null ? '' : (0, content_directory_1.htAudioInLabel)(code);
-            if (fromZone) {
-                this.lastTvFormat[player.uuid] = fromZone;
-                return fromZone;
+            if (code != null) {
+                if ((0, content_directory_1.isHtAudioSilent)(code)) {
+                    this.lastTvFormat[player.uuid] = '';
+                    return '';
+                }
+                const fromZone = (0, content_directory_1.htAudioInLabel)(code);
+                if (fromZone) {
+                    this.lastTvFormat[player.uuid] = fromZone;
+                    return fromZone;
+                }
             }
         }
         catch (err) {
@@ -1011,10 +1064,8 @@ class Sonos extends utils.Adapter {
         try {
             const xml = await (0, content_directory_1.soapGetPositionInfo)(player.baseUrl);
             const format = (0, content_directory_1.tvAudioFormat)((0, content_directory_1.streamContentFromDidl)(xml)) || fromEvent;
-            if (format) {
-                this.lastTvFormat[player.uuid] = format;
-            }
-            return format || this.lastTvFormat[player.uuid] || '';
+            this.lastTvFormat[player.uuid] = format || '';
+            return format || '';
         }
         catch (err) {
             this.log.debug(`TV stream format: ${err}`);

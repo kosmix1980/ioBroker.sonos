@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.11',
+        version: '4.3.12',
         _bound: {},
         _tickers: {},
         words: {
@@ -700,13 +700,11 @@ vis.binds = vis.binds || {};
             var album = String(vis.binds.sonos.state(playerId, 'current_album') || '').trim();
             var type = parseInt(vis.binds.sonos.state(playerId, 'current_type'), 10);
             var tvLabel = vis.binds.sonos.t('tv');
-            var hdmiLabel = vis.binds.sonos.t('tvHdmi');
             if (!title) {
                 title = station;
             }
             if (!title && type === 2) {
                 title = tvLabel;
-                artist = artist || hdmiLabel;
             }
             if (!title) {
                 title = vis.binds.sonos.t('nothing');
