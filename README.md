@@ -11,6 +11,21 @@
 
 Control and monitor SONOS devices with ioBroker.
 
+## VIS widget
+
+The adapter includes a VIS widget **Sonos Control**. One widget can switch rooms, control playback, form groups, and start favorites, playlists and queue tracks.
+
+1. Install this adapter and make sure the **vis** adapter is running.
+2. Restart **vis.0** (the adapter already asks vis to restart on install).
+3. Reload the VIS editor with Ctrl+F5.
+4. From the widget group **sonos**, drag **Sonos Control** onto a view.
+5. Set the object to the instance, for example `sonos.0` — not a single `play` state.
+6. Size the widget around **900 × 520**.
+
+After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. Favorites and playlists must already exist in the Sonos app; the widget only starts them.
+
+To install this fork over the official adapter: in Admin open **Adapters** → GitHub button → `https://github.com/kosmix1980/ioBroker.sonos`, then restart vis and hard-reload the editor.
+
 ## Handling of groups
 * States for handling SONOS groups:
    * **`coordinator`**: set/get the coordinator, so the SONOS device which is the master and coordinating the group. It requires the IP address (channel name) of the SONOS device to be the coordinator, but with underscore `_` instead of dot `.`, so use for example `192_168_0_100` for IP address `192.168.0.100`. If the device does not belong to any group, then the value is equal to the own channel name (IP).
@@ -112,6 +127,10 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### **WORK IN PROGRESS**
+* (kosmix1980) Added a VIS widget for rooms, groups, favorites, playlists and the queue
+* (kosmix1980) Added `playlist_list` and `playlist_list_array` states
+
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0
 * (@GermanBluefox) Fixed the immediate stop of TTS: the state before TTS was not restored and TTS stayed blocked

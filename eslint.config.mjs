@@ -22,6 +22,6 @@ export default [
         },
     },
     {
-        ignores: ['build/**/*', 'admin/**/*', 'test/**/*', '**/*.mjs'],
+        ignores: ['build/**/*', 'admin/**/*', 'test/**/*', 'widgets/**/*', '**/*.mjs'],
     },
 ];

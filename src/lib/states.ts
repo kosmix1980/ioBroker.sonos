@@ -75,6 +75,24 @@ export const newGroupStates: Record<string, StateDefinition> = {
         desc: 'Set Sonos playlist to play',
         name: 'Playlist set',
     },
+    playlist_list: {
+        def: '',
+        type: 'string',
+        read: true,
+        write: false,
+        role: 'media.playlist',
+        desc: 'List of Sonos playlists, divided by comma',
+        name: 'Playlist list',
+    },
+    playlist_list_array: {
+        def: '',
+        type: 'array',
+        read: true,
+        write: false,
+        role: 'media.playlist',
+        desc: 'Array of Sonos playlists',
+        name: 'Playlist array',
+    },
 };
 
 // Definition of all states, that every sonos channel must have

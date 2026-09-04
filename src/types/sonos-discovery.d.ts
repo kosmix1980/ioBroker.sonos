@@ -115,7 +115,8 @@ declare module 'sonos-discovery' {
         localEndpoint: string;
 
         getPlayerByUUID(uuid: string): SonosPlayer | undefined;
-        getFavorites(): Promise<Record<string, SonosFavorite>>;
+        getFavorites(): Promise<Record<string, SonosFavorite> | SonosFavorite[]>;
+        getPlaylists(): Promise<Record<string, SonosFavorite> | SonosFavorite[]>;
         on(event: string, listener: (data: any) => void): this;
         dispose(): void;
     }

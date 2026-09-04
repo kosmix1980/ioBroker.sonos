@@ -138,6 +138,8 @@ function getPlaybackState(playbackState: string): PlaybackState {
 class Sonos extends utils.Adapter {
     /** IDs of all "alive" states, that must be set to false by unload */
     private readonly aliveIds: string[] = [];
+    /** True after playlists were loaded at least once */
+    private playlistsLoaded = false;
     /** All known devices with the IP address (dots replaced by underscores) as key */
     private channels: Record<string, ChannelInfo> = {};
     private discovery: SonosDiscovery | null = null;
@@ -1156,24 +1158,42 @@ class Sonos extends utils.Adapter {
         }
     }
 
-    private async takeSonosFavorites(ip: string, favorites: Record<string, SonosFavorite>): Promise<void> {
+    /** Normalize browse results from sonos-discovery (array or dictionary) */
+    private toFavoriteList(items: Record<string, SonosFavorite> | SonosFavorite[] | null | undefined): SonosFavorite[] {
+        if (!items) {
+            return [];
+        }
+
+        if (Array.isArray(items)) {
+            return items;
+        }
+
+        return Object.keys(items)
+            .map(key => items[key])
+            .filter((item): item is SonosFavorite => Boolean(item));
+    }
+
+    private async takeSonosFavorites(
+        ip: string,
+        favorites: Record<string, SonosFavorite> | SonosFavorite[],
+    ): Promise<void> {
         let sFavorites = '';
         const aFavorites: string[] = [];
         const _hFavorites: string[] = [];
 
         _hFavorites.push('<table class="sonosFavoriteTable">');
 
-        Object.keys(favorites).forEach(favorite => {
-            const title = favorites[favorite].title;
+        this.toFavoriteList(favorites).forEach((favorite, index) => {
+            const title = favorite.title;
 
             if (title) {
                 sFavorites += (sFavorites ? ', ' : '') + title;
                 aFavorites.push(title);
                 _hFavorites.push(
                     `<tr class="sonosFavoriteRow" onclick="vis.setValue('${this.namespace}.root.${ip}.favorites_set', '${title}')"><td class="sonosFavoriteNumber">${
-                        Number(favorite) + 1
+                        index + 1
                     }</td><td class="sonosFavoriteCover"><img src="${
-                        favorites[favorite].albumArtUri
+                        favorite.albumArtUri || ''
                     }"></td><td class="sonosFavoriteTitle">${title}</td></tr>`,
                 );
             }
@@ -1212,6 +1232,61 @@ class Sonos extends utils.Adapter {
             if (ip && this.channels[ip]) {
                 await this.takeSonosFavorites(ip, favorites);
             }
+        }
+    }
+
+    private async takeSonosPlaylists(
+        ip: string,
+        playlists: Record<string, SonosFavorite> | SonosFavorite[],
+    ): Promise<void> {
+        const names = this.toFavoriteList(playlists)
+            .map(item => item.title)
+            .filter((title): title is string => Boolean(title));
+
+        await this.setState(
+            { device: 'root', channel: ip, state: 'playlist_list' },
+            { val: names.join(', '), ack: true },
+        );
+        await this.setState(
+            { device: 'root', channel: ip, state: 'playlist_list_array' },
+            { val: JSON.stringify(names), ack: true },
+        );
+    }
+
+    /** Read Sonos playlists and write them to all known players */
+    private async updatePlaylists(): Promise<void> {
+        if (!this.discovery?.getPlaylists) {
+            return;
+        }
+
+        const playlists = await this.discovery.getPlaylists();
+
+        for (const player of this.discovery.players) {
+            if (!player) {
+                continue;
+            }
+            player._address = player._address || getIp(player);
+
+            const ip = player._address;
+
+            if (ip && this.channels[ip]) {
+                await this.takeSonosPlaylists(ip, playlists);
+            }
+        }
+    }
+
+    /** Refresh favorites and playlists; errors are logged and do not abort the other list */
+    private async updateMediaLists(): Promise<void> {
+        try {
+            await this.updateFavorites();
+        } catch (err) {
+            this.log.error(`Cannot getFavorites: ${err}`);
+        }
+        try {
+            await this.updatePlaylists();
+            this.playlistsLoaded = true;
+        } catch (err) {
+            this.log.error(`Cannot getPlaylists: ${err}`);
         }
     }
 
@@ -1289,11 +1364,7 @@ class Sonos extends utils.Adapter {
                 this.log.debug(`mute: Mute for ${player.baseUrl}: ${data.newMute}`);
             }
         } else if (event === 'favorites') {
-            try {
-                await this.updateFavorites();
-            } catch (err) {
-                this.log.error(`Cannot getFavorites: ${err}`);
-            }
+            await this.updateMediaLists();
         } else if (event === 'queue') {
             const player = this.discovery.getPlayerByUUID(data.uuid);
             const ip = this.getIpOfPlayer(data.uuid);
@@ -1304,11 +1375,7 @@ class Sonos extends utils.Adapter {
             }
 
             if (player) {
-                try {
-                    await this.updateFavorites();
-                } catch (err) {
-                    this.log.error(`Cannot getFavorites: ${err}`);
-                }
+                await this.updateMediaLists();
             }
         } else {
             this.log.debug(`${event} ${typeof data === 'object' ? JSON.stringify(data) : data}`);
@@ -1367,6 +1434,10 @@ class Sonos extends utils.Adapter {
                     { val: membersChannels.join(','), ack: true },
                 );
             }
+        }
+
+        if (!this.playlistsLoaded && this.discovery?.players?.length) {
+            await this.updateMediaLists();
         }
     }
 

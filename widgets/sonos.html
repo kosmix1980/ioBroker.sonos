@@ -1,0 +1,22 @@
+<!--
+    ioBroker.sonos VIS widget
+
+    Copyright (c) 2026 ioBroker.sonos contributors
+    MIT License
+-->
+<link rel="stylesheet" href="widgets/sonos/css/style.css" />
+<script type="text/javascript" src="widgets/sonos/js/sonos.js"></script>
+
+<script id="tplSonosControl"
+        type="text/ejs"
+        class="vis-tpl"
+        data-vis-set="sonos"
+        data-vis-type="ctrl,val,player"
+        data-vis-name="Sonos Control"
+        data-vis-update-style="true"
+        data-vis-attrs="oid/id;"
+        data-vis-prev='<div id="prev_tplSonosControl" style="position:relative;text-align:initial;padding:4px"><div class="vis-widget_prev" style="width:220px;height:92px;background:#141414;color:#fff;border-radius:10px;padding:10px;font-family:Arial,sans-serif"><div style="font-weight:800;letter-spacing:.12em;background:linear-gradient(90deg,#ff8a3d,#e31c23);-webkit-background-clip:text;background-clip:text;color:transparent">SONOS</div><div style="margin-top:8px;font-size:12px;color:#bbb">Rooms · Groups · Favorites</div></div></div>'>
+    <div class="vis-widget <%== this.data.attr('class') %>" style="overflow:hidden;width:900px;height:520px" id="<%= this.data.attr('wid') %>"><%
+        vis.binds.sonos.createWidget(this.data.wid, this.view, this.data, this.style);
+    %></div>
+</script>
