@@ -466,7 +466,7 @@ export function getChannelStates(): Record<string, StateDefinition> {
             read: false,
             write: true,
             role: 'media',
-            desc: 'Browse a Sonos content directory object id (root, R:0, S:, A:, AI:)',
+            desc: 'Browse a Sonos content directory or SMAPI object id (root, R:0, service:Spotify, smapi:…)',
             name: 'Browse media',
         },
         media_browse_result: {

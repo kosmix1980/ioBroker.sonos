@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.2.1',
+        version: '4.3.0',
         _bound: {},
         _tickers: {},
         words: {
@@ -32,7 +32,9 @@ vis.binds = vis.binds || {};
                 emptyPlaylists: 'No playlists. Create them in the Sonos app first.',
                 emptyQueue: 'Queue is empty.',
                 emptyRecent: 'No recent tracks yet. They appear after something is played.',
-                emptySources: 'No entries in this folder.',
+                search: 'Search…',
+                signedIn: 'Signed in',
+                loginOpen: 'Open this link in a browser to connect the music service.',
                 unknown: 'Unknown room',
                 nothing: 'Nothing playing',
             },
@@ -52,7 +54,9 @@ vis.binds = vis.binds || {};
                 emptyPlaylists: 'Keine Playlists. Lege sie zuerst in der Sonos-App an.',
                 emptyQueue: 'Die Warteschlange ist leer.',
                 emptyRecent: 'Noch keine Titel. Die Liste füllt sich beim Abspielen.',
-                emptySources: 'In diesem Ordner gibt es keine Einträge.',
+                search: 'Suchen…',
+                signedIn: 'Anmeldung abgeschlossen',
+                loginOpen: 'Diesen Link im Browser öffnen, um den Dienst zu verbinden.',
                 unknown: 'Unbekannter Raum',
                 nothing: 'Nichts spielt',
             },
@@ -654,6 +658,30 @@ vis.binds = vis.binds || {};
             return { id: '', title: '', items: [] };
         },
 
+        serviceNameFromBrowse: function ($div, browse) {
+            if (browse && browse.serviceName) {
+                return String(browse.serviceName);
+            }
+            var ids = (($div.data('sonos-browse-path') || []).map(function (item) { return item.id; })).concat([browse && browse.id]);
+            var i;
+            for (i = 0; i < ids.length; i++) {
+                var id = String(ids[i] || '');
+                if (id.indexOf('service:') === 0) {
+                    return id.slice('service:'.length);
+                }
+                if (id.indexOf('smapi:') === 0) {
+                    var rest = id.slice('smapi:'.length);
+                    var colon = rest.indexOf(':');
+                    try {
+                        return decodeURIComponent(colon === -1 ? rest : rest.slice(0, colon));
+                    } catch (e) {
+                        return colon === -1 ? rest : rest.slice(0, colon);
+                    }
+                }
+            }
+            return '';
+        },
+
         isGroupedWith: function (player, other) {
             var coordA = String(vis.binds.sonos.state(player.id, 'coordinator') || player.ip);
             var coordB = String(vis.binds.sonos.state(other.id, 'coordinator') || other.ip);
@@ -811,12 +839,28 @@ vis.binds = vis.binds || {};
             } else if (tab === 'sources') {
                 var browse = vis.binds.sonos.parseBrowse(mediaId);
                 var path = $div.data('sonos-browse-path') || [];
+                var serviceName = vis.binds.sonos.serviceNameFromBrowse($div, browse);
                 var backHtml = path.length
                     ? '<button type="button" class="sonos-ctrl-item" data-browse-back="1">' +
                         '<div class="sonos-ctrl-thumb"></div>' +
                         '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(t('back')) + '</div></div></button>'
                     : '';
-                listHtml = backHtml + (browse.items && browse.items.length
+                var extraHtml = '';
+                if (browse.loginUrl) {
+                    extraHtml += '<div class="sonos-ctrl-login">' +
+                        '<div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(t('loginOpen')) + '</div>' +
+                        '<div class="sonos-ctrl-login-url">' + vis.binds.sonos.esc(browse.loginUrl) + '</div>' +
+                        (serviceName
+                            ? '<button type="button" class="sonos-ctrl-login-btn" data-smapi-auth="' + vis.binds.sonos.esc(serviceName) + '">' + vis.binds.sonos.esc(t('signedIn')) + '</button>'
+                            : '') +
+                        '</div>';
+                }
+                if (serviceName) {
+                    extraHtml += '<form class="sonos-ctrl-search" data-smapi-search="' + vis.binds.sonos.esc(serviceName) + '">' +
+                        '<input type="search" class="sonos-ctrl-search-input" placeholder="' + vis.binds.sonos.esc(t('search')) + '">' +
+                        '</form>';
+                }
+                listHtml = extraHtml + backHtml + (browse.items && browse.items.length
                     ? browse.items.map(function (item) {
                         var payload = encodeURIComponent(JSON.stringify({
                             id: item.id || '',
@@ -833,7 +877,7 @@ vis.binds = vis.binds || {};
                             '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || (item.folder ? '…' : '') || (item.service ? 'Service' : '')) + '</div></div></button>';
                     }).join('')
-                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptySources')) + '</div>');
+                    : (extraHtml ? '' : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptySources')) + '</div>'));
             } else {
                 var queue = vis.binds.sonos.parseQueue(mediaId);
                 var currentNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
@@ -983,6 +1027,22 @@ vis.binds = vis.binds || {};
                 path.pop();
                 $div.data('sonos-browse-path', path);
                 vis.binds.sonos.write(mediaId + '.media_browse', path.length ? path[path.length - 1].id : 'root');
+            });
+            $div.find('[data-smapi-auth]').on('click', function () {
+                vis.binds.sonos.write(mediaId + '.media_browse', 'smapi-auth:' + encodeURIComponent(String($(this).attr('data-smapi-auth') || '')));
+            });
+            $div.find('[data-smapi-search]').on('submit', function (ev) {
+                ev.preventDefault();
+                var name = String($(this).attr('data-smapi-search') || '');
+                var term = String($(this).find('.sonos-ctrl-search-input').val() || '').trim();
+                if (!name || !term) {
+                    return;
+                }
+                var path = ($div.data('sonos-browse-path') || []).slice();
+                var searchId = 'smapi-search:' + encodeURIComponent(name) + ':' + encodeURIComponent(term);
+                path.push({ id: searchId, title: term });
+                $div.data('sonos-browse-path', path);
+                vis.binds.sonos.write(mediaId + '.media_browse', searchId);
             });
             $div.find('[data-media-item]').on('click', function () {
                 var item = {};

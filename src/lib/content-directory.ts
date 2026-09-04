@@ -1,8 +1,7 @@
 /**
  * Browse Sonos ContentDirectory (TuneIn, music library, network shares, line-in).
- * Spotify and similar music services are listed as sources. Their full catalogs
- * need SMAPI, which sonos-discovery does not expose, so opening a service shows
- * matching Sonos favorites and playlists instead.
+ * Spotify and similar services are listed as sources; their catalogs are browsed
+ * via SMAPI in src/lib/smapi.ts.
  */
 import * as http from 'node:http';
 
@@ -24,6 +23,10 @@ export interface MediaBrowseResult {
     id: string;
     title: string;
     items: MediaBrowseItem[];
+    serviceName?: string;
+    searchable?: boolean;
+    loginUrl?: string;
+    loginHint?: string;
 }
 
 const BROWSE_LIMIT = 200;
@@ -175,7 +178,7 @@ const FEATURED_SERVICES = [
     'SoundCloud',
 ];
 
-function mediaItem(partial: Partial<MediaBrowseItem> & Pick<MediaBrowseItem, 'id' | 'title'>): MediaBrowseItem {
+export function mediaItem(partial: Partial<MediaBrowseItem> & Pick<MediaBrowseItem, 'id' | 'title'>): MediaBrowseItem {
     return {
         uri: '',
         metadata: '',
@@ -268,4 +271,9 @@ export function isStreamUri(uri: string): boolean {
     return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|pndrradio:|aac:)/i.test(
         uri,
     );
+}
+
+/** URIs that the player resolves itself (radio, SMAPI containers) — use setAVTransport, not the queue. */
+export function isDirectPlayUri(uri: string): boolean {
+    return isStreamUri(uri) || /^x-rincon-cpcontainer:/i.test(uri);
 }

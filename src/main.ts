@@ -16,8 +16,9 @@ import type { SonosFavorite, SonosPlayer, SonosPlayerState, SonosQueueItem } fro
 
 import { TTS } from './lib/tts';
 import { getChannelStates } from './lib/states';
-import { browseMedia, getMediaRoot, isStreamUri, matchesMusicService } from './lib/content-directory';
-import type { MediaBrowseItem } from './lib/content-directory';
+import { browseMedia, getMediaRoot, isDirectPlayUri, matchesMusicService, mediaItem } from './lib/content-directory';
+import type { MediaBrowseItem, MediaBrowseResult } from './lib/content-directory';
+import { SmapiHub, encodeSmapiId, parseSmapiId } from './lib/smapi';
 
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
 
@@ -167,6 +168,7 @@ class Sonos extends utils.Adapter {
     /** All known devices with the IP address (dots replaced by underscores) as key */
     private channels: Record<string, ChannelInfo> = {};
     private discovery: SonosDiscovery | null = null;
+    private smapi: SmapiHub | null = null;
     private lastCover: Record<string, string | null> = {};
     private readonly lastHistoryKey: Record<string, string> = {};
     private cacheDir = '';
@@ -1321,16 +1323,42 @@ class Sonos extends utils.Adapter {
         return undefined;
     }
 
+    private getSmapi(): SmapiHub {
+        if (!this.smapi) {
+            let dir = path.join('/tmp', this.namespace);
+            try {
+                dir = utils.getAbsoluteInstanceDataDir(this);
+            } catch {
+                // unit tests / missing controller paths
+            }
+            this.smapi = new SmapiHub(this.log, path.join(dir, 'smapi-tokens.json'));
+        }
+        return this.smapi;
+    }
+
     /**
-     * Spotify and similar catalogs are not in ContentDirectory.
-     * List matching Sonos favorites and saved playlists so they can be started
-     * from the Quellen tab like a real source.
+     * Spotify and similar catalogs via SMAPI, plus matching Sonos favorites.
      */
-    private async listServiceLibrary(serviceName: string, german: boolean): Promise<MediaBrowseItem[]> {
+    private async listServiceLibrary(
+        player: SonosPlayer,
+        serviceName: string,
+        german: boolean,
+    ): Promise<MediaBrowseResult> {
         const items: MediaBrowseItem[] = [];
+        let loginUrl: string | undefined;
+        let loginHint: string | undefined;
         const info = this.musicServiceInfo(serviceName);
         const blobOf = (item: SonosFavorite): string =>
             [item.title, item.uri, item.albumArtUri, item.metadata].filter(Boolean).join('\n');
+
+        try {
+            const smapi = await this.getSmapi().browse(player.baseUrl, serviceName, 'root', german);
+            items.push(...smapi.items);
+            loginUrl = smapi.loginUrl;
+            loginHint = smapi.loginHint;
+        } catch (err) {
+            this.log.warn(`SMAPI browse ${serviceName}: ${err}`);
+        }
 
         try {
             const favorites = this.toFavoriteList(await this.discovery?.getFavorites());
@@ -1378,22 +1406,30 @@ class Sonos extends utils.Adapter {
             this.log.warn(`Cannot list ${serviceName} playlists: ${err}`);
         }
 
-        if (!items.length) {
-            items.push({
-                id: '',
-                title: german
-                    ? `${serviceName} ist als Quelle verfügbar. Der Katalog selbst lässt sich hier nicht durchsuchen — speichere Sender oder Playlists in der Sonos-App als Favoriten, dann erscheinen sie in diesem Ordner.`
-                    : `${serviceName} is available as a source. The catalog cannot be browsed here — save stations or playlists as favorites in the Sonos app and they will appear in this folder.`,
-                uri: '',
-                metadata: '',
-                artist: '',
-                album: '',
-                cover: '',
-                folder: false,
-            });
+        if (loginHint && !items.some(item => item.uri || item.folder || item.favorite || item.playlist)) {
+            items.unshift(mediaItem({ id: '', title: loginHint }));
         }
 
-        return items;
+        if (!items.length) {
+            items.push(
+                mediaItem({
+                    id: '',
+                    title: german
+                        ? `${serviceName} ist als Quelle verfügbar. Melde den Dienst in der Sonos-App an oder speichere Favoriten.`
+                        : `${serviceName} is available as a source. Sign in via the Sonos app or save favorites.`,
+                }),
+            );
+        }
+
+        return {
+            id: `service:${serviceName}`,
+            title: serviceName,
+            items,
+            serviceName,
+            searchable: true,
+            loginUrl,
+            loginHint,
+        };
     }
 
     private async handleMediaBrowse(player: SonosPlayer, ip: string, objectId: string): Promise<void> {
@@ -1406,18 +1442,88 @@ class Sonos extends utils.Adapter {
             lineIn: 'Line-In',
         };
 
-        let result: { id: string; title: string; items: unknown[] };
+        let result: MediaBrowseResult;
 
         if (id === 'root') {
             result = getMediaRoot(this.discovery?.availableServices, labels);
             result.title = german ? 'Quellen' : 'Sources';
+        } else if (id.startsWith('smapi-search:')) {
+            const rest = id.slice('smapi-search:'.length);
+            const colon = rest.indexOf(':');
+            const name = decodeURIComponent(colon === -1 ? rest : rest.slice(0, colon));
+            const term = decodeURIComponent(colon === -1 ? '' : rest.slice(colon + 1));
+            try {
+                const smapi = await this.getSmapi().search(player.baseUrl, name, term, german);
+                result = {
+                    id,
+                    title: term || name,
+                    items: smapi.items,
+                    serviceName: name,
+                    searchable: true,
+                    loginUrl: smapi.loginUrl,
+                    loginHint: smapi.loginHint,
+                };
+            } catch (err) {
+                this.log.warn(`SMAPI search ${name}: ${err}`);
+                result = { id, title: name, items: [], serviceName: name, searchable: true };
+            }
+        } else if (id.startsWith('smapi-auth:')) {
+            const name = decodeURIComponent(id.slice('smapi-auth:'.length));
+            const ok = await this.getSmapi().completeLogin(player.baseUrl, name);
+            if (ok) {
+                result = await this.listServiceLibrary(player, name, german);
+                result.id = encodeSmapiId(name, 'root');
+            } else {
+                result = {
+                    id,
+                    title: name,
+                    items: [
+                        mediaItem({
+                            id: '',
+                            title: german
+                                ? 'Anmeldung noch nicht fertig. Seite im Browser abschließen und erneut tippen.'
+                                : 'Sign-in is not finished yet. Complete it in the browser, then tap again.',
+                        }),
+                    ],
+                    serviceName: name,
+                    searchable: true,
+                };
+            }
+        } else if (id.startsWith('smapi:')) {
+            const parsed = parseSmapiId(id);
+            if (!parsed) {
+                result = { id, title: id, items: [] };
+            } else {
+                try {
+                    const smapi = await this.getSmapi().browse(
+                        player.baseUrl,
+                        parsed.serviceName,
+                        parsed.itemId,
+                        german,
+                    );
+                    result = {
+                        id,
+                        title: parsed.serviceName,
+                        items: smapi.items,
+                        serviceName: parsed.serviceName,
+                        searchable: true,
+                        loginUrl: smapi.loginUrl,
+                        loginHint: smapi.loginHint,
+                    };
+                } catch (err) {
+                    this.log.warn(`SMAPI browse ${parsed.serviceName}: ${err}`);
+                    result = {
+                        id,
+                        title: parsed.serviceName,
+                        items: [],
+                        serviceName: parsed.serviceName,
+                        searchable: true,
+                    };
+                }
+            }
         } else if (id.startsWith('service:')) {
             const name = id.slice('service:'.length);
-            result = {
-                id,
-                title: name,
-                items: await this.listServiceLibrary(name, german),
-            };
+            result = await this.listServiceLibrary(player, name, german);
         } else {
             try {
                 result = { id, title: id, items: await browseMedia(player.baseUrl, id) };
@@ -1472,7 +1578,7 @@ class Sonos extends utils.Adapter {
             return;
         }
 
-        if (isStreamUri(uri)) {
+        if (isDirectPlayUri(uri)) {
             await player.setAVTransport(uri, metadata);
             await player.play();
             return;

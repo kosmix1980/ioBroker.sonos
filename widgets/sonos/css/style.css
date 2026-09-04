@@ -297,6 +297,43 @@
     text-overflow: ellipsis;
 }
 
+.sonos-ctrl-search {
+    padding: 8px 10px 4px;
+}
+
+.sonos-ctrl-search-input {
+    width: 100%;
+    border: 0;
+    border-radius: 8px;
+    background: #2a2a2a;
+    color: #f3f3f3;
+    padding: 8px 10px;
+    font: inherit;
+}
+
+.sonos-ctrl-login {
+    padding: 10px 12px 6px;
+    color: #cfcfcf;
+}
+
+.sonos-ctrl-login-url {
+    margin: 6px 0;
+    font-size: 11px;
+    color: #7dd3fc;
+    word-break: break-all;
+    user-select: text;
+}
+
+.sonos-ctrl-login-btn {
+    border: 0;
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    color: #fff;
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font: inherit;
+}
+
 .sonos-ctrl-empty,
 .sonos-ctrl-hint {
     padding: 18px;

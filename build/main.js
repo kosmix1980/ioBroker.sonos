@@ -52,6 +52,7 @@ const sonos_discovery_1 = __importDefault(require("sonos-discovery"));
 const tts_1 = require("./lib/tts");
 const states_1 = require("./lib/states");
 const content_directory_1 = require("./lib/content-directory");
+const smapi_1 = require("./lib/smapi");
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
 const RECENT_TRACKS_MAX = 25;
 /** Grouping URI used when a player is a slave (`x-rincon:RINCON_...`) */
@@ -146,6 +147,7 @@ class Sonos extends utils.Adapter {
     /** All known devices with the IP address (dots replaced by underscores) as key */
     channels = {};
     discovery = null;
+    smapi = null;
     lastCover = {};
     lastHistoryKey = {};
     cacheDir = '';
@@ -1043,15 +1045,37 @@ class Sonos extends utils.Adapter {
         }
         return undefined;
     }
+    getSmapi() {
+        if (!this.smapi) {
+            let dir = path.join('/tmp', this.namespace);
+            try {
+                dir = utils.getAbsoluteInstanceDataDir(this);
+            }
+            catch {
+                // unit tests / missing controller paths
+            }
+            this.smapi = new smapi_1.SmapiHub(this.log, path.join(dir, 'smapi-tokens.json'));
+        }
+        return this.smapi;
+    }
     /**
-     * Spotify and similar catalogs are not in ContentDirectory.
-     * List matching Sonos favorites and saved playlists so they can be started
-     * from the Quellen tab like a real source.
+     * Spotify and similar catalogs via SMAPI, plus matching Sonos favorites.
      */
-    async listServiceLibrary(serviceName, german) {
+    async listServiceLibrary(player, serviceName, german) {
         const items = [];
+        let loginUrl;
+        let loginHint;
         const info = this.musicServiceInfo(serviceName);
         const blobOf = (item) => [item.title, item.uri, item.albumArtUri, item.metadata].filter(Boolean).join('\n');
+        try {
+            const smapi = await this.getSmapi().browse(player.baseUrl, serviceName, 'root', german);
+            items.push(...smapi.items);
+            loginUrl = smapi.loginUrl;
+            loginHint = smapi.loginHint;
+        }
+        catch (err) {
+            this.log.warn(`SMAPI browse ${serviceName}: ${err}`);
+        }
         try {
             const favorites = this.toFavoriteList(await this.discovery?.getFavorites());
             for (const fav of favorites) {
@@ -1098,21 +1122,26 @@ class Sonos extends utils.Adapter {
         catch (err) {
             this.log.warn(`Cannot list ${serviceName} playlists: ${err}`);
         }
+        if (loginHint && !items.some(item => item.uri || item.folder || item.favorite || item.playlist)) {
+            items.unshift((0, content_directory_1.mediaItem)({ id: '', title: loginHint }));
+        }
         if (!items.length) {
-            items.push({
+            items.push((0, content_directory_1.mediaItem)({
                 id: '',
                 title: german
-                    ? `${serviceName} ist als Quelle verfügbar. Der Katalog selbst lässt sich hier nicht durchsuchen — speichere Sender oder Playlists in der Sonos-App als Favoriten, dann erscheinen sie in diesem Ordner.`
-                    : `${serviceName} is available as a source. The catalog cannot be browsed here — save stations or playlists as favorites in the Sonos app and they will appear in this folder.`,
-                uri: '',
-                metadata: '',
-                artist: '',
-                album: '',
-                cover: '',
-                folder: false,
-            });
+                    ? `${serviceName} ist als Quelle verfügbar. Melde den Dienst in der Sonos-App an oder speichere Favoriten.`
+                    : `${serviceName} is available as a source. Sign in via the Sonos app or save favorites.`,
+            }));
         }
-        return items;
+        return {
+            id: `service:${serviceName}`,
+            title: serviceName,
+            items,
+            serviceName,
+            searchable: true,
+            loginUrl,
+            loginHint,
+        };
     }
     async handleMediaBrowse(player, ip, objectId) {
         const id = objectId.trim() || 'root';
@@ -1128,13 +1157,85 @@ class Sonos extends utils.Adapter {
             result = (0, content_directory_1.getMediaRoot)(this.discovery?.availableServices, labels);
             result.title = german ? 'Quellen' : 'Sources';
         }
+        else if (id.startsWith('smapi-search:')) {
+            const rest = id.slice('smapi-search:'.length);
+            const colon = rest.indexOf(':');
+            const name = decodeURIComponent(colon === -1 ? rest : rest.slice(0, colon));
+            const term = decodeURIComponent(colon === -1 ? '' : rest.slice(colon + 1));
+            try {
+                const smapi = await this.getSmapi().search(player.baseUrl, name, term, german);
+                result = {
+                    id,
+                    title: term || name,
+                    items: smapi.items,
+                    serviceName: name,
+                    searchable: true,
+                    loginUrl: smapi.loginUrl,
+                    loginHint: smapi.loginHint,
+                };
+            }
+            catch (err) {
+                this.log.warn(`SMAPI search ${name}: ${err}`);
+                result = { id, title: name, items: [], serviceName: name, searchable: true };
+            }
+        }
+        else if (id.startsWith('smapi-auth:')) {
+            const name = decodeURIComponent(id.slice('smapi-auth:'.length));
+            const ok = await this.getSmapi().completeLogin(player.baseUrl, name);
+            if (ok) {
+                result = await this.listServiceLibrary(player, name, german);
+                result.id = (0, smapi_1.encodeSmapiId)(name, 'root');
+            }
+            else {
+                result = {
+                    id,
+                    title: name,
+                    items: [
+                        (0, content_directory_1.mediaItem)({
+                            id: '',
+                            title: german
+                                ? 'Anmeldung noch nicht fertig. Seite im Browser abschließen und erneut tippen.'
+                                : 'Sign-in is not finished yet. Complete it in the browser, then tap again.',
+                        }),
+                    ],
+                    serviceName: name,
+                    searchable: true,
+                };
+            }
+        }
+        else if (id.startsWith('smapi:')) {
+            const parsed = (0, smapi_1.parseSmapiId)(id);
+            if (!parsed) {
+                result = { id, title: id, items: [] };
+            }
+            else {
+                try {
+                    const smapi = await this.getSmapi().browse(player.baseUrl, parsed.serviceName, parsed.itemId, german);
+                    result = {
+                        id,
+                        title: parsed.serviceName,
+                        items: smapi.items,
+                        serviceName: parsed.serviceName,
+                        searchable: true,
+                        loginUrl: smapi.loginUrl,
+                        loginHint: smapi.loginHint,
+                    };
+                }
+                catch (err) {
+                    this.log.warn(`SMAPI browse ${parsed.serviceName}: ${err}`);
+                    result = {
+                        id,
+                        title: parsed.serviceName,
+                        items: [],
+                        serviceName: parsed.serviceName,
+                        searchable: true,
+                    };
+                }
+            }
+        }
         else if (id.startsWith('service:')) {
             const name = id.slice('service:'.length);
-            result = {
-                id,
-                title: name,
-                items: await this.listServiceLibrary(name, german),
-            };
+            result = await this.listServiceLibrary(player, name, german);
         }
         else {
             try {
@@ -1180,7 +1281,7 @@ class Sonos extends utils.Adapter {
         if (!uri || isGroupingUri(uri)) {
             return;
         }
-        if ((0, content_directory_1.isStreamUri)(uri)) {
+        if ((0, content_directory_1.isDirectPlayUri)(uri)) {
             await player.setAVTransport(uri, metadata);
             await player.play();
             return;

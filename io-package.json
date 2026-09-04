@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.2.1",
+    "version": "4.3.0",
     "news": {
+      "4.3.0": {
+        "en": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
+        "de": "Das VIS-Widget durchsucht Spotify und andere Musikdienste per SMAPI (Katalog, Suche, Wiedergabe). Die Anmeldung nutzt den Sonos App-Link, falls die Speaker-Tokens nicht lesbar sind.",
+        "ru": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
+        "pt": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
+        "nl": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
+        "fr": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
+        "it": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
+        "es": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
+        "pl": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
+        "uk": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
+        "zh-cn": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable."
+      },
       "4.2.1": {
         "en": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
         "de": "Spotify ist im VIS-Widget eine Quelle. Beim Öffnen erscheinen passende Sonos-Favoriten und Playlists und können direkt gestartet werden.",
