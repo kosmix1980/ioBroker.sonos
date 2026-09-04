@@ -122,6 +122,11 @@
     letter-spacing: 0.12em;
 }
 
+.sonos-ctrl-cover.is-tv {
+    background: #1a1a1a;
+    color: transparent;
+}
+
 .sonos-ctrl-meta {
     min-width: 0;
     display: flex;

@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.8 (2026-09-04)
+* (kosmix1980) VIS widget: TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover
+
 ### 4.3.7 (2026-09-04)
 * (kosmix1980) VIS widget: hide the progress bar while TV HDMI is playing
 

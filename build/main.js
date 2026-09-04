@@ -55,6 +55,7 @@ const content_directory_1 = require("./lib/content-directory");
 const smapi_1 = require("./lib/smapi");
 const ytmusic_1 = require("./lib/ytmusic");
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
+const TV_IMAGE = `${__dirname}/../img/tv-cover.png`;
 const RECENT_TRACKS_MAX = 25;
 /** Grouping URI used when a player is a slave (`x-rincon:RINCON_...`) */
 function isGroupingUri(uri) {
@@ -150,6 +151,8 @@ class Sonos extends utils.Adapter {
     discovery = null;
     smapi = null;
     lastCover = {};
+    lastTvFormat = {};
+    lastTvFormatFetch = {};
     lastHistoryKey = {};
     cacheDir = '';
     currentFileNum = 0;
@@ -854,7 +857,14 @@ class Sonos extends utils.Adapter {
         // Still work to do:
         // - Tracks w/o Album name keeps album name from previous track or some random album.
         //   Don't know if this is already wrong from SONOS API.
-        const playing = this.playbackDisplay(sonosState);
+        const meta = typeof player.avTransportUriMetadata === 'string' ? player.avTransportUriMetadata : '';
+        let playing = this.playbackDisplay(sonosState, meta);
+        if ((0, content_directory_1.isTvStreamUri)(sonosState.currentTrack.uri)) {
+            const format = (0, content_directory_1.tvAudioFormat)(playing.artist) || (await this.resolveTvFormat(player, sonosState.currentTrack, meta));
+            if (format) {
+                playing = { ...playing, artist: format };
+            }
+        }
         await this.setState({ device: 'root', channel: ip, state: 'current_type' }, { val: playing.type, ack: true });
         await this.setState({ device: 'root', channel: ip, state: 'current_station' }, { val: playing.station, ack: true });
         await this.setState({ device: 'root', channel: ip, state: 'current_title' }, { val: playing.title, ack: true });
@@ -869,9 +879,16 @@ class Sonos extends utils.Adapter {
         if (player._address) {
             await this.updateHtmlQueue(player._address, sonosState.trackNo);
         }
-        if (this.lastCover[ip] !== sonosState.currentTrack.albumArtUri) {
-            await this.updateCover(ip, sonosState.currentTrack.albumArtUri);
-            this.lastCover[ip] = sonosState.currentTrack.albumArtUri || null;
+        const tvCover = (0, content_directory_1.isTvStreamUri)(sonosState.currentTrack.uri);
+        const coverKey = tvCover ? 'tv' : sonosState.currentTrack.albumArtUri || '';
+        if (this.lastCover[ip] !== coverKey) {
+            if (tvCover) {
+                await this.syncCoverFileToStorage(TV_IMAGE, ip);
+            }
+            else {
+                await this.updateCover(ip, sonosState.currentTrack.albumArtUri);
+            }
+            this.lastCover[ip] = coverKey || null;
         }
         this.channels[ip].elapsed = sonosState.elapsedTime;
         this.channels[ip].duration = sonosState.currentTrack.duration;
@@ -908,12 +925,12 @@ class Sonos extends utils.Adapter {
             await this.appendRecentTrack(ip, sonosState, coverUrl);
         }
         if (isCoordinator && !player.tts) {
-            await this.copyPlaybackToGroupMembers(ip, sonosState, ps, coverUrl);
+            await this.copyPlaybackToGroupMembers(ip, sonosState, ps, coverUrl, playing);
         }
     }
-    playbackDisplay(sonosState) {
+    playbackDisplay(sonosState, metadata) {
         const track = sonosState.currentTrack;
-        const display = (0, content_directory_1.nowPlayingLabels)(track, { tv: 'TV', tvHdmi: 'HDMI', lineIn: 'Line-In' });
+        const display = (0, content_directory_1.nowPlayingLabels)(track, { tv: 'TV', tvHdmi: 'HDMI', lineIn: 'Line-In' }, { metadata });
         const uri = track.uri;
         const tv = (0, content_directory_1.isTvStreamUri)(uri);
         const lineIn = (0, content_directory_1.isLineInStreamUri)(uri) || track.type === 'line_in';
@@ -931,8 +948,32 @@ class Sonos extends utils.Adapter {
         }
         return { type: 0, title: display.title, artist: display.artist, album: display.album, station: '' };
     }
-    recentKey(sonosState) {
-        const playing = this.playbackDisplay(sonosState);
+    async resolveTvFormat(player, track, metadata) {
+        const fromEvent = (0, content_directory_1.tvAudioFormat)(track.title) || (0, content_directory_1.tvAudioFormat)((0, content_directory_1.streamContentFromDidl)(metadata)) || (0, content_directory_1.tvAudioFormat)(track.artist);
+        if (fromEvent) {
+            this.lastTvFormat[player.uuid] = fromEvent;
+            return fromEvent;
+        }
+        const now = Date.now();
+        if ((this.lastTvFormatFetch[player.uuid] || 0) + 4000 > now) {
+            return this.lastTvFormat[player.uuid] || '';
+        }
+        this.lastTvFormatFetch[player.uuid] = now;
+        try {
+            const xml = await (0, content_directory_1.soapGetPositionInfo)(player.baseUrl);
+            const format = (0, content_directory_1.tvAudioFormat)((0, content_directory_1.streamContentFromDidl)(xml));
+            if (format) {
+                this.lastTvFormat[player.uuid] = format;
+            }
+            return format || this.lastTvFormat[player.uuid] || '';
+        }
+        catch (err) {
+            this.log.debug(`TV stream format: ${err}`);
+            return this.lastTvFormat[player.uuid] || '';
+        }
+    }
+    recentKey(sonosState, metadata) {
+        const playing = this.playbackDisplay(sonosState, metadata);
         return `${playing.title}|${playing.artist}|${playing.album}`;
     }
     async appendRecentTrack(ip, sonosState, coverUrl) {
@@ -974,7 +1015,7 @@ class Sonos extends utils.Adapter {
         list = [entry, ...list.filter(item => `${item.title}|${item.artist}|${item.album}` !== key)].slice(0, RECENT_TRACKS_MAX);
         await this.setState({ device: 'root', channel: ip, state: 'recent_tracks' }, { val: JSON.stringify(list), ack: true });
     }
-    async copyPlaybackToGroupMembers(coordinatorIp, sonosState, ps, coverUrl) {
+    async copyPlaybackToGroupMembers(coordinatorIp, sonosState, ps, coverUrl, display) {
         const membersState = await this.getStateAsync(`root.${coordinatorIp}.membersChannels`);
         const members = String(membersState?.val || '')
             .split(',')
@@ -986,7 +1027,7 @@ class Sonos extends utils.Adapter {
         const queue = await this.getStateAsync(`root.${coordinatorIp}.queue`);
         const queueHtml = await this.getStateAsync(`root.${coordinatorIp}.queue_html`);
         const playMode = sonosState.playMode;
-        const playing = this.playbackDisplay(sonosState);
+        const playing = display || this.playbackDisplay(sonosState);
         for (const memberIp of members) {
             if (!memberIp || memberIp === coordinatorIp || !this.channels[memberIp]) {
                 continue;

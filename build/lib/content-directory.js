@@ -38,6 +38,9 @@ exports.matchesMusicService = matchesMusicService;
 exports.tvStreamUri = tvStreamUri;
 exports.isTvStreamUri = isTvStreamUri;
 exports.isLineInStreamUri = isLineInStreamUri;
+exports.tvAudioFormat = tvAudioFormat;
+exports.streamContentFromDidl = streamContentFromDidl;
+exports.soapGetPositionInfo = soapGetPositionInfo;
 exports.nowPlayingLabels = nowPlayingLabels;
 exports.getMediaRoot = getMediaRoot;
 exports.browseMedia = browseMedia;
@@ -240,17 +243,115 @@ function isPlaceholderTitle(title) {
     }
     return /^(spdif|rincon_)/i.test(text);
 }
+const TV_FORMAT_NAMES = {
+    PCM: 'PCM',
+    STEREOPCM: 'Stereo PCM',
+    STEREOPCM2: 'Stereo PCM',
+    '2STEREOPCM': 'Stereo PCM',
+    '20PCM': 'Stereo PCM',
+    MULTICHANNELPCM: 'Multichannel PCM',
+    MULTICHANNEL: 'Multichannel PCM',
+    DOLBYDIGITAL: 'Dolby Digital',
+    DOLBYDIGITAL51: 'Dolby Digital 5.1',
+    DOLBYDIGITALPLUS: 'Dolby Digital Plus',
+    DOLBYATMOS: 'Dolby Atmos',
+    DOLBYTRUEHD: 'Dolby TrueHD',
+    DOLBYMAT: 'Dolby MAT',
+    DTS: 'DTS',
+    DTSDIGITALSURROUND: 'DTS Digital Surround',
+    DTSHD: 'DTS-HD',
+    DTSHDMA: 'DTS-HD MA',
+    AAC: 'AAC',
+};
+function formatKey(text) {
+    return text
+        .toUpperCase()
+        .replace(/[_./+-]+/g, ' ')
+        .replace(/\b(\d+)\s+(\d+)\b/g, '$1$2')
+        .replace(/[^A-Z0-9]+/g, '');
+}
+/** HDMI audio format from streamContent / title, e.g. Stereo PCM, Dolby Atmos. */
+function tvAudioFormat(text) {
+    const raw = String(text || '').trim();
+    if (!raw || isPlaceholderTitle(raw)) {
+        return '';
+    }
+    const mapped = TV_FORMAT_NAMES[formatKey(raw)];
+    if (mapped) {
+        return mapped;
+    }
+    if (/pcm|dolby|dts|atmos|truehd|\bmat\b/i.test(raw) && raw.length < 64) {
+        return raw.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+    return '';
+}
+function streamContentFromDidl(xml) {
+    const source = String(xml || '');
+    if (!source) {
+        return '';
+    }
+    const decoded = decodeXml(source);
+    const match = source.match(/<r:streamContent\b[^>]*>([\s\S]*?)<\/r:streamContent>/i) ||
+        source.match(/<r:streamcontent\b[^>]*>([\s\S]*?)<\/r:streamcontent>/i) ||
+        decoded.match(/<r:streamContent\b[^>]*>([\s\S]*?)<\/r:streamContent>/i) ||
+        decoded.match(/<r:streamcontent\b[^>]*>([\s\S]*?)<\/r:streamcontent>/i);
+    return match ? decodeXml(match[1]).trim() : '';
+}
+function soapGetPositionInfo(baseUrl) {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <InstanceID>0</InstanceID>
+    </u:GetPositionInfo>
+  </s:Body>
+</s:Envelope>`;
+    const url = new URL(`${baseUrl.replace(/\/$/, '')}/MediaRenderer/AVTransport/Control`);
+    const payload = Buffer.from(body, 'utf8');
+    return new Promise((resolve, reject) => {
+        const req = http.request({
+            hostname: url.hostname,
+            port: url.port || 1400,
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+                'CONTENT-TYPE': 'text/xml; charset="utf-8"',
+                SOAPACTION: '"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo"',
+                'CONTENT-LENGTH': payload.length,
+            },
+        }, res => {
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => {
+                const xml = Buffer.concat(chunks).toString('utf8');
+                if ((res.statusCode || 500) >= 400) {
+                    reject(new Error(`GetPositionInfo failed: HTTP ${res.statusCode}`));
+                    return;
+                }
+                resolve(xml);
+            });
+        });
+        req.on('error', reject);
+        req.setTimeout(5000, () => {
+            req.destroy();
+            reject(new Error('GetPositionInfo timed out'));
+        });
+        req.write(payload);
+        req.end();
+    });
+}
 /** Friendly now-playing text when Sonos leaves TV HDMI / line-in metadata empty. */
-function nowPlayingLabels(track, labels) {
+function nowPlayingLabels(track, labels, extra) {
     const uri = String(track.uri || '');
     const rawTitle = String(track.title || '').trim();
     const artist = String(track.artist || '').trim();
     const album = String(track.album || '').trim();
     const placeholder = isPlaceholderTitle(rawTitle);
     if (isTvStreamUri(uri)) {
+        const format = tvAudioFormat(rawTitle) || tvAudioFormat(streamContentFromDidl(extra?.metadata)) || tvAudioFormat(artist);
         return {
-            title: placeholder ? labels.tv : rawTitle,
-            artist: artist || labels.tvHdmi,
+            title: labels.tv,
+            artist: format || labels.tvHdmi,
             album,
             station: labels.tv,
         };

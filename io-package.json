@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.7",
+    "version": "4.3.8",
     "news": {
+      "4.3.8": {
+        "en": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
+        "de": "Bei TV HDMI werden das Tonformat (z. B. Stereo PCM) und ein Fernseher-Cover statt No Cover angezeigt.",
+        "ru": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
+        "pt": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
+        "nl": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
+        "fr": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
+        "it": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
+        "es": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
+        "pl": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
+        "uk": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
+        "zh-cn": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover."
+      },
       "4.3.7": {
         "en": "The progress bar is hidden while TV HDMI is playing.",
         "de": "Der Fortschrittsbalken wird ausgeblendet, während TV HDMI läuft.",

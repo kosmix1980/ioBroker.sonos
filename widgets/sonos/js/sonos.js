@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.7',
+        version: '4.3.8',
         _bound: {},
         _tickers: {},
         words: {
@@ -684,9 +684,7 @@ vis.binds = vis.binds || {};
                 station === 'TV' ||
                 station === tvLabel ||
                 title === 'TV' ||
-                title === tvLabel ||
-                artist === 'HDMI' ||
-                artist === hdmiLabel
+                title === tvLabel
             );
             return { title: title, artist: artist, album: album, station: station, type: type, isTv: isTv };
         },
@@ -1001,7 +999,17 @@ vis.binds = vis.binds || {};
             if (!album && station && station !== title) {
                 sub = [sub, station].filter(Boolean).join(' — ');
             }
-            var coverStyle = cover ? ' style="background-image:url(\'' + vis.binds.sonos.esc(cover) + '\')"' : '';
+            var coverHtml = now.isTv
+                ? '<div class="sonos-ctrl-cover is-tv" aria-hidden="true">' +
+                    '<svg viewBox="0 0 80 80" width="92" height="92">' +
+                    '<rect x="12" y="16" width="56" height="38" rx="4" fill="#2a2a2a" stroke="#8a8a8a" stroke-width="2.4"/>' +
+                    '<rect x="17" y="21" width="46" height="28" rx="2" fill="#111"/>' +
+                    '<path d="M34 58 L40 52 L46 58" fill="none" stroke="#8a8a8a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<line x1="28" y1="64" x2="52" y2="64" stroke="#8a8a8a" stroke-width="2.4" stroke-linecap="round"/>' +
+                    '<circle cx="19.5" cy="50.5" r="1.6" fill="#e31c23"/>' +
+                    '</svg></div>'
+                : '<div class="sonos-ctrl-cover"' + (cover ? ' style="background-image:url(\'' + vis.binds.sonos.esc(cover) + '\')"' : '') + '>' +
+                    (cover ? '' : 'SONOS') + '</div>';
             var seekHtml = now.isTv
                 ? ''
                 : '<div class="sonos-ctrl-seek">' +
@@ -1018,7 +1026,7 @@ vis.binds = vis.binds || {};
                         '<div class="sonos-ctrl-rooms">' + roomsHtml + '</div>' +
                     '</div>' +
                     '<div class="sonos-ctrl-main">' +
-                        '<div class="sonos-ctrl-cover"' + coverStyle + '>' + (cover ? '' : 'SONOS') + '</div>' +
+                        coverHtml +
                         '<div class="sonos-ctrl-meta">' +
                             '<div class="sonos-ctrl-title">' + vis.binds.sonos.esc(title) + '</div>' +
                             '<div class="sonos-ctrl-sub">' + vis.binds.sonos.esc(sub) + '</div>' +
