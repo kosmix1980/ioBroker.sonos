@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.1.1',
+        version: '4.1.2',
         _bound: {},
         _tickers: {},
         words: {
@@ -650,7 +650,29 @@ vis.binds = vis.binds || {};
                 hash = ((hash << 5) - hash) + key.charCodeAt(i);
                 hash |= 0;
             }
-            return palette[Math.abs(hash) % palette.length];
+            var color = palette[Math.abs(hash) % palette.length];
+            var isMaster = key === player.ip;
+            return isMaster ? color : vis.binds.sonos.shadeColor(color, 0.58);
+        },
+
+        shadeColor: function (hex, factor) {
+            hex = String(hex || '').replace('#', '');
+            if (hex.length !== 6) {
+                return '#' + hex;
+            }
+            var out = '#';
+            for (var i = 0; i < 6; i += 2) {
+                var n = Math.round(parseInt(hex.substring(i, i + 2), 16) * factor);
+                if (n < 0) {
+                    n = 0;
+                }
+                if (n > 255) {
+                    n = 255;
+                }
+                var part = n.toString(16);
+                out += part.length < 2 ? '0' + part : part;
+            }
+            return out;
         },
 
         render: function (widgetID, instance) {
@@ -701,9 +723,12 @@ vis.binds = vis.binds || {};
                 var isPlaying = vis.binds.sonos.state(vis.binds.sonos.mediaPlayerId(player), 'state') === 'play';
                 var alive = vis.binds.sonos.state(player.id, 'alive') !== false;
                 var nameColor = vis.binds.sonos.groupNameColor(player, players);
+                var coord = String(vis.binds.sonos.state(player.id, 'coordinator') || player.ip);
+                var isMaster = Boolean(nameColor && coord === player.ip);
                 return '<button type="button" class="sonos-ctrl-chip' +
                     (isActive ? ' is-active' : '') +
                     (isPlaying ? ' is-playing' : '') +
+                    (isMaster ? ' is-master' : '') +
                     (alive ? '' : ' is-offline') +
                     '" data-ip="' + vis.binds.sonos.esc(player.ip) + '"' +
                     (nameColor ? ' style="--sonos-name:' + nameColor + '"' : '') + '>' +

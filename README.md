@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.1.2 (2026-09-04)
+* (kosmix1980) The group master is shown brighter than the other rooms in the same group
+
 ### 4.1.1 (2026-09-04)
 * (kosmix1980) Grouped rooms share a name color in the VIS widget; ungrouped rooms stay white
 

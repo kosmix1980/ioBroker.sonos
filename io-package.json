@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.1.1",
+    "version": "4.1.2",
     "news": {
+      "4.1.2": {
+        "en": "The group master is shown brighter than the other rooms in the same group.",
+        "de": "Der Gruppenmaster wird heller dargestellt als die anderen Räume derselben Gruppe.",
+        "ru": "The group master is shown brighter than the other rooms in the same group.",
+        "pt": "The group master is shown brighter than the other rooms in the same group.",
+        "nl": "The group master is shown brighter than the other rooms in the same group.",
+        "fr": "The group master is shown brighter than the other rooms in the same group.",
+        "it": "The group master is shown brighter than the other rooms in the same group.",
+        "es": "The group master is shown brighter than the other rooms in the same group.",
+        "pl": "The group master is shown brighter than the other rooms in the same group.",
+        "uk": "The group master is shown brighter than the other rooms in the same group.",
+        "zh-cn": "The group master is shown brighter than the other rooms in the same group."
+      },
       "4.1.1": {
         "en": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
         "de": "Gruppierte Räume haben im VIS-Widget die gleiche Namensfarbe. Räume ohne Gruppe bleiben weiß.",
