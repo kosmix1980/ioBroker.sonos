@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.2.0",
+    "version": "4.2.1",
     "news": {
+      "4.2.1": {
+        "en": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
+        "de": "Spotify ist im VIS-Widget eine Quelle. Beim Öffnen erscheinen passende Sonos-Favoriten und Playlists und können direkt gestartet werden.",
+        "ru": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
+        "pt": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
+        "nl": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
+        "fr": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
+        "it": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
+        "es": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
+        "pl": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
+        "uk": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen.",
+        "zh-cn": "Spotify is a source in the VIS widget. Opening it lists matching Sonos favorites and playlists so they can be started from Quellen."
+      },
       "4.2.0": {
         "en": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
         "de": "Das VIS-Widget kann TuneIn, Mediathek, Netzlaufwerke und Line-In durchsuchen. YouTube und ähnliche Dienste erscheinen als Namen; Wiedergabe über Sonos-Favoriten.",

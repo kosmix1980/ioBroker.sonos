@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.2.0',
+        version: '4.2.1',
         _bound: {},
         _tickers: {},
         words: {
@@ -824,6 +824,8 @@ vis.binds = vis.binds || {};
                             metadata: item.metadata || '',
                             folder: !!item.folder,
                             service: !!item.service,
+                            favorite: item.favorite || '',
+                            playlist: item.playlist || '',
                             title: item.title || '',
                         }));
                         return '<button type="button" class="sonos-ctrl-item" data-media-item="' + vis.binds.sonos.esc(payload) + '">' +
@@ -987,6 +989,14 @@ vis.binds = vis.binds || {};
                 try {
                     item = JSON.parse(decodeURIComponent(String($(this).attr('data-media-item') || '')));
                 } catch (e) {
+                    return;
+                }
+                if (item.favorite) {
+                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ favorite: item.favorite }));
+                    return;
+                }
+                if (item.playlist) {
+                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ playlist: item.playlist }));
                     return;
                 }
                 if (item.folder || item.service) {

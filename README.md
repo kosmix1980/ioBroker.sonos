@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.2.1 (2026-09-04)
+* (kosmix1980) Spotify is a source in the VIS widget; opening it lists matching Sonos favorites and playlists
+
 ### 4.2.0 (2026-09-04)
 * (kosmix1980) VIS widget: browse TuneIn, music library, network shares and line-in
 

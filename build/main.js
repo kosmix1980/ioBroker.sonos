@@ -1026,9 +1026,97 @@ class Sonos extends utils.Adapter {
         const coverState = await this.getStateAsync(`root.${coordinatorIp}.current_cover`);
         await this.copyPlaybackToGroupMembers(coordinatorIp, player.state, getPlaybackState(player.state.playbackState), String(coverState?.val || ''));
     }
+    isGermanUi() {
+        const lang = this.language;
+        return String(lang || '')
+            .toLowerCase()
+            .startsWith('de');
+    }
+    musicServiceInfo(name) {
+        const services = this.discovery?.availableServices || {};
+        const key = Object.keys(services).find(item => item.toLowerCase() === name.toLowerCase());
+        if (key) {
+            return services[key];
+        }
+        if (name.toLowerCase() === 'spotify') {
+            return { id: 9, type: 2311 };
+        }
+        return undefined;
+    }
+    /**
+     * Spotify and similar catalogs are not in ContentDirectory.
+     * List matching Sonos favorites and saved playlists so they can be started
+     * from the Quellen tab like a real source.
+     */
+    async listServiceLibrary(serviceName, german) {
+        const items = [];
+        const info = this.musicServiceInfo(serviceName);
+        const blobOf = (item) => [item.title, item.uri, item.albumArtUri, item.metadata].filter(Boolean).join('\n');
+        try {
+            const favorites = this.toFavoriteList(await this.discovery?.getFavorites());
+            for (const fav of favorites) {
+                if (!fav.title || !(0, content_directory_1.matchesMusicService)(blobOf(fav), serviceName, info)) {
+                    continue;
+                }
+                items.push({
+                    id: `favorite:${fav.title}`,
+                    title: fav.title,
+                    uri: fav.uri || '',
+                    metadata: fav.metadata || '',
+                    artist: german ? 'Favorit' : 'Favorite',
+                    album: serviceName,
+                    cover: fav.albumArtUri || '',
+                    folder: false,
+                    favorite: fav.title,
+                });
+            }
+        }
+        catch (err) {
+            this.log.warn(`Cannot list ${serviceName} favorites: ${err}`);
+        }
+        try {
+            if (this.discovery?.getPlaylists) {
+                const playlists = this.toFavoriteList(await this.discovery.getPlaylists());
+                for (const playlist of playlists) {
+                    if (!playlist.title || !(0, content_directory_1.matchesMusicService)(blobOf(playlist), serviceName, info)) {
+                        continue;
+                    }
+                    items.push({
+                        id: `playlist:${playlist.title}`,
+                        title: playlist.title,
+                        uri: playlist.uri || '',
+                        metadata: playlist.metadata || '',
+                        artist: 'Playlist',
+                        album: serviceName,
+                        cover: playlist.albumArtUri || '',
+                        folder: false,
+                        playlist: playlist.title,
+                    });
+                }
+            }
+        }
+        catch (err) {
+            this.log.warn(`Cannot list ${serviceName} playlists: ${err}`);
+        }
+        if (!items.length) {
+            items.push({
+                id: '',
+                title: german
+                    ? `${serviceName} ist als Quelle verfügbar. Der Katalog selbst lässt sich hier nicht durchsuchen — speichere Sender oder Playlists in der Sonos-App als Favoriten, dann erscheinen sie in diesem Ordner.`
+                    : `${serviceName} is available as a source. The catalog cannot be browsed here — save stations or playlists as favorites in the Sonos app and they will appear in this folder.`,
+                uri: '',
+                metadata: '',
+                artist: '',
+                album: '',
+                cover: '',
+                folder: false,
+            });
+        }
+        return items;
+    }
     async handleMediaBrowse(player, ip, objectId) {
         const id = objectId.trim() || 'root';
-        const german = this.language === 'de';
+        const german = this.isGermanUi();
         const labels = {
             radio: 'TuneIn Radio',
             library: german ? 'Mediathek' : 'Music library',
@@ -1045,21 +1133,7 @@ class Sonos extends utils.Adapter {
             result = {
                 id,
                 title: name,
-                items: [
-                    {
-                        id,
-                        title: german
-                            ? `${name} kann hier nicht durchsucht werden. Lege Sender oder Playlists in der Sonos-App als Favorit an.`
-                            : `${name} cannot be browsed here. Save stations or playlists as favorites in the Sonos app.`,
-                        uri: '',
-                        metadata: '',
-                        artist: '',
-                        album: '',
-                        cover: '',
-                        folder: false,
-                        service: true,
-                    },
-                ],
+                items: await this.listServiceLibrary(name, german),
             };
         }
         else {
@@ -1083,6 +1157,16 @@ class Sonos extends utils.Adapter {
         if (text.startsWith('{')) {
             try {
                 const parsed = JSON.parse(text);
+                if (parsed.favorite) {
+                    await player.replaceWithFavorite(parsed.favorite);
+                    await player.play();
+                    return;
+                }
+                if (parsed.playlist) {
+                    await player.replaceWithPlaylist(parsed.playlist);
+                    await player.play();
+                    return;
+                }
                 uri = String(parsed.uri || '').trim();
                 metadata = String(parsed.metadata || '');
             }

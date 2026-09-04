@@ -483,7 +483,7 @@ function getChannelStates() {
             read: false,
             write: true,
             role: 'media',
-            desc: 'Play a browsed media item as JSON {uri, metadata}',
+            desc: 'Play a browsed media item as JSON {uri, metadata, favorite, playlist}',
             name: 'Play browsed media',
         },
     };

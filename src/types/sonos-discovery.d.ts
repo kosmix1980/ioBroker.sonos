@@ -43,6 +43,7 @@ declare module 'sonos-discovery' {
         title?: string;
         uri?: string;
         albumArtUri?: string;
+        metadata?: string;
     }
 
     export interface SonosQueueItem {

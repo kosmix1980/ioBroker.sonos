@@ -33,13 +33,15 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.matchesMusicService = matchesMusicService;
 exports.getMediaRoot = getMediaRoot;
 exports.browseMedia = browseMedia;
 exports.isStreamUri = isStreamUri;
 /**
  * Browse Sonos ContentDirectory (TuneIn, music library, network shares, line-in).
- * Music services such as YouTube Music are listed by name only; their catalogs
- * need SMAPI, which sonos-discovery does not expose.
+ * Spotify and similar music services are listed as sources. Their full catalogs
+ * need SMAPI, which sonos-discovery does not expose, so opening a service shows
+ * matching Sonos favorites and playlists instead.
  */
 const http = __importStar(require("node:http"));
 const BROWSE_LIMIT = 200;
@@ -163,28 +165,77 @@ function soapBrowse(baseUrl, objectId) {
         req.end();
     });
 }
+const FEATURED_SERVICES = [
+    'Spotify',
+    'YouTube Music',
+    'YouTube',
+    'Amazon Music',
+    'Apple Music',
+    'Deezer',
+    'Tidal',
+    'SoundCloud',
+];
+function mediaItem(partial) {
+    return {
+        uri: '',
+        metadata: '',
+        artist: '',
+        album: '',
+        cover: '',
+        folder: false,
+        ...partial,
+    };
+}
+function matchesMusicService(blob, serviceName, service) {
+    const name = serviceName.toLowerCase();
+    const text = blob.toLowerCase();
+    if (service?.id != null && new RegExp(`(?:^|[?&;])sid=${service.id}(?:\\b|&|$)`).test(text)) {
+        return true;
+    }
+    if (name === 'spotify') {
+        return /spotify|x-sonos-spotify|sid=9\b|sa_rincon2311|scdn\.co/.test(text);
+    }
+    if (name.includes('youtube')) {
+        return /youtube|sid=677\b/.test(text);
+    }
+    if (name.includes('amazon')) {
+        return /amazon|prime|sid=20199\b/.test(text);
+    }
+    if (name.includes('apple')) {
+        return /apple.?music|sid=204\b/.test(text);
+    }
+    if (name.includes('deezer')) {
+        return /deezer|sid=2\b/.test(text);
+    }
+    if (name.includes('tidal')) {
+        return /tidal|sid=44591\b|sid=303\b/.test(text);
+    }
+    if (name.includes('soundcloud')) {
+        return /soundcloud|sid=160\b/.test(text);
+    }
+    return text.includes(name);
+}
 function getMediaRoot(services, labels) {
-    const items = [
-        { id: 'R:0', title: labels.radio, uri: '', metadata: '', artist: '', album: '', cover: '', folder: true },
-        { id: 'A:', title: labels.library, uri: '', metadata: '', artist: '', album: '', cover: '', folder: true },
-        { id: 'S:', title: labels.shares, uri: '', metadata: '', artist: '', album: '', cover: '', folder: true },
-        { id: 'AI:', title: labels.lineIn, uri: '', metadata: '', artist: '', album: '', cover: '', folder: true },
-    ];
-    Object.keys(services || {})
-        .sort((a, b) => a.localeCompare(b))
-        .forEach(name => {
-        items.push({
-            id: `service:${name}`,
-            title: name,
-            uri: '',
-            metadata: '',
-            artist: '',
-            album: '',
-            cover: '',
-            folder: false,
-            service: true,
-        });
+    const available = Object.keys(services || {});
+    const used = new Set();
+    const items = [mediaItem({ id: 'R:0', title: labels.radio, folder: true })];
+    const addService = (name) => {
+        const key = name.toLowerCase();
+        if (used.has(key)) {
+            return;
+        }
+        used.add(key);
+        items.push(mediaItem({ id: `service:${name}`, title: name, folder: true, service: true }));
+    };
+    addService('Spotify');
+    FEATURED_SERVICES.forEach(name => {
+        const match = available.find(item => item.toLowerCase() === name.toLowerCase());
+        if (match) {
+            addService(match);
+        }
     });
+    items.push(mediaItem({ id: 'A:', title: labels.library, folder: true }), mediaItem({ id: 'S:', title: labels.shares, folder: true }), mediaItem({ id: 'AI:', title: labels.lineIn, folder: true }));
+    available.sort((a, b) => a.localeCompare(b)).forEach(name => addService(name));
     return { id: 'root', title: '', items };
 }
 async function browseMedia(baseUrl, objectId) {
