@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.1.0",
+    "version": "4.1.1",
     "news": {
+      "4.1.1": {
+        "en": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
+        "de": "Gruppierte Räume haben im VIS-Widget die gleiche Namensfarbe. Räume ohne Gruppe bleiben weiß.",
+        "ru": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
+        "pt": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
+        "nl": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
+        "fr": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
+        "it": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
+        "es": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
+        "pl": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
+        "uk": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white.",
+        "zh-cn": "Grouped rooms share a name color in the VIS widget. Ungrouped rooms stay white."
+      },
       "4.1.0": {
         "en": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
         "de": "VIS-Widget für Räume, Gruppen, Favoriten, Playlists, Warteschlange und zuletzt gespielte Titel. Gruppenmitglieder folgen Titel, Transport und Fortschritt des Masters.",

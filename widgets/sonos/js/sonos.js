@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.1.0',
+        version: '4.1.1',
         _bound: {},
         _tickers: {},
         words: {
@@ -633,6 +633,26 @@ vis.binds = vis.binds || {};
             return coordA && coordA === coordB;
         },
 
+        groupNameColor: function (player, players) {
+            var count = 0;
+            players.forEach(function (other) {
+                if (vis.binds.sonos.isGroupedWith(player, other)) {
+                    count += 1;
+                }
+            });
+            if (count < 2) {
+                return '';
+            }
+            var palette = ['#7dd3fc', '#86efac', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fb7185', '#a3e635', '#818cf8'];
+            var key = String(vis.binds.sonos.state(player.id, 'coordinator') || player.ip);
+            var hash = 0;
+            for (var i = 0; i < key.length; i++) {
+                hash = ((hash << 5) - hash) + key.charCodeAt(i);
+                hash |= 0;
+            }
+            return palette[Math.abs(hash) % palette.length];
+        },
+
         render: function (widgetID, instance) {
             var $div = $('#' + widgetID);
             if (!$div.length) {
@@ -680,18 +700,21 @@ vis.binds = vis.binds || {};
                 var isActive = player.ip === selected.ip;
                 var isPlaying = vis.binds.sonos.state(vis.binds.sonos.mediaPlayerId(player), 'state') === 'play';
                 var alive = vis.binds.sonos.state(player.id, 'alive') !== false;
+                var nameColor = vis.binds.sonos.groupNameColor(player, players);
                 return '<button type="button" class="sonos-ctrl-chip' +
                     (isActive ? ' is-active' : '') +
                     (isPlaying ? ' is-playing' : '') +
                     (alive ? '' : ' is-offline') +
-                    '" data-ip="' + vis.binds.sonos.esc(player.ip) + '">' +
+                    '" data-ip="' + vis.binds.sonos.esc(player.ip) + '"' +
+                    (nameColor ? ' style="--sonos-name:' + nameColor + '"' : '') + '>' +
                     vis.binds.sonos.esc(player.name) +
                     '</button>';
             }).join('');
 
             var groupHtml = players.filter(function (player) { return player.ip !== selected.ip; }).map(function (player) {
                 var checked = vis.binds.sonos.isGroupedWith(selected, player) ? ' checked' : '';
-                return '<label><input type="checkbox" data-group-ip="' + vis.binds.sonos.esc(player.ip) + '"' + checked + '> ' +
+                var nameColor = vis.binds.sonos.groupNameColor(player, players);
+                return '<label' + (nameColor ? ' style="--sonos-name:' + nameColor + '"' : '') + '><input type="checkbox" data-group-ip="' + vis.binds.sonos.esc(player.ip) + '"' + checked + '> ' +
                     vis.binds.sonos.esc(player.name) + '</label>';
             }).join('');
 

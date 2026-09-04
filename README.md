@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.1.1 (2026-09-04)
+* (kosmix1980) Grouped rooms share a name color in the VIS widget; ungrouped rooms stay white
+
 ### 4.1.0 (2026-09-04)
 * (kosmix1980) Added a VIS widget for rooms, groups, favorites, playlists and the queue
 * (kosmix1980) Added `playlist_list` and `playlist_list_array` states
