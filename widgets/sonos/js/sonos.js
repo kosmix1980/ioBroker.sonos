@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.6',
+        version: '4.3.7',
         _bound: {},
         _tickers: {},
         words: {
@@ -543,6 +543,9 @@ vis.binds = vis.binds || {};
                 ip: selectedIp,
             });
             var playing = vis.binds.sonos.state(playerId, 'state') === 'play';
+            if (vis.binds.sonos.nowPlaying(playerId).isTv) {
+                return;
+            }
             var durationS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_duration_s'));
             var elapsedS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_elapsed_s'));
             var seek = parseFloat(vis.binds.sonos.state(playerId, 'seek'));
@@ -665,17 +668,27 @@ vis.binds = vis.binds || {};
             var artist = String(vis.binds.sonos.state(playerId, 'current_artist') || '').trim();
             var album = String(vis.binds.sonos.state(playerId, 'current_album') || '').trim();
             var type = parseInt(vis.binds.sonos.state(playerId, 'current_type'), 10);
+            var tvLabel = vis.binds.sonos.t('tv');
+            var hdmiLabel = vis.binds.sonos.t('tvHdmi');
             if (!title) {
                 title = station;
             }
             if (!title && type === 2) {
-                title = vis.binds.sonos.t('tv');
-                artist = artist || vis.binds.sonos.t('tvHdmi');
+                title = tvLabel;
+                artist = artist || hdmiLabel;
             }
             if (!title) {
                 title = vis.binds.sonos.t('nothing');
             }
-            return { title: title, artist: artist, album: album, station: station };
+            var isTv = type === 2 && (
+                station === 'TV' ||
+                station === tvLabel ||
+                title === 'TV' ||
+                title === tvLabel ||
+                artist === 'HDMI' ||
+                artist === hdmiLabel
+            );
+            return { title: title, artist: artist, album: album, station: station, type: type, isTv: isTv };
         },
 
         parseBrowse: function (playerId) {
@@ -989,6 +1002,13 @@ vis.binds = vis.binds || {};
                 sub = [sub, station].filter(Boolean).join(' — ');
             }
             var coverStyle = cover ? ' style="background-image:url(\'' + vis.binds.sonos.esc(cover) + '\')"' : '';
+            var seekHtml = now.isTv
+                ? ''
+                : '<div class="sonos-ctrl-seek">' +
+                    '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(elapsed) + '</span>' +
+                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-seek-input" value="' + seek + '">' +
+                    '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(duration) + '</span>' +
+                '</div>';
 
             $div.html(
                 '<div class="sonos-ctrl">' +
@@ -1010,11 +1030,7 @@ vis.binds = vis.binds || {};
                                 '<button type="button" class="sonos-ctrl-btn' + (shuffle ? ' is-on' : '') + '" data-cmd="shuffle" title="Shuffle">&#128256;</button>' +
                                 '<button type="button" class="sonos-ctrl-btn' + (repeat ? ' is-on' : '') + '" data-cmd="repeat" title="Repeat">' + (repeat === 2 ? '1' : '&#128257;') + '</button>' +
                             '</div>' +
-                            '<div class="sonos-ctrl-seek">' +
-                                '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(elapsed) + '</span>' +
-                                '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-seek-input" value="' + seek + '">' +
-                                '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(duration) + '</span>' +
-                            '</div>' +
+                            seekHtml +
                             '<div class="sonos-ctrl-volume">' +
                                 '<span>Vol</span>' +
                                 '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-volume-input" value="' + volume + '">' +

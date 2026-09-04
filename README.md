@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.7 (2026-09-04)
+* (kosmix1980) VIS widget: hide the progress bar while TV HDMI is playing
+
 ### 4.3.6 (2026-09-04)
 * (kosmix1980) VIS widget: show TV HDMI as now-playing instead of an empty title
 
