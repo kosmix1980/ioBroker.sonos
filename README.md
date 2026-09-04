@@ -22,11 +22,27 @@ The adapter includes a VIS widget **Sonos Control**. One widget can switch rooms
 5. Set the object to the instance, for example `sonos.0` — not a single `play` state.
 6. Size the widget around **900 × 520**.
 
-After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the last local title of that room. The **Recent** tab lists the last tracks of the selected room. The **Sources** tab browses TuneIn, Spotify, YouTube Music, the music library, network shares and line-in. Spotify search uses the Sonos catalog. YouTube Music search lists catalog titles and tells the speaker to play them via `sid=284` (the official YTM account on the player). If a title does not start, save it as a favorite in the Sonos app.
+After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the last local title of that room. Library buttons under the rooms (**Favorites**, **Playlists**, **Queue**, **Recent**, **Sources**) open a slightly transparent sheet below the buttons. **Recent** lists the last tracks of the selected room. **Sources** browses TuneIn, Spotify, YouTube Music, the music library, network shares, line-in and TV HDMI. Spotify search uses the Sonos catalog. YouTube Music search lists catalog titles and tells the speaker to play them via `sid=284` (the official YTM account on the player). If a title does not start, save it as a favorite in the Sonos app.
+
+![Sonos Control – player](img/widget-player.png)
+
+*Rooms, grouping and now-playing*
+
+![Sonos Control – favorites](img/widget-favorites.png)
+
+*Library buttons open a slightly transparent sheet below the rooms*
+
+![Sonos Control – sources](img/widget-sources.png)
+
+*Sources including TV HDMI, TuneIn, Spotify and YouTube Music*
+
+![Sonos Control – TV HDMI](img/widget-hdmi.png)
+
+*TV HDMI: title TV, format, mute, night sound and speech enhancement*
 
 To install this fork over the official adapter: in Admin open **Adapters** → GitHub button → `https://github.com/kosmix1980/ioBroker.sonos`, then restart vis and hard-reload the editor.
 
-This branch includes the compiled `build/` folder. ioBroker needs `build/main.js` as start file. After a GitHub install, if the log shows `cannot find start file`, compile once on the host:
+This branch does not include the compiled `build/` folder (same as official). ioBroker needs `build/main.js` as start file. After a GitHub install, if the log shows `cannot find start file`, compile once on the host:
 
 ```
 cd /opt/iobroker/node_modules/iobroker.sonos
