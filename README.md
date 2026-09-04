@@ -26,6 +26,15 @@ After that, every discovered speaker appears as a chip at the top. Group members
 
 To install this fork over the official adapter: in Admin open **Adapters** → GitHub button → `https://github.com/kosmix1980/ioBroker.sonos`, then restart vis and hard-reload the editor.
 
+This branch includes the compiled `build/` folder. ioBroker needs `build/main.js` as start file. After a GitHub install, if the log shows `cannot find start file`, compile once on the host:
+
+```
+cd /opt/iobroker/node_modules/iobroker.sonos
+npm install
+npm run build
+iobroker restart sonos.0
+```
+
 ## Handling of groups
 * States for handling SONOS groups:
    * **`coordinator`**: set/get the coordinator, so the SONOS device which is the master and coordinating the group. It requires the IP address (channel name) of the SONOS device to be the coordinator, but with underscore `_` instead of dot `.`, so use for example `192_168_0_100` for IP address `192.168.0.100`. If the device does not belong to any group, then the value is equal to the own channel name (IP).
