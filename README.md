@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.14 (2026-09-04)
+* (kosmix1980) VIS widget: library popup is slightly transparent
+
 ### 4.3.13 (2026-09-04)
 * (kosmix1980) VIS widget: Favorites/Playlists/Queue/Recent/Sources are top buttons with a covering popup
 
