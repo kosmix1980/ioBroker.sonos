@@ -37,12 +37,20 @@ declare module 'sonos-discovery' {
         volume: number;
         mute: boolean;
         groupState?: SonosGroupState;
+        equalizer?: {
+            bass?: number;
+            treble?: number;
+            loudness?: boolean;
+            nightMode?: boolean;
+            speechEnhancement?: boolean;
+        };
     }
 
     export interface SonosFavorite {
         title?: string;
         uri?: string;
         albumArtUri?: string;
+        metadata?: string;
     }
 
     export interface SonosQueueItem {
@@ -60,6 +68,7 @@ declare module 'sonos-discovery' {
         state: SonosPlayerState;
         groupState: SonosGroupState;
         coordinator: SonosPlayer;
+        avTransportUri?: string;
         avTransportUriMetadata: unknown;
         /** IP address of the player. It will be stored by this adapter and is not part of the library */
         _address?: string | null;
@@ -90,13 +99,16 @@ declare module 'sonos-discovery' {
         setGroupVolume(volume: number): Promise<unknown>;
         setTreble(treble: number): Promise<unknown>;
         setBass(bass: number): Promise<unknown>;
+        nightMode(enabled: boolean): Promise<unknown>;
+        speechEnhancement(enabled: boolean): Promise<unknown>;
         shuffle(enabled: boolean): Promise<unknown>;
         crossfade(enabled: boolean): Promise<unknown>;
         repeat(mode: string): Promise<unknown>;
         replaceWithFavorite(favorite: string): Promise<unknown>;
         replaceWithPlaylist(playlist: string): Promise<unknown>;
         setAVTransport(uri: string, metadata?: unknown): Promise<unknown>;
-        addURIToQueue(uri: string): Promise<{ firsttracknumberenqueued: string | number }>;
+        clearQueue(): Promise<unknown>;
+        addURIToQueue(uri: string, metadata?: unknown): Promise<{ firsttracknumberenqueued: string | number }>;
         removeTrackFromQueue(trackNo: number): Promise<unknown>;
         getQueue(): Promise<SonosQueueItem[]>;
     }
@@ -115,7 +127,9 @@ declare module 'sonos-discovery' {
         localEndpoint: string;
 
         getPlayerByUUID(uuid: string): SonosPlayer | undefined;
-        getFavorites(): Promise<Record<string, SonosFavorite>>;
+        getFavorites(): Promise<Record<string, SonosFavorite> | SonosFavorite[]>;
+        getPlaylists(): Promise<Record<string, SonosFavorite> | SonosFavorite[]>;
+        availableServices?: Record<string, { id: number; type: number; capabilities?: number }>;
         on(event: string, listener: (data: any) => void): this;
         dispose(): void;
     }
