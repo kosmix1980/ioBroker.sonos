@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.2 (2026-09-04)
+* (kosmix1980) Restore the Sources folders and translate emptySources instead of showing the raw key
+
 ### 4.3.1 (2026-09-04)
 * (kosmix1980) Fix SMAPI catalog/search XML parsing and add a Search button
 

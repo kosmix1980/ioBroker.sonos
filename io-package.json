@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.1",
+    "version": "4.3.2",
     "news": {
+      "4.3.2": {
+        "en": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
+        "de": "Der Quellen-Tab zeigt wieder TuneIn, Spotify, Mediathek, Netzlaufwerke und Line-In statt des emptySources-Platzhalters.",
+        "ru": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
+        "pt": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
+        "nl": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
+        "fr": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
+        "it": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
+        "es": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
+        "pl": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
+        "uk": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
+        "zh-cn": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder."
+      },
       "4.3.1": {
         "en": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
         "de": "Spotify-Katalog und Titelsuche parsen SMAPI-XML jetzt korrekt. Die Suche hat einen Suchen-Button. YouTube Music hat keinen SMAPI-Katalog.",
