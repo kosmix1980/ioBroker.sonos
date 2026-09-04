@@ -317,7 +317,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '1.1.0',
+        version: '1.1.1',
         _bound: {},
         words: {
             en: {
@@ -475,11 +475,16 @@ vis.binds = vis.binds || {};
         },
 
         mediaPlayerId: function (player) {
-            var coord = String(vis.binds.sonos.state(player.id, 'coordinator') || '').trim();
-            if (coord && coord !== player.ip && coord !== 'null' && coord !== 'undefined') {
-                return player.id.replace(/\.[^.]+$/, '.' + coord);
+            if (!vis.binds.sonos.isGroupMember(player)) {
+                return player.id;
             }
-            return player.id;
+            var coord = String(vis.binds.sonos.state(player.id, 'coordinator') || '').trim();
+            return player.id.replace(/\.[^.]+$/, '.' + coord);
+        },
+
+        isGroupMember: function (player) {
+            var coord = String(vis.binds.sonos.state(player.id, 'coordinator') || '').trim();
+            return Boolean(coord && coord !== player.ip && coord !== 'null' && coord !== 'undefined');
         },
 
         findPlayers: function (instance) {
@@ -902,7 +907,7 @@ vis.binds = vis.binds || {};
             var elapsed = vis.binds.sonos.state(mediaId, 'current_elapsed_s') || '00:00';
             var duration = vis.binds.sonos.state(mediaId, 'current_duration_s') || '00:00';
             var coordinator = String(vis.binds.sonos.state(selected.id, 'coordinator') || selected.ip);
-            var groupVolume = parseInt(vis.binds.sonos.state(selected.id, 'group_volume'), 10);
+            var groupVolume = parseInt(vis.binds.sonos.state(mediaId, 'group_volume'), 10);
             var grouped = players.filter(function (player) {
                 return vis.binds.sonos.isGroupedWith(selected, player);
             });
@@ -1055,16 +1060,15 @@ vis.binds = vis.binds || {};
                 vis.binds.sonos.write(mediaId + '.seek', parseFloat(this.value));
             });
             $div.find('.sonos-ctrl-group-volume').on('change input', function () {
-                vis.binds.sonos.write(selected.id + '.group_volume', parseInt(this.value, 10));
+                vis.binds.sonos.write(mediaId + '.group_volume', parseInt(this.value, 10));
             });
 
             $div.find('[data-group-ip]').on('change', function () {
                 var otherIp = String($(this).data('group-ip'));
-                var masterId = selected.id.replace(/\.[^.]+$/, '.' + coordinator);
                 if (this.checked) {
-                    vis.binds.sonos.write(selected.id + '.add_to_group', otherIp);
+                    vis.binds.sonos.write(mediaId + '.add_to_group', otherIp);
                 } else {
-                    vis.binds.sonos.write((coordinator ? masterId : selected.id) + '.remove_from_group', otherIp);
+                    vis.binds.sonos.write(mediaId + '.remove_from_group', otherIp);
                 }
             });
 

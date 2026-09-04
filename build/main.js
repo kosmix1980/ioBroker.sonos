@@ -57,6 +57,10 @@ const RECENT_TRACKS_MAX = 25;
 function isGroupingUri(uri) {
     return /^x-rincon:RINCON_/i.test(String(uri || ''));
 }
+/** True if this player is in a group and is not the coordinator */
+function isGroupMember(player) {
+    return Boolean(player.coordinator && player.coordinator.uuid !== player.uuid);
+}
 /**
  * Convert seconds into "[h:]mm:ss"
  *
@@ -240,56 +244,60 @@ class Sonos extends utils.Adapter {
             this.discovery?.players.forEach(p => this.log.debug(`UUID: ${p.uuid} in ${p.roomName} / ${p.baseUrl}`));
             return;
         }
+        // Only grouped members send transport to the master. A standalone room
+        // (or the group coordinator itself) always controls its own playback.
+        const media = isGroupMember(player) && player.coordinator ? player.coordinator : player;
+        const mediaIp = getIp(media) || id.channel;
         let promise;
         if (id.state === 'state_simple') {
-            promise = value ? player.play() : player.pause();
+            promise = value ? media.play() : media.pause();
         }
         else if (id.state === 'current_track_number') {
-            promise = player.trackSeek(value);
+            promise = media.trackSeek(value);
         }
         else if (id.state === 'shuffle') {
-            promise = player.shuffle(!!value);
+            promise = media.shuffle(!!value);
         }
         else if (id.state === 'crossfade') {
-            promise = player.crossfade(!!value);
+            promise = media.crossfade(!!value);
         }
         else if (id.state === 'repeat') {
             if (value === 0 || value === '0') {
-                promise = player.repeat('none');
+                promise = media.repeat('none');
             }
             else if (value === 1 || value === '1') {
-                promise = player.repeat('all');
+                promise = media.repeat('all');
             }
             else if (value === 2 || value === '2') {
-                promise = player.repeat('one');
+                promise = media.repeat('one');
             }
             else {
-                promise = player.repeat(value);
+                promise = media.repeat(value);
             }
         }
         else if (id.state === 'play') {
             if (value) {
-                promise = player.play();
+                promise = media.play();
             }
         }
         else if (id.state === 'stop') {
             if (value) {
-                promise = player.pause();
+                promise = media.pause();
             }
         }
         else if (id.state === 'pause') {
             if (value) {
-                promise = player.pause();
+                promise = media.pause();
             }
         }
         else if (id.state === 'next') {
             if (value) {
-                promise = player.nextTrack();
+                promise = media.nextTrack();
             }
         }
         else if (id.state === 'prev') {
             if (value) {
-                promise = player.previousTrack();
+                promise = media.previousTrack();
             }
         }
         else if (id.state === 'seek') {
@@ -300,10 +308,11 @@ class Sonos extends utils.Adapter {
             if (percent > 100) {
                 percent = 100;
             }
-            promise = player.timeSeek(Math.round((this.channels[id.channel].duration * percent) / 100));
+            const duration = this.channels[mediaIp]?.duration || this.channels[id.channel].duration;
+            promise = media.timeSeek(Math.round((duration * percent) / 100));
         }
         else if (id.state === 'current_elapsed') {
-            promise = player.timeSeek(parseInt(value, 10));
+            promise = media.timeSeek(parseInt(value, 10));
         }
         else if (id.state === 'current_elapsed_s') {
             const parts = value.toString().split(':');
@@ -324,7 +333,7 @@ class Sonos extends utils.Adapter {
                 this.log.error(`Invalid elapsed time: ${value}`);
                 return;
             }
-            promise = player.timeSeek(seconds);
+            promise = media.timeSeek(seconds);
         }
         else if (id.state === 'muted') {
             promise = value ? player.mute() : player.unMute();
@@ -343,19 +352,19 @@ class Sonos extends utils.Adapter {
             if (value && typeof value === 'string') {
                 switch (value.toLowerCase()) {
                     case 'stop':
-                        promise = player.pause();
+                        promise = media.pause();
                         break;
                     case 'play':
-                        promise = player.play();
+                        promise = media.play();
                         break;
                     case 'pause':
-                        promise = player.pause();
+                        promise = media.pause();
                         break;
                     case 'next':
-                        promise = player.nextTrack();
+                        promise = media.nextTrack();
                         break;
                     case 'previous':
-                        promise = player.previousTrack();
+                        promise = media.previousTrack();
                         break;
                     case 'mute':
                         promise = player.mute();
@@ -378,12 +387,12 @@ class Sonos extends utils.Adapter {
                 this.log.warn('favorites_set called without valid favorite name - ignored');
             }
             else {
-                promise = player
+                promise = media
                     .replaceWithFavorite(favorite)
-                    .then(() => player.play())
+                    .then(() => media.play())
                     .then(async () => {
-                    await this.setState({ device: 'root', channel: id.channel, state: 'current_album' }, { val: favorite, ack: true });
-                    await this.setState({ device: 'root', channel: id.channel, state: 'current_artist' }, { val: favorite, ack: true });
+                    await this.setState({ device: 'root', channel: mediaIp, state: 'current_album' }, { val: favorite, ack: true });
+                    await this.setState({ device: 'root', channel: mediaIp, state: 'current_artist' }, { val: favorite, ack: true });
                 })
                     .catch(error => this.log.error(`Cannot replaceWithFavorite: ${error}`));
             }
@@ -394,12 +403,12 @@ class Sonos extends utils.Adapter {
                 this.log.warn('playlist_set called without valid playlist name - ignored');
             }
             else {
-                promise = player
+                promise = media
                     .replaceWithPlaylist(playlist)
-                    .then(() => player.play())
+                    .then(() => media.play())
                     .then(async () => {
-                    await this.setState({ device: 'root', channel: id.channel, state: 'current_album' }, { val: playlist, ack: true });
-                    await this.setState({ device: 'root', channel: id.channel, state: 'current_artist' }, { val: playlist, ack: true });
+                    await this.setState({ device: 'root', channel: mediaIp, state: 'current_album' }, { val: playlist, ack: true });
+                    await this.setState({ device: 'root', channel: mediaIp, state: 'current_artist' }, { val: playlist, ack: true });
                 })
                     .catch(error => this.log.error(`Cannot replaceWithPlaylist: ${error}`));
             }
@@ -409,10 +418,10 @@ class Sonos extends utils.Adapter {
             void this.text2speech(value, id.channel);
         }
         else if (id.state === 'add_to_group') {
-            promise = this.addToGroup(value, player);
+            promise = this.addToGroup(value, media);
         }
         else if (id.state === 'remove_from_group') {
-            promise = this.removeFromGroup(value, player);
+            promise = this.removeFromGroup(value, media);
         }
         else if (id.state === 'coordinator') {
             if (value === id.channel) {
@@ -427,19 +436,19 @@ class Sonos extends utils.Adapter {
         }
         else if (id.state === 'group_volume') {
             try {
-                promise = player.setGroupVolume(value);
+                promise = media.setGroupVolume(value);
             }
             catch (err) {
                 this.log.warn(`Cannot set group volume: ${err}`);
             }
         }
         else if (id.state === 'group_muted') {
-            promise = value ? player.muteGroup() : player.unMuteGroup();
+            promise = value ? media.muteGroup() : media.unMuteGroup();
         }
         else if (id.state === 'play_uri') {
             const uri = String(value || '').trim();
             if (uri && !isGroupingUri(uri)) {
-                promise = player.setAVTransport(uri).then(() => player.play());
+                promise = media.setAVTransport(uri).then(() => media.play());
             }
         }
         else {
@@ -976,6 +985,8 @@ class Sonos extends utils.Adapter {
             await this.setState({ device: 'root', channel: memberIp, state: 'current_duration_s' }, { val: toFormattedTime(sonosState.currentTrack.duration), ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'current_track_number' }, { val: sonosState.trackNo, ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'current_cover' }, { val: coverUrl, ack: true });
+            this.channels[memberIp].elapsed = sonosState.elapsedTime;
+            this.channels[memberIp].duration = sonosState.currentTrack.duration;
             if (sonosState.currentTrack.duration > 0) {
                 await this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed' }, { val: sonosState.elapsedTime, ack: true });
                 await this.setState({ device: 'root', channel: memberIp, state: 'seek' }, {
@@ -1008,19 +1019,50 @@ class Sonos extends utils.Adapter {
         const coverState = await this.getStateAsync(`root.${coordinatorIp}.current_cover`);
         await this.copyPlaybackToGroupMembers(coordinatorIp, player.state, getPlaybackState(player.state.playbackState), String(coverState?.val || ''));
     }
+    /** Players that currently share playback with this coordinator (includes itself) */
+    getGroupMemberIps(coordinatorIp) {
+        const channel = this.channels[coordinatorIp];
+        const player = channel?.player || (channel?.uuid ? this.discovery?.getPlayerByUUID(channel.uuid) : undefined);
+        if (!player) {
+            return [coordinatorIp];
+        }
+        const master = isGroupMember(player) && player.coordinator ? player.coordinator : player;
+        const ips = [];
+        for (const item of this.discovery?.players || []) {
+            const itemMaster = isGroupMember(item) && item.coordinator ? item.coordinator : item;
+            if (itemMaster.uuid !== master.uuid) {
+                continue;
+            }
+            const ip = getIp(item);
+            if (ip && this.channels[ip]) {
+                ips.push(ip);
+            }
+        }
+        return ips.length ? ips : [coordinatorIp];
+    }
     /** Update the elapsed time while playing */
     updateElapsed(ip) {
         const channel = this.channels[ip];
-        if (!channel) {
+        if (!channel || channel.duration <= 0) {
             return;
         }
         channel.elapsed += (this.config.elapsedInterval || 5000) / 1000;
         if (channel.elapsed > channel.duration) {
             channel.elapsed = channel.duration;
         }
-        void this.setState({ device: 'root', channel: ip, state: 'seek' }, { val: Math.round((channel.elapsed / channel.duration) * 1000) / 10, ack: true });
-        void this.setState({ device: 'root', channel: ip, state: 'current_elapsed' }, { val: channel.elapsed, ack: true });
-        void this.setState({ device: 'root', channel: ip, state: 'current_elapsed_s' }, { val: toFormattedTime(channel.elapsed), ack: true });
+        const seek = Math.round((channel.elapsed / channel.duration) * 1000) / 10;
+        const elapsedS = toFormattedTime(channel.elapsed);
+        for (const memberIp of this.getGroupMemberIps(ip)) {
+            const member = this.channels[memberIp];
+            if (!member) {
+                continue;
+            }
+            member.elapsed = channel.elapsed;
+            member.duration = channel.duration;
+            void this.setState({ device: 'root', channel: memberIp, state: 'seek' }, { val: seek, ack: true });
+            void this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed' }, { val: channel.elapsed, ack: true });
+            void this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed_s' }, { val: elapsedS, ack: true });
+        }
     }
     /**
      * Read the cover of the current track and store it in the ioBroker storage
@@ -1200,15 +1242,21 @@ class Sonos extends utils.Adapter {
             }
         }
         else if (event === 'group-volume') {
+            const source = this.discovery.getPlayerByUUID(data.uuid);
+            const masterUuid = (source && isGroupMember(source) && source.coordinator ? source.coordinator : source)
+                ?.uuid;
             for (const player of this.discovery.players) {
-                if (player.roomName !== data.roomName) {
+                const itemMaster = isGroupMember(player) && player.coordinator ? player.coordinator : player;
+                if (masterUuid && itemMaster.uuid !== masterUuid) {
+                    continue;
+                }
+                if (!masterUuid && player.roomName !== data.roomName) {
                     continue;
                 }
                 const ip = this.getIpOfPlayer(player.uuid);
                 if (ip) {
                     this.channels[ip].uuid = player.uuid;
                     await this.setState({ device: 'root', channel: ip, state: 'group_volume' }, { val: data.newVolume, ack: true });
-                    player._volume = data.newVolume;
                     this.log.debug(`group-volume: Volume for ${player.baseUrl}: ${data.newVolume}`);
                 }
             }
