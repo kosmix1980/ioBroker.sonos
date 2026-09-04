@@ -209,6 +209,24 @@ export function getChannelStates(): Record<string, StateDefinition> {
             desc: 'State and control of bass',
             name: 'Player bass',
         },
+        night_mode: {
+            def: false,
+            type: 'boolean',
+            read: true,
+            write: true,
+            role: 'switch',
+            desc: 'Night sound (home theater HDMI)',
+            name: 'Night sound',
+        },
+        speech_enhancement: {
+            def: false,
+            type: 'boolean',
+            read: true,
+            write: true,
+            role: 'switch',
+            desc: 'Speech enhancement / dialog (home theater HDMI)',
+            name: 'Speech enhancement',
+        },
         muted: {
             // media.muted -            is muted (read only)
             def: false,

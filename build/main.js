@@ -354,6 +354,12 @@ class Sonos extends utils.Adapter {
         else if (id.state === 'bass') {
             promise = player.setBass(value);
         }
+        else if (id.state === 'night_mode') {
+            promise = player.nightMode(!!value);
+        }
+        else if (id.state === 'speech_enhancement') {
+            promise = player.speechEnhancement(!!value);
+        }
         else if (id.state === 'state') {
             // stop, play, pause, next, previous, mute, unmute
             if (value && typeof value === 'string') {
@@ -860,7 +866,7 @@ class Sonos extends utils.Adapter {
         const meta = typeof player.avTransportUriMetadata === 'string' ? player.avTransportUriMetadata : '';
         let playing = this.playbackDisplay(sonosState, meta);
         if ((0, content_directory_1.isTvStreamUri)(sonosState.currentTrack.uri)) {
-            const format = (0, content_directory_1.tvAudioFormat)(playing.artist) || (await this.resolveTvFormat(player, sonosState.currentTrack, meta));
+            const format = await this.resolveTvFormat(player, sonosState.currentTrack, meta);
             if (format) {
                 playing = { ...playing, artist: format };
             }
@@ -902,6 +908,8 @@ class Sonos extends utils.Adapter {
             await this.setState({ device: 'root', channel: ip, state: 'current_elapsed_s' }, { val: sonosState.elapsedTimeFormatted, ack: true });
         }
         await this.setState({ device: 'root', channel: ip, state: 'volume' }, { val: sonosState.volume, ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'night_mode' }, { val: Boolean(sonosState.equalizer?.nightMode), ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'speech_enhancement' }, { val: Boolean(sonosState.equalizer?.speechEnhancement), ack: true });
         if (sonosState.groupState) {
             await this.setState({ device: 'root', channel: ip, state: 'muted' }, { val: sonosState.groupState.mute, ack: true });
         }
@@ -949,19 +957,27 @@ class Sonos extends utils.Adapter {
         return { type: 0, title: display.title, artist: display.artist, album: display.album, station: '' };
     }
     async resolveTvFormat(player, track, metadata) {
-        const fromEvent = (0, content_directory_1.tvAudioFormat)(track.title) || (0, content_directory_1.tvAudioFormat)((0, content_directory_1.streamContentFromDidl)(metadata)) || (0, content_directory_1.tvAudioFormat)(track.artist);
-        if (fromEvent) {
-            this.lastTvFormat[player.uuid] = fromEvent;
-            return fromEvent;
-        }
         const now = Date.now();
-        if ((this.lastTvFormatFetch[player.uuid] || 0) + 4000 > now) {
-            return this.lastTvFormat[player.uuid] || '';
+        if ((this.lastTvFormatFetch[player.uuid] || 0) + 4000 > now && this.lastTvFormat[player.uuid]) {
+            return this.lastTvFormat[player.uuid];
         }
         this.lastTvFormatFetch[player.uuid] = now;
         try {
+            const zoneXml = await (0, content_directory_1.soapGetZoneInfo)(player.baseUrl);
+            const code = (0, content_directory_1.parseHtAudioIn)(zoneXml);
+            const fromZone = code == null ? '' : (0, content_directory_1.htAudioInLabel)(code);
+            if (fromZone) {
+                this.lastTvFormat[player.uuid] = fromZone;
+                return fromZone;
+            }
+        }
+        catch (err) {
+            this.log.debug(`TV HTAudioIn: ${err}`);
+        }
+        const fromEvent = (0, content_directory_1.tvAudioFormat)(track.title) || (0, content_directory_1.tvAudioFormat)((0, content_directory_1.streamContentFromDidl)(metadata)) || (0, content_directory_1.tvAudioFormat)(track.artist);
+        try {
             const xml = await (0, content_directory_1.soapGetPositionInfo)(player.baseUrl);
-            const format = (0, content_directory_1.tvAudioFormat)((0, content_directory_1.streamContentFromDidl)(xml));
+            const format = (0, content_directory_1.tvAudioFormat)((0, content_directory_1.streamContentFromDidl)(xml)) || fromEvent;
             if (format) {
                 this.lastTvFormat[player.uuid] = format;
             }
@@ -969,7 +985,7 @@ class Sonos extends utils.Adapter {
         }
         catch (err) {
             this.log.debug(`TV stream format: ${err}`);
-            return this.lastTvFormat[player.uuid] || '';
+            return fromEvent || this.lastTvFormat[player.uuid] || '';
         }
     }
     recentKey(sonosState, metadata) {

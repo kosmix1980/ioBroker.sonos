@@ -309,6 +309,85 @@ export function streamContentFromDidl(xml: string | undefined): string {
     return match ? decodeXml(match[1]).trim() : '';
 }
 
+/** DeviceProperties HTAudioIn codes (SoCo / openHAB), named like the Sonos app. */
+const HT_AUDIO_IN: Record<number, string> = {
+    2: 'Stereo PCM',
+    7: 'Dolby Digital 2.0',
+    18: 'Dolby Digital 5.1',
+    59: 'Dolby Atmos',
+    61: 'Dolby Atmos',
+    63: 'Dolby Atmos',
+    33554434: 'Stereo PCM',
+    33554488: 'Dolby Digital 2.0',
+    33554490: 'Dolby Digital Plus 2.0',
+    33554492: 'Dolby TrueHD 2.0',
+    33554494: 'Multichannel PCM 2.0',
+    84934658: 'Multichannel PCM 5.1',
+    84934713: 'Dolby Digital 5.1',
+    84934714: 'Dolby Digital Plus 5.1',
+    84934716: 'Dolby TrueHD 5.1',
+    84934718: 'Multichannel PCM 5.1',
+    84934721: 'DTS 5.1',
+    118489090: 'Multichannel PCM 7.1',
+    118489146: 'Dolby Digital Plus 7.1',
+};
+
+export function htAudioInLabel(code: number): string {
+    return HT_AUDIO_IN[code] || '';
+}
+
+export function parseHtAudioIn(xml: string): number | null {
+    const match = String(xml || '').match(/<HTAudioIn>(\d+)<\/HTAudioIn>/i);
+    return match ? parseInt(match[1], 10) : null;
+}
+
+export function soapGetZoneInfo(baseUrl: string): Promise<string> {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <u:GetZoneInfo xmlns:u="urn:schemas-upnp-org:service:DeviceProperties:1"></u:GetZoneInfo>
+  </s:Body>
+</s:Envelope>`;
+
+    const url = new URL(`${baseUrl.replace(/\/$/, '')}/DeviceProperties/Control`);
+    const payload = Buffer.from(body, 'utf8');
+
+    return new Promise((resolve, reject) => {
+        const req = http.request(
+            {
+                hostname: url.hostname,
+                port: url.port || 1400,
+                path: url.pathname,
+                method: 'POST',
+                headers: {
+                    'CONTENT-TYPE': 'text/xml; charset="utf-8"',
+                    SOAPACTION: '"urn:schemas-upnp-org:service:DeviceProperties:1#GetZoneInfo"',
+                    'CONTENT-LENGTH': payload.length,
+                },
+            },
+            res => {
+                const chunks: Buffer[] = [];
+                res.on('data', chunk => chunks.push(chunk as Buffer));
+                res.on('end', () => {
+                    const xml = Buffer.concat(chunks).toString('utf8');
+                    if ((res.statusCode || 500) >= 400) {
+                        reject(new Error(`GetZoneInfo failed: HTTP ${res.statusCode}`));
+                        return;
+                    }
+                    resolve(xml);
+                });
+            },
+        );
+        req.on('error', reject);
+        req.setTimeout(5000, () => {
+            req.destroy();
+            reject(new Error('GetZoneInfo timed out'));
+        });
+        req.write(payload);
+        req.end();
+    });
+}
+
 export function soapGetPositionInfo(baseUrl: string): Promise<string> {
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">

@@ -183,6 +183,30 @@
     font-size: 16px;
 }
 
+.sonos-ctrl-ht {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sonos-ctrl-ht-btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: #2b2b2b;
+    color: #fff;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.sonos-ctrl-ht-btn:hover {
+    background: #3a3a3a;
+}
+
+.sonos-ctrl-ht-btn.is-on {
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+}
+
 .sonos-ctrl-seek,
 .sonos-ctrl-volume {
     display: flex;

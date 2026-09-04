@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.9 (2026-09-04)
+* (kosmix1980) VIS widget: Night sound and speech enhancement on TV HDMI; audio format via HTAudioIn; remember last room
+
 ### 4.3.8 (2026-09-04)
 * (kosmix1980) VIS widget: TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover
 

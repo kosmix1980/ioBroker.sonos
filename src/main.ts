@@ -24,8 +24,11 @@ import {
     isTvStreamUri,
     matchesMusicService,
     mediaItem,
+    htAudioInLabel,
     nowPlayingLabels,
+    parseHtAudioIn,
     soapGetPositionInfo,
+    soapGetZoneInfo,
     streamContentFromDidl,
     tvAudioFormat,
     tvStreamUri,
@@ -388,6 +391,10 @@ class Sonos extends utils.Adapter {
             promise = player.setTreble(value);
         } else if (id.state === 'bass') {
             promise = player.setBass(value);
+        } else if (id.state === 'night_mode') {
+            promise = player.nightMode(!!value);
+        } else if (id.state === 'speech_enhancement') {
+            promise = player.speechEnhancement(!!value);
         } else if (id.state === 'state') {
             // stop, play, pause, next, previous, mute, unmute
             if (value && typeof value === 'string') {
@@ -994,8 +1001,7 @@ class Sonos extends utils.Adapter {
         const meta = typeof player.avTransportUriMetadata === 'string' ? player.avTransportUriMetadata : '';
         let playing = this.playbackDisplay(sonosState, meta);
         if (isTvStreamUri(sonosState.currentTrack.uri)) {
-            const format =
-                tvAudioFormat(playing.artist) || (await this.resolveTvFormat(player, sonosState.currentTrack, meta));
+            const format = await this.resolveTvFormat(player, sonosState.currentTrack, meta);
             if (format) {
                 playing = { ...playing, artist: format };
             }
@@ -1068,6 +1074,14 @@ class Sonos extends utils.Adapter {
         }
 
         await this.setState({ device: 'root', channel: ip, state: 'volume' }, { val: sonosState.volume, ack: true });
+        await this.setState(
+            { device: 'root', channel: ip, state: 'night_mode' },
+            { val: Boolean(sonosState.equalizer?.nightMode), ack: true },
+        );
+        await this.setState(
+            { device: 'root', channel: ip, state: 'speech_enhancement' },
+            { val: Boolean(sonosState.equalizer?.speechEnhancement), ack: true },
+        );
 
         if (sonosState.groupState) {
             await this.setState(
@@ -1148,29 +1162,37 @@ class Sonos extends utils.Adapter {
         track: { title?: string; artist?: string },
         metadata: string,
     ): Promise<string> {
-        const fromEvent =
-            tvAudioFormat(track.title) || tvAudioFormat(streamContentFromDidl(metadata)) || tvAudioFormat(track.artist);
-        if (fromEvent) {
-            this.lastTvFormat[player.uuid] = fromEvent;
-            return fromEvent;
-        }
-
         const now = Date.now();
-        if ((this.lastTvFormatFetch[player.uuid] || 0) + 4000 > now) {
-            return this.lastTvFormat[player.uuid] || '';
+        if ((this.lastTvFormatFetch[player.uuid] || 0) + 4000 > now && this.lastTvFormat[player.uuid]) {
+            return this.lastTvFormat[player.uuid];
         }
         this.lastTvFormatFetch[player.uuid] = now;
 
         try {
+            const zoneXml = await soapGetZoneInfo(player.baseUrl);
+            const code = parseHtAudioIn(zoneXml);
+            const fromZone = code == null ? '' : htAudioInLabel(code);
+            if (fromZone) {
+                this.lastTvFormat[player.uuid] = fromZone;
+                return fromZone;
+            }
+        } catch (err) {
+            this.log.debug(`TV HTAudioIn: ${err}`);
+        }
+
+        const fromEvent =
+            tvAudioFormat(track.title) || tvAudioFormat(streamContentFromDidl(metadata)) || tvAudioFormat(track.artist);
+
+        try {
             const xml = await soapGetPositionInfo(player.baseUrl);
-            const format = tvAudioFormat(streamContentFromDidl(xml));
+            const format = tvAudioFormat(streamContentFromDidl(xml)) || fromEvent;
             if (format) {
                 this.lastTvFormat[player.uuid] = format;
             }
             return format || this.lastTvFormat[player.uuid] || '';
         } catch (err) {
             this.log.debug(`TV stream format: ${err}`);
-            return this.lastTvFormat[player.uuid] || '';
+            return fromEvent || this.lastTvFormat[player.uuid] || '';
         }
     }
 

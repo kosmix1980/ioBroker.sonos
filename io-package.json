@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.8",
+    "version": "4.3.9",
     "news": {
+      "4.3.9": {
+        "en": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered.",
+        "de": "TV HDMI: Nachtsound und Sprachverbesserung, Tonformat über HTAudioIn, zuletzt gewählter Raum bleibt nach Reload erhalten.",
+        "ru": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered.",
+        "pt": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered.",
+        "nl": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered.",
+        "fr": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered.",
+        "it": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered.",
+        "es": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered.",
+        "pl": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered.",
+        "uk": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered.",
+        "zh-cn": "TV HDMI: night sound and speech enhancement toggles, audio format via HTAudioIn, last selected room is remembered."
+      },
       "4.3.8": {
         "en": "TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover instead of No Cover.",
         "de": "Bei TV HDMI werden das Tonformat (z. B. Stereo PCM) und ein Fernseher-Cover statt No Cover angezeigt.",
@@ -249,19 +262,6 @@
         "pl": "Prepare for future js-controller version",
         "uk": "Підготовка до майбутніх версій js-controller",
         "zh-cn": "今后防污版本的编制"
-      },
-      "2.3.0": {
-        "en": "Added new states `favorites_list_html` and `queue_html with covers`\nChanged default album art if no cover was found\nConfiguration migrated to JSON-Config",
-        "de": "Neue Zustände favorites_list_html und `queue_html mit Covers hinzugefügt `\nVeränderte Standardalbumkunst, wenn kein Cover gefunden wurde\nKonfiguration migriert zu JSON-Config",
-        "ru": "Добавлены новые состояния favorites_list_html и `queue_html with cover »\nИзмененный арт альбом по умолчанию, если не было найдено обложки\nКонфигурация перенесена на JSON-Config",
-        "pt": "Adicionado novos estados favorites_list_html e `queue_html com capas \"\nArte padrão alterada se nenhuma capa foi encontrada\nConfiguração migrada para JSON-Config",
-        "nl": "Vertaling: _\nVeranderde default album kunst als er geen dekmantel is gevonden\nConfiguration gemigreerd tot JSON-Config",
-        "fr": "Ajout de nouveaux états favoris_list_html et `queue_html avec des couvertures `\nChanged default album art if no cover was found\nConfiguration migrée à JSON-Config",
-        "it": "Aggiunto nuovi stati preferiti_list_html e `queue_html con copertine #\nModificata l'arte dell'album di default se non è stata trovata alcuna copertura\nConfigurazione migrata a JSON-Config",
-        "es": "Nuevos estados favoritos_list_html y `queue_html con fundas `\nCambio de arte del disco predeterminado si no se encontró cobertura\nConfiguración migrada a JSON-Config",
-        "pl": "Nowe państwa faworyzują: „_list_html” i „'queue_html”. `\nZmienił domyślny album, jeśli nie znaleziono żadnych okładek\nKonfiguracja przeniosła się do JSON-Config",
-        "uk": "Додано нові держави фаворити_list_html і `queue_html з кришками й\nЗмінений дизайн альбому за замовчуванням, якщо не знайдено\nКонфігурація мігрованих до JSON-Config",
-        "zh-cn": "增加新州优惠名单:名单:html和“queue_html” 目 录\n如果没有发现任何掩护,则改写了手法。\nA. 移徙到联合市场"
       }
     },
     "titleLang": {

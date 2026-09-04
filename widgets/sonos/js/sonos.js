@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.8',
+        version: '4.3.9',
         _bound: {},
         _tickers: {},
         words: {
@@ -46,6 +46,8 @@ vis.binds = vis.binds || {};
                 loginOpen: 'Open this link in a browser to connect the music service.',
                 unknown: 'Unknown room',
                 nothing: 'Nothing playing',
+                nightSound: 'Night sound',
+                speechEnhance: 'Speech enhancement',
             },
             de: {
                 hint: 'Als Objekt die Sonos-Instanz setzen, z. B. sonos.0',
@@ -77,6 +79,8 @@ vis.binds = vis.binds || {};
                 loginOpen: 'Diesen Link im Browser öffnen, um den Dienst zu verbinden.',
                 unknown: 'Unbekannter Raum',
                 nothing: 'Nichts spielt',
+                nightSound: 'Nachtsound',
+                speechEnhance: 'Sprachverbesserung',
             },
         },
 
@@ -103,7 +107,7 @@ vis.binds = vis.binds || {};
 
             var instance = vis.binds.sonos.resolveInstance(oid);
             $div.data('sonos-tab', $div.data('sonos-tab') || 'favorites');
-            $div.data('sonos-player', $div.data('sonos-player') || '');
+            $div.data('sonos-player', $div.data('sonos-player') || vis.binds.sonos.loadRoom(widgetID, instance) || '');
 
             vis.binds.sonos.unbind(widgetID);
 
@@ -139,6 +143,29 @@ vis.binds = vis.binds || {};
                 return parts[0] + '.' + parts[1];
             }
             return oid;
+        },
+
+        roomKey: function (widgetID, instance) {
+            return 'iobroker.sonos.widget.room.' + instance + '.' + widgetID;
+        },
+
+        loadRoom: function (widgetID, instance) {
+            try {
+                return window.localStorage.getItem(vis.binds.sonos.roomKey(widgetID, instance)) || '';
+            } catch (e) {
+                return '';
+            }
+        },
+
+        saveRoom: function (widgetID, instance, ip) {
+            if (!ip) {
+                return;
+            }
+            try {
+                window.localStorage.setItem(vis.binds.sonos.roomKey(widgetID, instance), ip);
+            } catch (e) {
+                // ignore
+            }
         },
 
         esc: function (value) {
@@ -329,6 +356,8 @@ vis.binds = vis.binds || {};
                         'state',
                         'volume',
                         'muted',
+                        'night_mode',
+                        'speech_enhancement',
                         'current_title',
                         'current_artist',
                         'current_album',
@@ -481,6 +510,8 @@ vis.binds = vis.binds || {};
                     'state',
                     'volume',
                     'muted',
+                    'night_mode',
+                    'speech_enhancement',
                     'current_title',
                     'current_artist',
                     'current_album',
@@ -842,9 +873,10 @@ vis.binds = vis.binds || {};
                 return;
             }
 
-            var selectedIp = $div.data('sonos-player');
+            var selectedIp = $div.data('sonos-player') || vis.binds.sonos.loadRoom(widgetID, instance);
             var selected = players.filter(function (player) { return player.ip === selectedIp; })[0] || players[0];
             $div.data('sonos-player', selected.ip);
+            vis.binds.sonos.saveRoom(widgetID, instance, selected.ip);
             var tab = $div.data('sonos-tab') || 'favorites';
             var mediaId = vis.binds.sonos.mediaPlayerId(selected);
             var playing = vis.binds.sonos.state(mediaId, 'state') === 'play';
@@ -863,6 +895,8 @@ vis.binds = vis.binds || {};
                 seek = 0;
             }
             var muted = !!vis.binds.sonos.state(selected.id, 'muted');
+            var nightMode = !!vis.binds.sonos.state(selected.id, 'night_mode');
+            var speechOn = !!vis.binds.sonos.state(selected.id, 'speech_enhancement');
             var shuffle = !!vis.binds.sonos.state(mediaId, 'shuffle');
             var repeat = parseInt(vis.binds.sonos.state(mediaId, 'repeat'), 10) || 0;
             var elapsed = vis.binds.sonos.state(mediaId, 'current_elapsed_s') || '00:00';
@@ -1010,6 +1044,21 @@ vis.binds = vis.binds || {};
                     '</svg></div>'
                 : '<div class="sonos-ctrl-cover"' + (cover ? ' style="background-image:url(\'' + vis.binds.sonos.esc(cover) + '\')"' : '') + '>' +
                     (cover ? '' : 'SONOS') + '</div>';
+            var buttonsHtml = now.isTv
+                ? '<button type="button" class="sonos-ctrl-btn sonos-ctrl-btn-play" data-cmd="' + (playing ? 'pause' : 'play') + '" title="Play/Pause">' + (playing ? '&#10073;&#10073;' : '&#9654;') + '</button>' +
+                    '<button type="button" class="sonos-ctrl-btn' + (muted ? ' is-on' : '') + '" data-cmd="mute" title="Mute">' + (muted ? '&#128263;' : '&#128266;') + '</button>'
+                : '<button type="button" class="sonos-ctrl-btn" data-cmd="prev" title="Prev">&#9198;</button>' +
+                    '<button type="button" class="sonos-ctrl-btn sonos-ctrl-btn-play" data-cmd="' + (playing ? 'pause' : 'play') + '" title="Play/Pause">' + (playing ? '&#10073;&#10073;' : '&#9654;') + '</button>' +
+                    '<button type="button" class="sonos-ctrl-btn" data-cmd="next" title="Next">&#9197;</button>' +
+                    '<button type="button" class="sonos-ctrl-btn' + (muted ? ' is-on' : '') + '" data-cmd="mute" title="Mute">' + (muted ? '&#128263;' : '&#128266;') + '</button>' +
+                    '<button type="button" class="sonos-ctrl-btn' + (shuffle ? ' is-on' : '') + '" data-cmd="shuffle" title="Shuffle">&#128256;</button>' +
+                    '<button type="button" class="sonos-ctrl-btn' + (repeat ? ' is-on' : '') + '" data-cmd="repeat" title="Repeat">' + (repeat === 2 ? '1' : '&#128257;') + '</button>';
+            var htHtml = now.isTv
+                ? '<div class="sonos-ctrl-ht">' +
+                    '<button type="button" class="sonos-ctrl-ht-btn' + (nightMode ? ' is-on' : '') + '" data-ht="night_mode">' + vis.binds.sonos.esc(t('nightSound')) + '</button>' +
+                    '<button type="button" class="sonos-ctrl-ht-btn' + (speechOn ? ' is-on' : '') + '" data-ht="speech_enhancement">' + vis.binds.sonos.esc(t('speechEnhance')) + '</button>' +
+                '</div>'
+                : '';
             var seekHtml = now.isTv
                 ? ''
                 : '<div class="sonos-ctrl-seek">' +
@@ -1030,20 +1079,14 @@ vis.binds = vis.binds || {};
                         '<div class="sonos-ctrl-meta">' +
                             '<div class="sonos-ctrl-title">' + vis.binds.sonos.esc(title) + '</div>' +
                             '<div class="sonos-ctrl-sub">' + vis.binds.sonos.esc(sub) + '</div>' +
-                            '<div class="sonos-ctrl-buttons">' +
-                                '<button type="button" class="sonos-ctrl-btn" data-cmd="prev" title="Prev">&#9198;</button>' +
-                                '<button type="button" class="sonos-ctrl-btn sonos-ctrl-btn-play" data-cmd="' + (playing ? 'pause' : 'play') + '" title="Play/Pause">' + (playing ? '&#10073;&#10073;' : '&#9654;') + '</button>' +
-                                '<button type="button" class="sonos-ctrl-btn" data-cmd="next" title="Next">&#9197;</button>' +
-                                '<button type="button" class="sonos-ctrl-btn' + (muted ? ' is-on' : '') + '" data-cmd="mute" title="Mute">' + (muted ? '&#128263;' : '&#128266;') + '</button>' +
-                                '<button type="button" class="sonos-ctrl-btn' + (shuffle ? ' is-on' : '') + '" data-cmd="shuffle" title="Shuffle">&#128256;</button>' +
-                                '<button type="button" class="sonos-ctrl-btn' + (repeat ? ' is-on' : '') + '" data-cmd="repeat" title="Repeat">' + (repeat === 2 ? '1' : '&#128257;') + '</button>' +
-                            '</div>' +
+                            '<div class="sonos-ctrl-buttons">' + buttonsHtml + '</div>' +
                             seekHtml +
                             '<div class="sonos-ctrl-volume">' +
                                 '<span>Vol</span>' +
                                 '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-volume-input" value="' + volume + '">' +
                                 '<span class="sonos-ctrl-time">' + volume + '</span>' +
                             '</div>' +
+                            htHtml +
                             '<div class="sonos-ctrl-groups">' + groupHtml + '</div>' +
                         '</div>' +
                     '</div>' +
@@ -1065,8 +1108,10 @@ vis.binds = vis.binds || {};
         bindUi: function ($div, selected, players, coordinator, mediaId) {
             mediaId = mediaId || selected.id;
             $div.find('.sonos-ctrl-chip').on('click', function () {
-                $div.data('sonos-player', $(this).data('ip'));
+                var ip = String($(this).data('ip') || '');
+                $div.data('sonos-player', ip);
                 $div.data('sonos-browse-path', []);
+                vis.binds.sonos.saveRoom($div.attr('id'), vis.binds.sonos.resolveInstance(selected.id), ip);
                 vis.binds.sonos.render($div.attr('id'), vis.binds.sonos.resolveInstance(selected.id));
             });
 
@@ -1082,6 +1127,13 @@ vis.binds = vis.binds || {};
                     var next = (parseInt(vis.binds.sonos.state(mediaId, 'repeat'), 10) || 0) + 1;
                     vis.binds.sonos.write(mediaId + '.repeat', next > 2 ? 0 : next);
                 }
+            });
+            $div.find('[data-ht]').on('click', function () {
+                var ht = String($(this).attr('data-ht') || '');
+                if (ht !== 'night_mode' && ht !== 'speech_enhancement') {
+                    return;
+                }
+                vis.binds.sonos.write(selected.id + '.' + ht, !vis.binds.sonos.state(selected.id, ht));
             });
 
             $div.find('.sonos-ctrl-volume-input').on('change input', function () {

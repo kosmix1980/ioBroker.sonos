@@ -37,6 +37,13 @@ declare module 'sonos-discovery' {
         volume: number;
         mute: boolean;
         groupState?: SonosGroupState;
+        equalizer?: {
+            bass?: number;
+            treble?: number;
+            loudness?: boolean;
+            nightMode?: boolean;
+            speechEnhancement?: boolean;
+        };
     }
 
     export interface SonosFavorite {
@@ -91,6 +98,8 @@ declare module 'sonos-discovery' {
         setGroupVolume(volume: number): Promise<unknown>;
         setTreble(treble: number): Promise<unknown>;
         setBass(bass: number): Promise<unknown>;
+        nightMode(enabled: boolean): Promise<unknown>;
+        speechEnhancement(enabled: boolean): Promise<unknown>;
         shuffle(enabled: boolean): Promise<unknown>;
         crossfade(enabled: boolean): Promise<unknown>;
         repeat(mode: string): Promise<unknown>;
