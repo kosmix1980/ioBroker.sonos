@@ -1,0 +1,4 @@
+{
+  "name": "ioBroker.sonos",
+  "install": "bash .cursor/setup-node.sh"
+}
