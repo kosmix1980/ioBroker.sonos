@@ -96,7 +96,8 @@ declare module 'sonos-discovery' {
         replaceWithFavorite(favorite: string): Promise<unknown>;
         replaceWithPlaylist(playlist: string): Promise<unknown>;
         setAVTransport(uri: string, metadata?: unknown): Promise<unknown>;
-        addURIToQueue(uri: string): Promise<{ firsttracknumberenqueued: string | number }>;
+        clearQueue(): Promise<unknown>;
+        addURIToQueue(uri: string, metadata?: unknown): Promise<{ firsttracknumberenqueued: string | number }>;
         removeTrackFromQueue(trackNo: number): Promise<unknown>;
         getQueue(): Promise<SonosQueueItem[]>;
     }
@@ -117,6 +118,7 @@ declare module 'sonos-discovery' {
         getPlayerByUUID(uuid: string): SonosPlayer | undefined;
         getFavorites(): Promise<Record<string, SonosFavorite> | SonosFavorite[]>;
         getPlaylists(): Promise<Record<string, SonosFavorite> | SonosFavorite[]>;
+        availableServices?: Record<string, { id: number; type: number; capabilities?: number }>;
         on(event: string, listener: (data: any) => void): this;
         dispose(): void;
     }

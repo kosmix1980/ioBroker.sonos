@@ -51,6 +51,7 @@ const utils = __importStar(require("@iobroker/adapter-core"));
 const sonos_discovery_1 = __importDefault(require("sonos-discovery"));
 const tts_1 = require("./lib/tts");
 const states_1 = require("./lib/states");
+const content_directory_1 = require("./lib/content-directory");
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
 const RECENT_TRACKS_MAX = 25;
 /** Grouping URI used when a player is a slave (`x-rincon:RINCON_...`) */
@@ -450,6 +451,12 @@ class Sonos extends utils.Adapter {
             if (uri && !isGroupingUri(uri)) {
                 promise = media.setAVTransport(uri).then(() => media.play());
             }
+        }
+        else if (id.state === 'media_browse') {
+            promise = this.handleMediaBrowse(media, mediaIp, String(value || ''));
+        }
+        else if (id.state === 'media_play') {
+            promise = this.handleMediaPlay(media, String(value || ''));
         }
         else {
             this.log.warn(`try to control unknown id ${JSON.stringify(id)}`);
@@ -1018,6 +1025,86 @@ class Sonos extends utils.Adapter {
         }
         const coverState = await this.getStateAsync(`root.${coordinatorIp}.current_cover`);
         await this.copyPlaybackToGroupMembers(coordinatorIp, player.state, getPlaybackState(player.state.playbackState), String(coverState?.val || ''));
+    }
+    async handleMediaBrowse(player, ip, objectId) {
+        const id = objectId.trim() || 'root';
+        const german = this.language === 'de';
+        const labels = {
+            radio: 'TuneIn Radio',
+            library: german ? 'Mediathek' : 'Music library',
+            shares: german ? 'Netzlaufwerke' : 'Network shares',
+            lineIn: 'Line-In',
+        };
+        let result;
+        if (id === 'root') {
+            result = (0, content_directory_1.getMediaRoot)(this.discovery?.availableServices, labels);
+            result.title = german ? 'Quellen' : 'Sources';
+        }
+        else if (id.startsWith('service:')) {
+            const name = id.slice('service:'.length);
+            result = {
+                id,
+                title: name,
+                items: [
+                    {
+                        id,
+                        title: german
+                            ? `${name} kann hier nicht durchsucht werden. Lege Sender oder Playlists in der Sonos-App als Favorit an.`
+                            : `${name} cannot be browsed here. Save stations or playlists as favorites in the Sonos app.`,
+                        uri: '',
+                        metadata: '',
+                        artist: '',
+                        album: '',
+                        cover: '',
+                        folder: false,
+                        service: true,
+                    },
+                ],
+            };
+        }
+        else {
+            try {
+                result = { id, title: id, items: await (0, content_directory_1.browseMedia)(player.baseUrl, id) };
+            }
+            catch (err) {
+                this.log.warn(`Cannot browse media ${id}: ${err.message || err}`);
+                result = { id, title: id, items: [] };
+            }
+        }
+        await this.setState({ device: 'root', channel: ip, state: 'media_browse_result' }, { val: JSON.stringify(result), ack: true });
+    }
+    async handleMediaPlay(player, raw) {
+        let uri = '';
+        let metadata = '';
+        const text = raw.trim();
+        if (!text) {
+            return;
+        }
+        if (text.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(text);
+                uri = String(parsed.uri || '').trim();
+                metadata = String(parsed.metadata || '');
+            }
+            catch {
+                uri = text;
+            }
+        }
+        else {
+            uri = text;
+        }
+        if (!uri || isGroupingUri(uri)) {
+            return;
+        }
+        if ((0, content_directory_1.isStreamUri)(uri)) {
+            await player.setAVTransport(uri, metadata);
+            await player.play();
+            return;
+        }
+        await player.clearQueue();
+        await player.addURIToQueue(uri, metadata);
+        await player.setAVTransport(`x-rincon-queue:${player.uuid}#0`);
+        await player.play();
     }
     /** Players that currently share playback with this coordinator (includes itself) */
     getGroupMemberIps(coordinatorIp) {

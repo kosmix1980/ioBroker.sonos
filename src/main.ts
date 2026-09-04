@@ -16,6 +16,7 @@ import type { SonosFavorite, SonosPlayer, SonosPlayerState, SonosQueueItem } fro
 
 import { TTS } from './lib/tts';
 import { getChannelStates } from './lib/states';
+import { browseMedia, getMediaRoot, isStreamUri } from './lib/content-directory';
 
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
 
@@ -470,6 +471,10 @@ class Sonos extends utils.Adapter {
             if (uri && !isGroupingUri(uri)) {
                 promise = media.setAVTransport(uri).then(() => media.play());
             }
+        } else if (id.state === 'media_browse') {
+            promise = this.handleMediaBrowse(media, mediaIp, String(value || ''));
+        } else if (id.state === 'media_play') {
+            promise = this.handleMediaPlay(media, String(value || ''));
         } else {
             this.log.warn(`try to control unknown id ${JSON.stringify(id)}`);
         }
@@ -1294,6 +1299,93 @@ class Sonos extends utils.Adapter {
             getPlaybackState(player.state.playbackState),
             String(coverState?.val || ''),
         );
+    }
+
+    private async handleMediaBrowse(player: SonosPlayer, ip: string, objectId: string): Promise<void> {
+        const id = objectId.trim() || 'root';
+        const german = this.language === 'de';
+        const labels = {
+            radio: 'TuneIn Radio',
+            library: german ? 'Mediathek' : 'Music library',
+            shares: german ? 'Netzlaufwerke' : 'Network shares',
+            lineIn: 'Line-In',
+        };
+
+        let result: { id: string; title: string; items: unknown[] };
+
+        if (id === 'root') {
+            result = getMediaRoot(this.discovery?.availableServices, labels);
+            result.title = german ? 'Quellen' : 'Sources';
+        } else if (id.startsWith('service:')) {
+            const name = id.slice('service:'.length);
+            result = {
+                id,
+                title: name,
+                items: [
+                    {
+                        id,
+                        title: german
+                            ? `${name} kann hier nicht durchsucht werden. Lege Sender oder Playlists in der Sonos-App als Favorit an.`
+                            : `${name} cannot be browsed here. Save stations or playlists as favorites in the Sonos app.`,
+                        uri: '',
+                        metadata: '',
+                        artist: '',
+                        album: '',
+                        cover: '',
+                        folder: false,
+                        service: true,
+                    },
+                ],
+            };
+        } else {
+            try {
+                result = { id, title: id, items: await browseMedia(player.baseUrl, id) };
+            } catch (err: any) {
+                this.log.warn(`Cannot browse media ${id}: ${err.message || err}`);
+                result = { id, title: id, items: [] };
+            }
+        }
+
+        await this.setState(
+            { device: 'root', channel: ip, state: 'media_browse_result' },
+            { val: JSON.stringify(result), ack: true },
+        );
+    }
+
+    private async handleMediaPlay(player: SonosPlayer, raw: string): Promise<void> {
+        let uri = '';
+        let metadata = '';
+        const text = raw.trim();
+        if (!text) {
+            return;
+        }
+
+        if (text.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(text) as { uri?: string; metadata?: string };
+                uri = String(parsed.uri || '').trim();
+                metadata = String(parsed.metadata || '');
+            } catch {
+                uri = text;
+            }
+        } else {
+            uri = text;
+        }
+
+        if (!uri || isGroupingUri(uri)) {
+            return;
+        }
+
+        if (isStreamUri(uri)) {
+            await player.setAVTransport(uri, metadata);
+            await player.play();
+            return;
+        }
+
+        await player.clearQueue();
+        await player.addURIToQueue(uri, metadata);
+        await player.setAVTransport(`x-rincon-queue:${player.uuid}#0`);
+        await player.play();
     }
 
     /** Players that currently share playback with this coordinator (includes itself) */

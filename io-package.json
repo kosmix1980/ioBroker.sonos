@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.1.2",
+    "version": "4.2.0",
     "news": {
+      "4.2.0": {
+        "en": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
+        "de": "Das VIS-Widget kann TuneIn, Mediathek, Netzlaufwerke und Line-In durchsuchen. YouTube und ähnliche Dienste erscheinen als Namen; Wiedergabe über Sonos-Favoriten.",
+        "ru": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
+        "pt": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
+        "nl": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
+        "fr": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
+        "it": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
+        "es": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
+        "pl": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
+        "uk": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites.",
+        "zh-cn": "The VIS widget can browse TuneIn, the music library, network shares and line-in. YouTube and similar services appear as names; play them via Sonos favorites."
+      },
       "4.1.2": {
         "en": "The group master is shown brighter than the other rooms in the same group.",
         "de": "Der Gruppenmaster wird heller dargestellt als die anderen Räume derselben Gruppe.",

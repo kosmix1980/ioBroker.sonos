@@ -22,7 +22,7 @@ The adapter includes a VIS widget **Sonos Control**. One widget can switch rooms
 5. Set the object to the instance, for example `sonos.0` — not a single `play` state.
 6. Size the widget around **900 × 520**.
 
-After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the last local title of that room. The **Recent** tab lists the last tracks of the selected room. Favorites and playlists must already exist in the Sonos app; the widget only starts them.
+After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the last local title of that room. The **Recent** tab lists the last tracks of the selected room. The **Sources** tab browses TuneIn, the music library, network shares and line-in. YouTube and similar services are listed by name; play them via favorites from the Sonos app.
 
 To install this fork over the official adapter: in Admin open **Adapters** → GitHub button → `https://github.com/kosmix1980/ioBroker.sonos`, then restart vis and hard-reload the editor.
 
@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.2.0 (2026-09-04)
+* (kosmix1980) VIS widget: browse TuneIn, music library, network shares and line-in
+
 ### 4.1.2 (2026-09-04)
 * (kosmix1980) The group master is shown brighter than the other rooms in the same group
 

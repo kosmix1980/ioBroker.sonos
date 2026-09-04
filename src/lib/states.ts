@@ -460,6 +460,33 @@ export function getChannelStates(): Record<string, StateDefinition> {
             desc: 'Play a URI on this player',
             name: 'Play URI',
         },
+        media_browse: {
+            def: '',
+            type: 'string',
+            read: false,
+            write: true,
+            role: 'media',
+            desc: 'Browse a Sonos content directory object id (root, R:0, S:, A:, AI:)',
+            name: 'Browse media',
+        },
+        media_browse_result: {
+            def: '',
+            type: 'string',
+            read: true,
+            write: false,
+            role: 'media',
+            desc: 'JSON result of the last media browse',
+            name: 'Browse media result',
+        },
+        media_play: {
+            def: '',
+            type: 'string',
+            read: false,
+            write: true,
+            role: 'media',
+            desc: 'Play a browsed media item as JSON {uri, metadata}',
+            name: 'Play browsed media',
+        },
     };
 
     for (const g in newGroupStates) {

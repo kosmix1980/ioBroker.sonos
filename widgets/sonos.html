@@ -333,7 +333,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.1.2',
+        version: '4.2.0',
         _bound: {},
         _tickers: {},
         words: {
@@ -347,10 +347,13 @@ vis.binds = vis.binds || {};
                 playlists: 'Playlists',
                 queue: 'Queue',
                 recent: 'Recent',
+                sources: 'Sources',
+                back: 'Back',
                 emptyFavorites: 'No favorites. Add them in the Sonos app first.',
                 emptyPlaylists: 'No playlists. Create them in the Sonos app first.',
                 emptyQueue: 'Queue is empty.',
                 emptyRecent: 'No recent tracks yet. They appear after something is played.',
+                emptySources: 'No entries in this folder.',
                 unknown: 'Unknown room',
                 nothing: 'Nothing playing',
             },
@@ -364,10 +367,13 @@ vis.binds = vis.binds || {};
                 playlists: 'Playlists',
                 queue: 'Warteschlange',
                 recent: 'Zuletzt',
+                sources: 'Quellen',
+                back: 'Zurück',
                 emptyFavorites: 'Keine Favoriten. Lege sie zuerst in der Sonos-App an.',
                 emptyPlaylists: 'Keine Playlists. Lege sie zuerst in der Sonos-App an.',
                 emptyQueue: 'Die Warteschlange ist leer.',
                 emptyRecent: 'Noch keine Titel. Die Liste füllt sich beim Abspielen.',
+                emptySources: 'In diesem Ordner gibt es keine Einträge.',
                 unknown: 'Unbekannter Raum',
                 nothing: 'Nichts spielt',
             },
@@ -644,6 +650,7 @@ vis.binds = vis.binds || {};
                         'queue',
                         'queue_html',
                         'recent_tracks',
+                        'media_browse_result',
                     ].forEach(function (name) {
                         ids.push(player.id + '.' + name);
                     });
@@ -794,6 +801,7 @@ vis.binds = vis.binds || {};
                     'queue',
                     'queue_html',
                     'recent_tracks',
+                    'media_browse_result',
                 ].forEach(function (name) {
                     ids.push(player.id + '.' + name);
                 });
@@ -946,6 +954,25 @@ vis.binds = vis.binds || {};
             return list.filter(function (item) {
                 return item && item.title;
             });
+        },
+
+        parseBrowse: function (playerId) {
+            var raw = vis.binds.sonos.state(playerId, 'media_browse_result');
+            if (!raw) {
+                return { id: '', title: '', items: [] };
+            }
+            if (typeof raw === 'object' && raw.items) {
+                return raw;
+            }
+            try {
+                var parsed = JSON.parse(String(raw));
+                if (parsed && Array.isArray(parsed.items)) {
+                    return parsed;
+                }
+            } catch (e) {
+                // ignore
+            }
+            return { id: '', title: '', items: [] };
         },
 
         isGroupedWith: function (player, other) {
@@ -1102,6 +1129,30 @@ vis.binds = vis.binds || {};
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || item.station || '') + '</div></div></button>';
                     }).join('')
                     : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptyRecent')) + '</div>';
+            } else if (tab === 'sources') {
+                var browse = vis.binds.sonos.parseBrowse(mediaId);
+                var path = $div.data('sonos-browse-path') || [];
+                var backHtml = path.length
+                    ? '<button type="button" class="sonos-ctrl-item" data-browse-back="1">' +
+                        '<div class="sonos-ctrl-thumb"></div>' +
+                        '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(t('back')) + '</div></div></button>'
+                    : '';
+                listHtml = backHtml + (browse.items && browse.items.length
+                    ? browse.items.map(function (item) {
+                        var payload = encodeURIComponent(JSON.stringify({
+                            id: item.id || '',
+                            uri: item.uri || '',
+                            metadata: item.metadata || '',
+                            folder: !!item.folder,
+                            service: !!item.service,
+                            title: item.title || '',
+                        }));
+                        return '<button type="button" class="sonos-ctrl-item" data-media-item="' + vis.binds.sonos.esc(payload) + '">' +
+                            (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
+                            '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
+                            '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || (item.folder ? '…' : '') || (item.service ? 'Service' : '')) + '</div></div></button>';
+                    }).join('')
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptySources')) + '</div>');
             } else {
                 var queue = vis.binds.sonos.parseQueue(mediaId);
                 var currentNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
@@ -1158,6 +1209,7 @@ vis.binds = vis.binds || {};
                         '<button type="button" class="sonos-ctrl-tab' + (tab === 'playlists' ? ' is-active' : '') + '" data-tab="playlists">' + vis.binds.sonos.esc(t('playlists')) + '</button>' +
                         '<button type="button" class="sonos-ctrl-tab' + (tab === 'queue' ? ' is-active' : '') + '" data-tab="queue">' + vis.binds.sonos.esc(t('queue')) + '</button>' +
                         '<button type="button" class="sonos-ctrl-tab' + (tab === 'recent' ? ' is-active' : '') + '" data-tab="recent">' + vis.binds.sonos.esc(t('recent')) + '</button>' +
+                        '<button type="button" class="sonos-ctrl-tab' + (tab === 'sources' ? ' is-active' : '') + '" data-tab="sources">' + vis.binds.sonos.esc(t('sources')) + '</button>' +
                     '</div>' +
                     '<div class="sonos-ctrl-list">' + listHtml + '</div>' +
                 '</div>'
@@ -1165,12 +1217,16 @@ vis.binds = vis.binds || {};
 
             vis.binds.sonos.bindUi($div, selected, players, coordinator, mediaId);
             vis.binds.sonos.startTicker(widgetID, instance);
+            if (tab === 'sources' && !vis.binds.sonos.parseBrowse(mediaId).id) {
+                vis.binds.sonos.write(mediaId + '.media_browse', 'root');
+            }
         },
 
         bindUi: function ($div, selected, players, coordinator, mediaId) {
             mediaId = mediaId || selected.id;
             $div.find('.sonos-ctrl-chip').on('click', function () {
                 $div.data('sonos-player', $(this).data('ip'));
+                $div.data('sonos-browse-path', []);
                 vis.binds.sonos.render($div.attr('id'), vis.binds.sonos.resolveInstance(selected.id));
             });
 
@@ -1239,6 +1295,30 @@ vis.binds = vis.binds || {};
                     vis.binds.sonos.write(mediaId + '.play_uri', uri);
                 } else if (recentTitle) {
                     vis.binds.sonos.write(mediaId + '.favorites_set', recentTitle);
+                }
+            });
+            $div.find('[data-browse-back]').on('click', function () {
+                var path = ($div.data('sonos-browse-path') || []).slice();
+                path.pop();
+                $div.data('sonos-browse-path', path);
+                vis.binds.sonos.write(mediaId + '.media_browse', path.length ? path[path.length - 1].id : 'root');
+            });
+            $div.find('[data-media-item]').on('click', function () {
+                var item = {};
+                try {
+                    item = JSON.parse(decodeURIComponent(String($(this).attr('data-media-item') || '')));
+                } catch (e) {
+                    return;
+                }
+                if (item.folder || item.service) {
+                    var path = ($div.data('sonos-browse-path') || []).slice();
+                    path.push({ id: item.id, title: item.title });
+                    $div.data('sonos-browse-path', path);
+                    vis.binds.sonos.write(mediaId + '.media_browse', item.id);
+                    return;
+                }
+                if (item.uri) {
+                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ uri: item.uri, metadata: item.metadata || '' }));
                 }
             });
         },
