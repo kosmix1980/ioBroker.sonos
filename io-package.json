@@ -262,18 +262,6 @@
         "pl": "Nowe państwa faworyzują: „_list_html” i „'queue_html”. `\nZmienił domyślny album, jeśli nie znaleziono żadnych okładek\nKonfiguracja przeniosła się do JSON-Config",
         "uk": "Додано нові держави фаворити_list_html і `queue_html з кришками й\nЗмінений дизайн альбому за замовчуванням, якщо не знайдено\nКонфігурація мігрованих до JSON-Config",
         "zh-cn": "增加新州优惠名单:名单:html和“queue_html” 目 录\n如果没有发现任何掩护,则改写了手法。\nA. 移徙到联合市场"
-      },
-      "2.2.3": {
-        "en": "Added track number state",
-        "de": "Hinzugefügt Gleisnummer Zustand",
-        "ru": "Добавлен номер трека состояние",
-        "pt": "Adicionado número de faixa estado",
-        "nl": "Vertaling:",
-        "fr": "Ajout du numéro de piste",
-        "it": "Aggiunto numero di traccia stato",
-        "es": "Estado de la pista número",
-        "pl": "Poniższa liczba torów",
-        "zh-cn": "增加跟踪国家数目"
       }
     },
     "titleLang": {
