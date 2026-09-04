@@ -136,70 +136,13 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
-### 4.3.14 (2026-09-04)
-* (kosmix1980) VIS widget: library popup is slightly transparent
-
-### 4.3.13 (2026-09-04)
-* (kosmix1980) VIS widget: Favorites/Playlists/Queue/Recent/Sources are top buttons with a covering popup
-
-### 4.3.12 (2026-09-04)
-* (kosmix1980) VIS widget: clear HDMI compression when the TV signal stops
-
-### 4.3.11 (2026-09-04)
-* (kosmix1980) Do not send Play on TV HDMI (HTTP 500); log which command failed
-
-### 4.3.10 (2026-09-04)
-* (kosmix1980) VIS widget: hide play/pause on TV HDMI (mute stays); TV HDMI is first in Sources
-
-### 4.3.9 (2026-09-04)
-* (kosmix1980) VIS widget: Night sound and speech enhancement on TV HDMI; audio format via HTAudioIn; remember last room
-
-### 4.3.8 (2026-09-04)
-* (kosmix1980) VIS widget: TV HDMI shows the audio format (e.g. Stereo PCM) and a TV cover
-
-### 4.3.7 (2026-09-04)
-* (kosmix1980) VIS widget: hide the progress bar while TV HDMI is playing
-
-### 4.3.6 (2026-09-04)
-* (kosmix1980) VIS widget: show TV HDMI as now-playing instead of an empty title
-
-### 4.3.5 (2026-09-04)
-* (kosmix1980) VIS widget: TV HDMI is a selectable source (Arc, Beam, Playbar, Playbase, Ray, Amp)
-
-### 4.3.4 (2026-09-04)
-* (kosmix1980) YouTube Music search uses the public catalog; play sends a sid=284 URI to the speaker (no stream proxy)
-
-### 4.3.3 (2026-09-04)
-* (kosmix1980) YouTube Music is a source: search favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.
-
-### 4.3.2 (2026-09-04)
-* (kosmix1980) Restore the Sources folders and translate emptySources instead of showing the raw key
-
-### 4.3.1 (2026-09-04)
-* (kosmix1980) Fix SMAPI catalog/search XML parsing and add a Search button
-
-### 4.3.0 (2026-09-04)
-* (kosmix1980) VIS widget: browse and search Spotify and other music services via SMAPI
-
-### 4.2.1 (2026-09-04)
-* (kosmix1980) Spotify is a source in the VIS widget; opening it lists matching Sonos favorites and playlists
-
-### 4.2.0 (2026-09-04)
-* (kosmix1980) VIS widget: browse TuneIn, music library, network shares and line-in
-
-### 4.1.2 (2026-09-04)
-* (kosmix1980) The group master is shown brighter than the other rooms in the same group
-
-### 4.1.1 (2026-09-04)
-* (kosmix1980) Grouped rooms share a name color in the VIS widget; ungrouped rooms stay white
-
-### 4.1.0 (2026-09-04)
-* (kosmix1980) Added a VIS widget for rooms, groups, favorites, playlists and the queue
-* (kosmix1980) Added `playlist_list` and `playlist_list_array` states
-* (kosmix1980) Group members now show the coordinator's current track
-* (kosmix1980) Added `recent_tracks` history per room
-* (kosmix1980) Group members follow the master's progress and transport; standalone rooms keep their own control
-* (kosmix1980) Progress bar updates while a track is playing
+### **WORK IN PROGRESS**
+* (kosmix1980) VIS widget: rooms, groups, favorites, playlists, queue, recent tracks and sources
+* (kosmix1980) Sources: TuneIn, library, shares, line-in, Spotify/SMAPI search, YouTube Music catalog (sid=284, no stream proxy)
+* (kosmix1980) TV HDMI as a playable source with format, cover, night sound and speech enhancement
+* (kosmix1980) Library buttons open a slightly transparent popup below the buttons
+* (kosmix1980) Added `playlist_list` / `playlist_list_array` and per-room `recent_tracks`
+* (kosmix1980) Group members follow the coordinator's now-playing and transport
 
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0

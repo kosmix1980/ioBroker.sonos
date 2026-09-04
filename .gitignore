@@ -8,6 +8,6 @@ iob_npm.done
 #ignore .commitinfo created by ioBroker release script
 .commitinfo
 
-# TypeScript incremental info. The compiled adapter (build/) is committed
-# so GitHub installs include the start file build/main.js.
+# compiled typescript
+build/
 *.tsbuildinfo
