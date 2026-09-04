@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '1.0.0',
+        version: '1.1.0',
         _bound: {},
         words: {
             en: {
@@ -24,9 +24,11 @@ vis.binds = vis.binds || {};
                 favorites: 'Favorites',
                 playlists: 'Playlists',
                 queue: 'Queue',
+                recent: 'Recent',
                 emptyFavorites: 'No favorites. Add them in the Sonos app first.',
                 emptyPlaylists: 'No playlists. Create them in the Sonos app first.',
                 emptyQueue: 'Queue is empty.',
+                emptyRecent: 'No recent tracks yet. They appear after something is played.',
                 unknown: 'Unknown room',
                 nothing: 'Nothing playing',
             },
@@ -39,9 +41,11 @@ vis.binds = vis.binds || {};
                 favorites: 'Favoriten',
                 playlists: 'Playlists',
                 queue: 'Warteschlange',
+                recent: 'Zuletzt',
                 emptyFavorites: 'Keine Favoriten. Lege sie zuerst in der Sonos-App an.',
                 emptyPlaylists: 'Keine Playlists. Lege sie zuerst in der Sonos-App an.',
                 emptyQueue: 'Die Warteschlange ist leer.',
+                emptyRecent: 'Noch keine Titel. Die Liste füllt sich beim Abspielen.',
                 unknown: 'Unbekannter Raum',
                 nothing: 'Nichts spielt',
             },
@@ -163,6 +167,14 @@ vis.binds = vis.binds || {};
                 return;
             }
             vis.setValue(id, value);
+        },
+
+        mediaPlayerId: function (player) {
+            var coord = String(vis.binds.sonos.state(player.id, 'coordinator') || '').trim();
+            if (coord && coord !== player.ip && coord !== 'null' && coord !== 'undefined') {
+                return player.id.replace(/\.[^.]+$/, '.' + coord);
+            }
+            return player.id;
         },
 
         findPlayers: function (instance) {
@@ -304,6 +316,7 @@ vis.binds = vis.binds || {};
                         'playlist_list',
                         'queue',
                         'queue_html',
+                        'recent_tracks',
                     ].forEach(function (name) {
                         ids.push(player.id + '.' + name);
                     });
@@ -411,6 +424,7 @@ vis.binds = vis.binds || {};
                     'playlist_list',
                     'queue',
                     'queue_html',
+                    'recent_tracks',
                 ].forEach(function (name) {
                     ids.push(player.id + '.' + name);
                 });
@@ -443,7 +457,11 @@ vis.binds = vis.binds || {};
             if (!selectedIp) {
                 return;
             }
-            var playerId = instance + '.root.' + selectedIp;
+            var selectedId = instance + '.root.' + selectedIp;
+            var playerId = vis.binds.sonos.mediaPlayerId({
+                id: selectedId,
+                ip: selectedIp,
+            });
             if (!$div.find('.sonos-ctrl-seek-input:focus').length) {
                 var seek = parseFloat(vis.binds.sonos.state(playerId, 'seek'));
                 if (!isNaN(seek)) {
@@ -453,7 +471,7 @@ vis.binds = vis.binds || {};
                 $div.find('.sonos-ctrl-seek .sonos-ctrl-time').last().text(vis.binds.sonos.state(playerId, 'current_duration_s') || '00:00');
             }
             if (!$div.find('.sonos-ctrl-volume-input:focus').length) {
-                var volume = parseInt(vis.binds.sonos.state(playerId, 'volume'), 10);
+                var volume = parseInt(vis.binds.sonos.state(selectedId, 'volume'), 10);
                 if (!isNaN(volume)) {
                     $div.find('.sonos-ctrl-volume-input').val(volume);
                     $div.find('.sonos-ctrl-volume .sonos-ctrl-time').text(volume);
@@ -515,6 +533,26 @@ vis.binds = vis.binds || {};
             });
         },
 
+        parseRecent: function (playerId) {
+            var raw = vis.binds.sonos.state(playerId, 'recent_tracks');
+            var list = [];
+            if (Array.isArray(raw)) {
+                list = raw;
+            } else if (typeof raw === 'string' && raw) {
+                try {
+                    var parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        list = parsed;
+                    }
+                } catch (e) {
+                    list = [];
+                }
+            }
+            return list.filter(function (item) {
+                return item && item.title;
+            });
+        },
+
         isGroupedWith: function (player, other) {
             var coordA = String(vis.binds.sonos.state(player.id, 'coordinator') || player.ip);
             var coordB = String(vis.binds.sonos.state(other.id, 'coordinator') || other.ip);
@@ -538,25 +576,26 @@ vis.binds = vis.binds || {};
             var selected = players.filter(function (player) { return player.ip === selectedIp; })[0] || players[0];
             $div.data('sonos-player', selected.ip);
             var tab = $div.data('sonos-tab') || 'favorites';
-            var playing = vis.binds.sonos.state(selected.id, 'state') === 'play';
-            var title = vis.binds.sonos.state(selected.id, 'current_title') || vis.binds.sonos.state(selected.id, 'current_station') || t('nothing');
-            var artist = vis.binds.sonos.state(selected.id, 'current_artist');
-            var album = vis.binds.sonos.state(selected.id, 'current_album');
-            var station = vis.binds.sonos.state(selected.id, 'current_station');
-            var cover = vis.binds.sonos.state(selected.id, 'current_cover');
+            var mediaId = vis.binds.sonos.mediaPlayerId(selected);
+            var playing = vis.binds.sonos.state(mediaId, 'state') === 'play';
+            var title = vis.binds.sonos.state(mediaId, 'current_title') || vis.binds.sonos.state(mediaId, 'current_station') || t('nothing');
+            var artist = vis.binds.sonos.state(mediaId, 'current_artist');
+            var album = vis.binds.sonos.state(mediaId, 'current_album');
+            var station = vis.binds.sonos.state(mediaId, 'current_station');
+            var cover = vis.binds.sonos.state(mediaId, 'current_cover');
             var volume = parseInt(vis.binds.sonos.state(selected.id, 'volume'), 10);
             if (isNaN(volume)) {
                 volume = 0;
             }
-            var seek = parseFloat(vis.binds.sonos.state(selected.id, 'seek'));
+            var seek = parseFloat(vis.binds.sonos.state(mediaId, 'seek'));
             if (isNaN(seek)) {
                 seek = 0;
             }
             var muted = !!vis.binds.sonos.state(selected.id, 'muted');
-            var shuffle = !!vis.binds.sonos.state(selected.id, 'shuffle');
-            var repeat = parseInt(vis.binds.sonos.state(selected.id, 'repeat'), 10) || 0;
-            var elapsed = vis.binds.sonos.state(selected.id, 'current_elapsed_s') || '00:00';
-            var duration = vis.binds.sonos.state(selected.id, 'current_duration_s') || '00:00';
+            var shuffle = !!vis.binds.sonos.state(mediaId, 'shuffle');
+            var repeat = parseInt(vis.binds.sonos.state(mediaId, 'repeat'), 10) || 0;
+            var elapsed = vis.binds.sonos.state(mediaId, 'current_elapsed_s') || '00:00';
+            var duration = vis.binds.sonos.state(mediaId, 'current_duration_s') || '00:00';
             var coordinator = String(vis.binds.sonos.state(selected.id, 'coordinator') || selected.ip);
             var groupVolume = parseInt(vis.binds.sonos.state(selected.id, 'group_volume'), 10);
             var grouped = players.filter(function (player) {
@@ -565,7 +604,7 @@ vis.binds = vis.binds || {};
 
             var roomsHtml = players.map(function (player) {
                 var isActive = player.ip === selected.ip;
-                var isPlaying = vis.binds.sonos.state(player.id, 'state') === 'play';
+                var isPlaying = vis.binds.sonos.state(vis.binds.sonos.mediaPlayerId(player), 'state') === 'play';
                 var alive = vis.binds.sonos.state(player.id, 'alive') !== false;
                 return '<button type="button" class="sonos-ctrl-chip' +
                     (isActive ? ' is-active' : '') +
@@ -592,7 +631,7 @@ vis.binds = vis.binds || {};
 
             var listHtml = '';
             if (tab === 'favorites') {
-                var favorites = vis.binds.sonos.parseFavorites(selected.id);
+                var favorites = vis.binds.sonos.parseFavorites(mediaId);
                 listHtml = favorites.length
                     ? favorites.map(function (item) {
                         return '<button type="button" class="sonos-ctrl-item" data-favorite="' + vis.binds.sonos.esc(item.title) + '">' +
@@ -602,7 +641,7 @@ vis.binds = vis.binds || {};
                     : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptyFavorites')) + '</div>';
             } else if (tab === 'playlists') {
                 var playlists = vis.binds.sonos.parseList(
-                    vis.binds.sonos.state(selected.id, 'playlist_list_array') || vis.binds.sonos.state(selected.id, 'playlist_list')
+                    vis.binds.sonos.state(mediaId, 'playlist_list_array') || vis.binds.sonos.state(mediaId, 'playlist_list')
                 );
                 listHtml = playlists.length
                     ? playlists.map(function (name) {
@@ -610,9 +649,19 @@ vis.binds = vis.binds || {};
                             '<div class="sonos-ctrl-thumb"></div><div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(name) + '</div></div></button>';
                     }).join('')
                     : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptyPlaylists')) + '</div>';
+            } else if (tab === 'recent') {
+                var recent = vis.binds.sonos.parseRecent(selected.id);
+                listHtml = recent.length
+                    ? recent.map(function (item) {
+                        return '<button type="button" class="sonos-ctrl-item" data-recent-uri="' + vis.binds.sonos.esc(item.uri || '') + '" data-recent-title="' + vis.binds.sonos.esc(item.title) + '">' +
+                            (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
+                            '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
+                            '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || item.station || '') + '</div></div></button>';
+                    }).join('')
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptyRecent')) + '</div>';
             } else {
-                var queue = vis.binds.sonos.parseQueue(selected.id);
-                var currentNo = parseInt(vis.binds.sonos.state(selected.id, 'current_track_number'), 10) || 0;
+                var queue = vis.binds.sonos.parseQueue(mediaId);
+                var currentNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
                 listHtml = queue.length
                     ? queue.map(function (item) {
                         var current = item.current || item.no === currentNo;
@@ -664,15 +713,17 @@ vis.binds = vis.binds || {};
                         '<button type="button" class="sonos-ctrl-tab' + (tab === 'favorites' ? ' is-active' : '') + '" data-tab="favorites">' + vis.binds.sonos.esc(t('favorites')) + '</button>' +
                         '<button type="button" class="sonos-ctrl-tab' + (tab === 'playlists' ? ' is-active' : '') + '" data-tab="playlists">' + vis.binds.sonos.esc(t('playlists')) + '</button>' +
                         '<button type="button" class="sonos-ctrl-tab' + (tab === 'queue' ? ' is-active' : '') + '" data-tab="queue">' + vis.binds.sonos.esc(t('queue')) + '</button>' +
+                        '<button type="button" class="sonos-ctrl-tab' + (tab === 'recent' ? ' is-active' : '') + '" data-tab="recent">' + vis.binds.sonos.esc(t('recent')) + '</button>' +
                     '</div>' +
                     '<div class="sonos-ctrl-list">' + listHtml + '</div>' +
                 '</div>'
             );
 
-            vis.binds.sonos.bindUi($div, selected, players, coordinator);
+            vis.binds.sonos.bindUi($div, selected, players, coordinator, mediaId);
         },
 
-        bindUi: function ($div, selected, players, coordinator) {
+        bindUi: function ($div, selected, players, coordinator, mediaId) {
+            mediaId = mediaId || selected.id;
             $div.find('.sonos-ctrl-chip').on('click', function () {
                 $div.data('sonos-player', $(this).data('ip'));
                 vis.binds.sonos.render($div.attr('id'), vis.binds.sonos.resolveInstance(selected.id));
@@ -681,14 +732,14 @@ vis.binds = vis.binds || {};
             $div.find('[data-cmd]').on('click', function () {
                 var cmd = $(this).data('cmd');
                 if (cmd === 'play' || cmd === 'pause' || cmd === 'next' || cmd === 'prev') {
-                    vis.binds.sonos.write(selected.id + '.' + cmd, true);
+                    vis.binds.sonos.write(mediaId + '.' + cmd, true);
                 } else if (cmd === 'mute') {
                     vis.binds.sonos.write(selected.id + '.muted', !vis.binds.sonos.state(selected.id, 'muted'));
                 } else if (cmd === 'shuffle') {
-                    vis.binds.sonos.write(selected.id + '.shuffle', !vis.binds.sonos.state(selected.id, 'shuffle'));
+                    vis.binds.sonos.write(mediaId + '.shuffle', !vis.binds.sonos.state(mediaId, 'shuffle'));
                 } else if (cmd === 'repeat') {
-                    var next = (parseInt(vis.binds.sonos.state(selected.id, 'repeat'), 10) || 0) + 1;
-                    vis.binds.sonos.write(selected.id + '.repeat', next > 2 ? 0 : next);
+                    var next = (parseInt(vis.binds.sonos.state(mediaId, 'repeat'), 10) || 0) + 1;
+                    vis.binds.sonos.write(mediaId + '.repeat', next > 2 ? 0 : next);
                 }
             });
 
@@ -696,7 +747,7 @@ vis.binds = vis.binds || {};
                 vis.binds.sonos.write(selected.id + '.volume', parseInt(this.value, 10));
             });
             $div.find('.sonos-ctrl-seek-input').on('change', function () {
-                vis.binds.sonos.write(selected.id + '.seek', parseFloat(this.value));
+                vis.binds.sonos.write(mediaId + '.seek', parseFloat(this.value));
             });
             $div.find('.sonos-ctrl-group-volume').on('change input', function () {
                 vis.binds.sonos.write(selected.id + '.group_volume', parseInt(this.value, 10));
@@ -729,13 +780,22 @@ vis.binds = vis.binds || {};
             });
 
             $div.find('[data-favorite]').on('click', function () {
-                vis.binds.sonos.write(selected.id + '.favorites_set', String($(this).attr('data-favorite')));
+                vis.binds.sonos.write(mediaId + '.favorites_set', String($(this).attr('data-favorite')));
             });
             $div.find('[data-playlist]').on('click', function () {
-                vis.binds.sonos.write(selected.id + '.playlist_set', String($(this).attr('data-playlist')));
+                vis.binds.sonos.write(mediaId + '.playlist_set', String($(this).attr('data-playlist')));
             });
             $div.find('[data-track]').on('click', function () {
-                vis.binds.sonos.write(selected.id + '.current_track_number', parseInt($(this).data('track'), 10));
+                vis.binds.sonos.write(mediaId + '.current_track_number', parseInt($(this).data('track'), 10));
+            });
+            $div.find('[data-recent-title]').on('click', function () {
+                var uri = String($(this).attr('data-recent-uri') || '');
+                var recentTitle = String($(this).attr('data-recent-title') || '');
+                if (uri && !/^x-rincon:RINCON_/i.test(uri)) {
+                    vis.binds.sonos.write(mediaId + '.play_uri', uri);
+                } else if (recentTitle) {
+                    vis.binds.sonos.write(mediaId + '.favorites_set', recentTitle);
+                }
             });
         },
     };

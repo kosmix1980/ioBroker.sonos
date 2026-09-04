@@ -211,16 +211,18 @@
 
 .sonos-ctrl-tabs {
     display: flex;
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 4px 6px;
 }
 
 .sonos-ctrl-tab {
     border: 0;
     background: transparent;
     color: #9a9a9a;
-    padding: 6px 10px;
+    padding: 6px 8px;
     cursor: pointer;
     border-bottom: 2px solid transparent;
+    flex: 0 0 auto;
 }
 
 .sonos-ctrl-tab.is-active {

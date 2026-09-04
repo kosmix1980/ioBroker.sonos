@@ -52,6 +52,11 @@ const sonos_discovery_1 = __importDefault(require("sonos-discovery"));
 const tts_1 = require("./lib/tts");
 const states_1 = require("./lib/states");
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
+const RECENT_TRACKS_MAX = 25;
+/** Grouping URI used when a player is a slave (`x-rincon:RINCON_...`) */
+function isGroupingUri(uri) {
+    return /^x-rincon:RINCON_/i.test(String(uri || ''));
+}
 /**
  * Convert seconds into "[h:]mm:ss"
  *
@@ -136,7 +141,8 @@ class Sonos extends utils.Adapter {
     /** All known devices with the IP address (dots replaced by underscores) as key */
     channels = {};
     discovery = null;
-    lastCover = null;
+    lastCover = {};
+    lastHistoryKey = {};
     cacheDir = '';
     currentFileNum = 0;
     queues = {};
@@ -429,6 +435,12 @@ class Sonos extends utils.Adapter {
         }
         else if (id.state === 'group_muted') {
             promise = value ? player.muteGroup() : player.unMuteGroup();
+        }
+        else if (id.state === 'play_uri') {
+            const uri = String(value || '').trim();
+            if (uri && !isGroupingUri(uri)) {
+                promise = player.setAVTransport(uri).then(() => player.play());
+            }
         }
         else {
             this.log.warn(`try to control unknown id ${JSON.stringify(id)}`);
@@ -843,9 +855,9 @@ class Sonos extends utils.Adapter {
         if (player._address) {
             await this.updateHtmlQueue(player._address, sonosState.trackNo);
         }
-        if (this.lastCover !== sonosState.currentTrack.albumArtUri) {
+        if (this.lastCover[ip] !== sonosState.currentTrack.albumArtUri) {
             await this.updateCover(ip, sonosState.currentTrack.albumArtUri);
-            this.lastCover = sonosState.currentTrack.albumArtUri || null;
+            this.lastCover[ip] = sonosState.currentTrack.albumArtUri || null;
         }
         this.channels[ip].elapsed = sonosState.elapsedTime;
         this.channels[ip].duration = sonosState.currentTrack.duration;
@@ -875,6 +887,126 @@ class Sonos extends utils.Adapter {
                 player.tts.playingStarted();
             }
         }
+        const coverState = await this.getStateAsync(`root.${ip}.current_cover`);
+        const coverUrl = String(coverState?.val || '');
+        const isCoordinator = !player.coordinator || player.coordinator.uuid === player.uuid;
+        if (!player.tts && (isCoordinator || !isGroupingUri(sonosState.currentTrack.uri))) {
+            await this.appendRecentTrack(ip, sonosState, coverUrl);
+        }
+        if (isCoordinator && !player.tts) {
+            await this.copyPlaybackToGroupMembers(ip, sonosState, ps, coverUrl);
+        }
+    }
+    recentKey(sonosState) {
+        const title = sonosState.currentTrack.title || sonosState.currentTrack.stationName || '';
+        const artist = sonosState.currentTrack.artist || '';
+        const album = sonosState.currentTrack.album || '';
+        return `${title}|${artist}|${album}`;
+    }
+    async appendRecentTrack(ip, sonosState, coverUrl) {
+        const title = (sonosState.currentTrack.title || sonosState.currentTrack.stationName || '').trim();
+        if (!title || !this.channels[ip] || isGroupingUri(sonosState.currentTrack.uri)) {
+            return;
+        }
+        const key = this.recentKey(sonosState);
+        if (this.lastHistoryKey[ip] === key) {
+            return;
+        }
+        this.lastHistoryKey[ip] = key;
+        let list = [];
+        const current = await this.getStateAsync(`root.${ip}.recent_tracks`);
+        if (Array.isArray(current?.val)) {
+            list = current.val;
+        }
+        else if (current?.val) {
+            try {
+                const parsed = JSON.parse(String(current.val));
+                if (Array.isArray(parsed)) {
+                    list = parsed;
+                }
+            }
+            catch {
+                list = [];
+            }
+        }
+        const entry = {
+            title,
+            artist: sonosState.currentTrack.artist || '',
+            album: sonosState.currentTrack.album || '',
+            station: sonosState.currentTrack.stationName || '',
+            cover: coverUrl,
+            uri: sonosState.currentTrack.uri || '',
+            ts: Date.now(),
+        };
+        list = [entry, ...list.filter(item => `${item.title}|${item.artist}|${item.album}` !== key)].slice(0, RECENT_TRACKS_MAX);
+        await this.setState({ device: 'root', channel: ip, state: 'recent_tracks' }, { val: JSON.stringify(list), ack: true });
+    }
+    async copyPlaybackToGroupMembers(coordinatorIp, sonosState, ps, coverUrl) {
+        const membersState = await this.getStateAsync(`root.${coordinatorIp}.membersChannels`);
+        const members = String(membersState?.val || '')
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean);
+        if (members.length < 2) {
+            return;
+        }
+        const queue = await this.getStateAsync(`root.${coordinatorIp}.queue`);
+        const queueHtml = await this.getStateAsync(`root.${coordinatorIp}.queue_html`);
+        const playMode = sonosState.playMode;
+        for (const memberIp of members) {
+            if (!memberIp || memberIp === coordinatorIp || !this.channels[memberIp]) {
+                continue;
+            }
+            if (!ps.transitioning) {
+                await this.setState({ device: 'root', channel: memberIp, state: 'state_simple' }, { val: ps.playing, ack: true });
+                await this.setState({ device: 'root', channel: memberIp, state: 'state' }, { val: ps.paused ? 'pause' : ps.playing ? 'play' : 'stop', ack: true });
+            }
+            if (sonosState.currentTrack.type === 'radio') {
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_type' }, { val: 1, ack: true });
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_station' }, { val: sonosState.currentTrack.stationName || '', ack: true });
+            }
+            else {
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_type' }, { val: sonosState.currentTrack.type === 'line_in' ? 2 : 0, ack: true });
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_station' }, { val: '', ack: true });
+            }
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_title' }, { val: sonosState.currentTrack.title || '', ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_album' }, { val: sonosState.currentTrack.album || '', ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_artist' }, { val: sonosState.currentTrack.artist || '', ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_duration' }, { val: sonosState.currentTrack.duration, ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_duration_s' }, { val: toFormattedTime(sonosState.currentTrack.duration), ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_track_number' }, { val: sonosState.trackNo, ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_cover' }, { val: coverUrl, ack: true });
+            if (sonosState.currentTrack.duration > 0) {
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed' }, { val: sonosState.elapsedTime, ack: true });
+                await this.setState({ device: 'root', channel: memberIp, state: 'seek' }, {
+                    val: Math.round((sonosState.elapsedTime / sonosState.currentTrack.duration) * 1000) / 10,
+                    ack: true,
+                });
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed_s' }, { val: sonosState.elapsedTimeFormatted, ack: true });
+            }
+            if (playMode) {
+                await this.setState({ device: 'root', channel: memberIp, state: 'shuffle' }, { val: playMode.shuffle, ack: true });
+                await this.setState({ device: 'root', channel: memberIp, state: 'repeat' }, { val: playMode.repeat === 'all' ? 1 : playMode.repeat === 'one' ? 2 : 0, ack: true });
+                await this.setState({ device: 'root', channel: memberIp, state: 'crossfade' }, { val: playMode.crossfade, ack: true });
+            }
+            if (queue?.val !== undefined && queue.val !== null) {
+                await this.setState({ device: 'root', channel: memberIp, state: 'queue' }, { val: queue.val, ack: true });
+            }
+            if (queueHtml?.val !== undefined && queueHtml.val !== null) {
+                await this.setState({ device: 'root', channel: memberIp, state: 'queue_html' }, { val: queueHtml.val, ack: true });
+            }
+            await this.appendRecentTrack(memberIp, sonosState, coverUrl);
+        }
+    }
+    /** After grouping changes, copy the master's now-playing onto members */
+    async syncGroupPlayback(coordinatorIp) {
+        const uuid = this.channels[coordinatorIp]?.uuid;
+        const player = uuid ? this.discovery?.getPlayerByUUID(uuid) : undefined;
+        if (!player || player.tts || !player.state?.currentTrack) {
+            return;
+        }
+        const coverState = await this.getStateAsync(`root.${coordinatorIp}.current_cover`);
+        await this.copyPlaybackToGroupMembers(coordinatorIp, player.state, getPlaybackState(player.state.playbackState), String(coverState?.val || ''));
     }
     /** Update the elapsed time while playing */
     updateElapsed(ip) {
@@ -1168,6 +1300,7 @@ class Sonos extends utils.Adapter {
             }
             if (ip && membersChannels.length) {
                 await this.setState({ device: 'root', channel: ip, state: 'membersChannels' }, { val: membersChannels.join(','), ack: true });
+                await this.syncGroupPlayback(ip);
             }
         }
         if (!this.playlistsLoaded && this.discovery?.players?.length) {

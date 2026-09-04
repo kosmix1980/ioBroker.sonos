@@ -441,6 +441,24 @@ function getChannelStates() {
             role: 'state',
             name: 'Play queue html',
         },
+        recent_tracks: {
+            def: '[]',
+            type: 'array',
+            read: true,
+            write: false,
+            role: 'media',
+            desc: 'Recently played tracks as JSON array',
+            name: 'Recent tracks',
+        },
+        play_uri: {
+            def: '',
+            type: 'string',
+            read: false,
+            write: true,
+            role: 'media',
+            desc: 'Play a URI on this player',
+            name: 'Play URI',
+        },
     };
     for (const g in exports.newGroupStates) {
         states[g] = exports.newGroupStates[g];
