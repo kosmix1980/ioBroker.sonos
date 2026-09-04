@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.4',
+        version: '4.3.5',
         _bound: {},
         _tickers: {},
         words: {
@@ -37,6 +37,8 @@ vis.binds = vis.binds || {};
                 library: 'Music library',
                 shares: 'Network shares',
                 lineIn: 'Line-In',
+                tv: 'TV',
+                tvHdmi: 'HDMI',
                 search: 'Search…',
                 searchGo: 'Search',
                 noSearchHits: 'No matching titles.',
@@ -66,6 +68,8 @@ vis.binds = vis.binds || {};
                 library: 'Mediathek',
                 shares: 'Netzlaufwerke',
                 lineIn: 'Line-In',
+                tv: 'TV',
+                tvHdmi: 'HDMI',
                 search: 'Suchen…',
                 searchGo: 'Suchen',
                 noSearchHits: 'Keine passenden Titel.',
@@ -699,6 +703,7 @@ vis.binds = vis.binds || {};
                 { id: 'service:YouTube Music', title: 'YouTube Music', folder: true, service: true },
                 { id: 'A:', title: vis.binds.sonos.t('library'), folder: true },
                 { id: 'S:', title: vis.binds.sonos.t('shares'), folder: true },
+                { id: 'tv', title: vis.binds.sonos.t('tv'), artist: vis.binds.sonos.t('tvHdmi') },
                 { id: 'AI:', title: vis.binds.sonos.t('lineIn'), folder: true },
             ];
         },
@@ -1131,6 +1136,10 @@ vis.binds = vis.binds || {};
                     path.push({ id: item.id, title: item.title });
                     $div.data('sonos-browse-path', path);
                     vis.binds.sonos.write(mediaId + '.media_browse', item.id);
+                    return;
+                }
+                if (item.id === 'tv' || /^x-sonos-htastream:/i.test(item.uri || '')) {
+                    vis.binds.sonos.write(selected.id + '.media_play', JSON.stringify({ tv: true }));
                     return;
                 }
                 if (item.uri) {

@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.5 (2026-09-04)
+* (kosmix1980) VIS widget: TV HDMI is a selectable source (Arc, Beam, Playbar, Playbase, Ray, Amp)
+
 ### 4.3.4 (2026-09-04)
 * (kosmix1980) YouTube Music search uses the public catalog; play sends a sid=284 URI to the speaker (no stream proxy)
 

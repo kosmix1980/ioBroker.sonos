@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mediaItem = mediaItem;
 exports.matchesMusicService = matchesMusicService;
+exports.tvStreamUri = tvStreamUri;
 exports.getMediaRoot = getMediaRoot;
 exports.browseMedia = browseMedia;
 exports.isStreamUri = isStreamUri;
@@ -94,7 +95,7 @@ function parseDidl(didl, baseUrl) {
             artist: tagText(chunk, 'dc:creator'),
             album: tagText(chunk, 'upnp:album'),
             cover: absoluteCover(tagText(chunk, 'upnp:albumarturi') || tagText(chunk, 'upnp:albumArtURI'), baseUrl),
-            folder: folder && !uri.startsWith('x-rincon-stream:'),
+            folder: folder && !uri.startsWith('x-rincon-stream:') && !uri.startsWith('x-sonos-htastream:'),
         });
     };
     didl.replace(/<container\b[\s\S]*?<\/container>/gi, chunk => {
@@ -216,7 +217,11 @@ function matchesMusicService(blob, serviceName, service) {
     }
     return text.includes(name);
 }
-function getMediaRoot(services, labels) {
+/** HDMI / TV input on Arc, Beam, Playbar, Playbase, Ray and Amp. */
+function tvStreamUri(uuid) {
+    return `x-sonos-htastream:${uuid}:spdif`;
+}
+function getMediaRoot(services, labels, playerUuid) {
     const available = Object.keys(services || {});
     const used = new Set();
     const items = [mediaItem({ id: 'R:0', title: labels.radio, folder: true })];
@@ -236,7 +241,13 @@ function getMediaRoot(services, labels) {
             addService(match);
         }
     });
-    items.push(mediaItem({ id: 'A:', title: labels.library, folder: true }), mediaItem({ id: 'S:', title: labels.shares, folder: true }), mediaItem({ id: 'AI:', title: labels.lineIn, folder: true }));
+    items.push(mediaItem({ id: 'A:', title: labels.library, folder: true }), mediaItem({ id: 'S:', title: labels.shares, folder: true }), mediaItem({
+        id: 'tv',
+        title: labels.tv,
+        artist: labels.tvHdmi,
+        uri: playerUuid ? tvStreamUri(playerUuid) : '',
+        folder: false,
+    }), mediaItem({ id: 'AI:', title: labels.lineIn, folder: true }));
     available.sort((a, b) => a.localeCompare(b)).forEach(name => addService(name));
     return { id: 'root', title: '', items };
 }
@@ -245,7 +256,7 @@ async function browseMedia(baseUrl, objectId) {
     return parseDidl(extractDidl(xml), baseUrl);
 }
 function isStreamUri(uri) {
-    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls(?:-static)?:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|pndrradio:|aac:)/i.test(uri);
+    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls(?:-static)?:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(uri);
 }
 /** URIs that the player resolves itself (radio, SMAPI containers) — use setAVTransport, not the queue. */
 function isDirectPlayUri(uri) {

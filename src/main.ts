@@ -16,7 +16,14 @@ import type { SonosFavorite, SonosPlayer, SonosPlayerState, SonosQueueItem } fro
 
 import { TTS } from './lib/tts';
 import { getChannelStates } from './lib/states';
-import { browseMedia, getMediaRoot, isDirectPlayUri, matchesMusicService, mediaItem } from './lib/content-directory';
+import {
+    browseMedia,
+    getMediaRoot,
+    isDirectPlayUri,
+    matchesMusicService,
+    mediaItem,
+    tvStreamUri,
+} from './lib/content-directory';
 import type { MediaBrowseItem, MediaBrowseResult } from './lib/content-directory';
 import { SmapiHub, encodeSmapiId, parseSmapiId } from './lib/smapi';
 import { isYoutubeMusicName, searchYoutubeMusic } from './lib/ytmusic';
@@ -478,7 +485,7 @@ class Sonos extends utils.Adapter {
         } else if (id.state === 'media_browse') {
             promise = this.handleMediaBrowse(media, mediaIp, String(value || ''));
         } else if (id.state === 'media_play') {
-            promise = this.handleMediaPlay(media, String(value || ''));
+            promise = this.handleMediaPlay(media, String(value || ''), player);
         } else {
             this.log.warn(`try to control unknown id ${JSON.stringify(id)}`);
         }
@@ -1508,12 +1515,14 @@ class Sonos extends utils.Adapter {
             library: german ? 'Mediathek' : 'Music library',
             shares: german ? 'Netzlaufwerke' : 'Network shares',
             lineIn: 'Line-In',
+            tv: 'TV',
+            tvHdmi: 'HDMI',
         };
 
         let result: MediaBrowseResult;
 
         if (id === 'root') {
-            result = getMediaRoot(this.discovery?.availableServices, labels);
+            result = getMediaRoot(this.discovery?.availableServices, labels, player.uuid);
             result.title = german ? 'Quellen' : 'Sources';
         } else if (id.startsWith('smapi-search:')) {
             const rest = id.slice('smapi-search:'.length);
@@ -1642,7 +1651,7 @@ class Sonos extends utils.Adapter {
         );
     }
 
-    private async handleMediaPlay(player: SonosPlayer, raw: string): Promise<void> {
+    private async handleMediaPlay(player: SonosPlayer, raw: string, sourcePlayer?: SonosPlayer): Promise<void> {
         let uri = '';
         let metadata = '';
         const text = raw.trim();
@@ -1657,6 +1666,7 @@ class Sonos extends utils.Adapter {
                     metadata?: string;
                     favorite?: string;
                     playlist?: string;
+                    tv?: boolean;
                 };
                 if (parsed.favorite) {
                     await player.replaceWithFavorite(parsed.favorite);
@@ -1668,8 +1678,13 @@ class Sonos extends utils.Adapter {
                     await player.play();
                     return;
                 }
-                uri = String(parsed.uri || '').trim();
-                metadata = String(parsed.metadata || '');
+                if (parsed.tv) {
+                    uri = tvStreamUri(sourcePlayer?.uuid || player.uuid);
+                    metadata = String(parsed.metadata || '');
+                } else {
+                    uri = String(parsed.uri || '').trim();
+                    metadata = String(parsed.metadata || '');
+                }
             } catch {
                 uri = text;
             }

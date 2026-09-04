@@ -459,7 +459,7 @@ class Sonos extends utils.Adapter {
             promise = this.handleMediaBrowse(media, mediaIp, String(value || ''));
         }
         else if (id.state === 'media_play') {
-            promise = this.handleMediaPlay(media, String(value || ''));
+            promise = this.handleMediaPlay(media, String(value || ''), player);
         }
         else {
             this.log.warn(`try to control unknown id ${JSON.stringify(id)}`);
@@ -1216,10 +1216,12 @@ class Sonos extends utils.Adapter {
             library: german ? 'Mediathek' : 'Music library',
             shares: german ? 'Netzlaufwerke' : 'Network shares',
             lineIn: 'Line-In',
+            tv: 'TV',
+            tvHdmi: 'HDMI',
         };
         let result;
         if (id === 'root') {
-            result = (0, content_directory_1.getMediaRoot)(this.discovery?.availableServices, labels);
+            result = (0, content_directory_1.getMediaRoot)(this.discovery?.availableServices, labels, player.uuid);
             result.title = german ? 'Quellen' : 'Sources';
         }
         else if (id.startsWith('smapi-search:')) {
@@ -1351,7 +1353,7 @@ class Sonos extends utils.Adapter {
         }
         await this.setState({ device: 'root', channel: ip, state: 'media_browse_result' }, { val: JSON.stringify(result), ack: true });
     }
-    async handleMediaPlay(player, raw) {
+    async handleMediaPlay(player, raw, sourcePlayer) {
         let uri = '';
         let metadata = '';
         const text = raw.trim();
@@ -1371,8 +1373,14 @@ class Sonos extends utils.Adapter {
                     await player.play();
                     return;
                 }
-                uri = String(parsed.uri || '').trim();
-                metadata = String(parsed.metadata || '');
+                if (parsed.tv) {
+                    uri = (0, content_directory_1.tvStreamUri)(sourcePlayer?.uuid || player.uuid);
+                    metadata = String(parsed.metadata || '');
+                }
+                else {
+                    uri = String(parsed.uri || '').trim();
+                    metadata = String(parsed.metadata || '');
+                }
             }
             catch {
                 uri = text;

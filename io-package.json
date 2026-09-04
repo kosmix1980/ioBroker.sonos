@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.4",
+    "version": "4.3.5",
     "news": {
+      "4.3.5": {
+        "en": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "de": "TV HDMI ist im VIS-Widget als Quelle wählbar (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "ru": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "pt": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "nl": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "fr": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "it": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "es": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "pl": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "uk": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
+        "zh-cn": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp)."
+      },
       "4.3.4": {
         "en": "YouTube Music search uses the public catalog. Play sends a sid=284 URI to the speaker (no stream proxy). If playback fails, save a favorite in the Sonos app.",
         "de": "YouTube-Music-Suche nutzt den öffentlichen Katalog. Play schickt eine sid=284-URI an den Speaker (kein Stream-Proxy). Wenn nichts startet, Favorit in der Sonos-App speichern.",

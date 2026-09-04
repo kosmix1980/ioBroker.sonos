@@ -85,7 +85,7 @@ function parseDidl(didl: string, baseUrl: string): MediaBrowseItem[] {
             artist: tagText(chunk, 'dc:creator'),
             album: tagText(chunk, 'upnp:album'),
             cover: absoluteCover(tagText(chunk, 'upnp:albumarturi') || tagText(chunk, 'upnp:albumArtURI'), baseUrl),
-            folder: folder && !uri.startsWith('x-rincon-stream:'),
+            folder: folder && !uri.startsWith('x-rincon-stream:') && !uri.startsWith('x-sonos-htastream:'),
         });
     };
 
@@ -226,9 +226,15 @@ export function matchesMusicService(
     return text.includes(name);
 }
 
+/** HDMI / TV input on Arc, Beam, Playbar, Playbase, Ray and Amp. */
+export function tvStreamUri(uuid: string): string {
+    return `x-sonos-htastream:${uuid}:spdif`;
+}
+
 export function getMediaRoot(
     services: Record<string, unknown> | undefined,
-    labels: { radio: string; library: string; shares: string; lineIn: string },
+    labels: { radio: string; library: string; shares: string; lineIn: string; tv: string; tvHdmi: string },
+    playerUuid?: string,
 ): MediaBrowseResult {
     const available = Object.keys(services || {});
     const used = new Set<string>();
@@ -255,6 +261,13 @@ export function getMediaRoot(
     items.push(
         mediaItem({ id: 'A:', title: labels.library, folder: true }),
         mediaItem({ id: 'S:', title: labels.shares, folder: true }),
+        mediaItem({
+            id: 'tv',
+            title: labels.tv,
+            artist: labels.tvHdmi,
+            uri: playerUuid ? tvStreamUri(playerUuid) : '',
+            folder: false,
+        }),
         mediaItem({ id: 'AI:', title: labels.lineIn, folder: true }),
     );
 
@@ -269,7 +282,7 @@ export async function browseMedia(baseUrl: string, objectId: string): Promise<Me
 }
 
 export function isStreamUri(uri: string): boolean {
-    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls(?:-static)?:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|pndrradio:|aac:)/i.test(
+    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls(?:-static)?:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(
         uri,
     );
 }
