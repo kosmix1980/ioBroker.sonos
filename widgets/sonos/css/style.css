@@ -298,16 +298,30 @@
 }
 
 .sonos-ctrl-search {
+    display: flex;
+    gap: 8px;
     padding: 8px 10px 4px;
 }
 
 .sonos-ctrl-search-input {
-    width: 100%;
+    flex: 1 1 auto;
+    width: auto;
     border: 0;
     border-radius: 8px;
     background: #2a2a2a;
     color: #f3f3f3;
     padding: 8px 10px;
+    font: inherit;
+}
+
+.sonos-ctrl-search-btn {
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    color: #fff;
+    padding: 8px 12px;
+    cursor: pointer;
     font: inherit;
 }
 

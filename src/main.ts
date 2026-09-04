@@ -1406,8 +1406,8 @@ class Sonos extends utils.Adapter {
             this.log.warn(`Cannot list ${serviceName} playlists: ${err}`);
         }
 
-        if (loginHint && !items.some(item => item.uri || item.folder || item.favorite || item.playlist)) {
-            items.unshift(mediaItem({ id: '', title: loginHint }));
+        if (loginHint || loginUrl) {
+            items.unshift(mediaItem({ id: '', title: loginHint || loginUrl || '' }));
         }
 
         if (!items.length) {

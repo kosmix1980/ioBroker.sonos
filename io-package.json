@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.0",
+    "version": "4.3.1",
     "news": {
+      "4.3.1": {
+        "en": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
+        "de": "Spotify-Katalog und Titelsuche parsen SMAPI-XML jetzt korrekt. Die Suche hat einen Suchen-Button. YouTube Music hat keinen SMAPI-Katalog.",
+        "ru": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
+        "pt": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
+        "nl": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
+        "fr": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
+        "it": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
+        "es": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
+        "pl": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
+        "uk": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog.",
+        "zh-cn": "Spotify catalog and title search now parse SMAPI XML correctly. The search box has a Search button. YouTube Music has no SMAPI catalog."
+      },
       "4.3.0": {
         "en": "The VIS widget browses Spotify and other music services via SMAPI (catalog, search, play). Sign-in uses the Sonos App-Link if speaker tokens are not readable.",
         "de": "Das VIS-Widget durchsucht Spotify und andere Musikdienste per SMAPI (Katalog, Suche, Wiedergabe). Die Anmeldung nutzt den Sonos App-Link, falls die Speaker-Tokens nicht lesbar sind.",

@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.1 (2026-09-04)
+* (kosmix1980) Fix SMAPI catalog/search XML parsing and add a Search button
+
 ### 4.3.0 (2026-09-04)
 * (kosmix1980) VIS widget: browse and search Spotify and other music services via SMAPI
 

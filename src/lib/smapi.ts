@@ -78,9 +78,23 @@ function decodeXml(value: string): string {
         .replace(/&amp;/g, '&');
 }
 
+function tagRe(tag: string): string {
+    return `(?:[\\w.-]+:)?${tag}`;
+}
+
 function tagText(xml: string, tag: string): string {
-    const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i'));
+    const name = tagRe(tag);
+    const match = xml.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, 'i'));
     return match ? decodeXml(match[1]).trim() : '';
+}
+
+function eachTag(xml: string, tag: string, onChunk: (innerAndTag: string) => void): void {
+    const name = tagRe(tag);
+    const re = new RegExp(`<${name}\\b[^>]*>[\\s\\S]*?</${name}>`, 'gi');
+    xml.replace(re, chunk => {
+        onChunk(chunk);
+        return '';
+    });
 }
 
 function attr(xml: string, name: string): string {
@@ -112,6 +126,35 @@ function parseAuth(raw: string): string {
 function needsLoginToken(auth: string): boolean {
     return auth === 'DeviceLink' || auth === 'AppLink';
 }
+
+function isSoapSmapi(service: MusicServiceInfo): boolean {
+    const url = `${service.secureUri || service.uri}`;
+    return Boolean(url) && !/googleapis\.com|v1:sendRequest/i.test(url);
+}
+
+const FALLBACK_SERVICES: MusicServiceInfo[] = [
+    {
+        name: 'Spotify',
+        id: 9,
+        type: 2311,
+        uri: 'https://spotify-v5.ws.sonos.com/smapi',
+        secureUri: 'https://spotify-v5.ws.sonos.com/smapi',
+        auth: 'AppLink',
+    },
+];
+
+const SEARCH_IDS = [
+    'search:track',
+    'search:album',
+    'search:artist',
+    'search:playlist',
+    'search:station',
+    'tracks',
+    'albums',
+    'artists',
+    'playlists',
+    'all',
+];
 
 function colonEncode(id: string): string {
     return id.replace(/:/g, '%3a');
@@ -244,7 +287,7 @@ function smapiEnvelope(
 }
 
 function extractFault(xml: string): { code: string; string: string; detail: string } | undefined {
-    if (!/<faultcode/i.test(xml) && !/<s:Fault/i.test(xml) && !/<Fault/i.test(xml)) {
+    if (!/<[\w.-:]*Fault[\s>/]/i.test(xml) && !/<[\w.-:]*faultcode[\s>/]/i.test(xml)) {
         return undefined;
     }
     return {
@@ -255,6 +298,7 @@ function extractFault(xml: string): { code: string; string: string; detail: stri
 }
 
 function parseSmapiEntries(xml: string): SmapiEntry[] {
+    const source = xml.includes('&lt;media') ? decodeXml(xml) : xml;
     const entries: SmapiEntry[] = [];
     const push = (chunk: string, isCollection: boolean): void => {
         const id = tagText(chunk, 'id');
@@ -263,8 +307,14 @@ function parseSmapiEntries(xml: string): SmapiEntry[] {
             return;
         }
         const itemType = tagText(chunk, 'itemType') || (isCollection ? 'collection' : 'track');
-        const trackMeta = chunk.match(/<trackMetadata\b[\s\S]*?<\/trackMetadata>/i)?.[0] || '';
-        const streamMeta = chunk.match(/<streamMetadata\b[\s\S]*?<\/streamMetadata>/i)?.[0] || '';
+        let trackMeta = '';
+        let streamMeta = '';
+        eachTag(chunk, 'trackMetadata', inner => {
+            trackMeta = inner;
+        });
+        eachTag(chunk, 'streamMetadata', inner => {
+            streamMeta = inner;
+        });
         entries.push({
             id: id || title,
             title: title || id,
@@ -277,14 +327,8 @@ function parseSmapiEntries(xml: string): SmapiEntry[] {
         });
     };
 
-    xml.replace(/<mediaCollection\b[\s\S]*?<\/mediaCollection>/gi, chunk => {
-        push(chunk, true);
-        return '';
-    });
-    xml.replace(/<mediaMetadata\b[\s\S]*?<\/mediaMetadata>/gi, chunk => {
-        push(chunk, false);
-        return '';
-    });
+    eachTag(source, 'mediaCollection', chunk => push(chunk, true));
+    eachTag(source, 'mediaMetadata', chunk => push(chunk, false));
     return entries;
 }
 
@@ -471,36 +515,54 @@ export class SmapiHub {
         if (this.services?.length) {
             return this.services;
         }
-        const xml = await upnpSoap(
-            baseUrl,
-            '/MusicServices/Control',
-            'urn:schemas-upnp-org:service:MusicServices:1#ListAvailableServices',
-            '<u:ListAvailableServices xmlns:u="urn:schemas-upnp-org:service:MusicServices:1"></u:ListAvailableServices>',
-        );
-        let descriptor = tagText(xml, 'AvailableServiceDescriptorList');
-        if (!descriptor.includes('<Service')) {
-            descriptor = decodeXml(descriptor);
-        }
         const services: MusicServiceInfo[] = [];
-        descriptor.replace(/<Service\b([^>]*)>([\s\S]*?)<\/Service>/gi, (_all, attrs: string, body: string) => {
-            const id = parseInt(attr(attrs, 'Id') || attr(attrs, 'id') || '0', 10);
-            const name = attr(attrs, 'Name') || attr(attrs, 'name');
-            if (!id || !name) {
-                return '';
+        try {
+            const xml = await upnpSoap(
+                baseUrl,
+                '/MusicServices/Control',
+                'urn:schemas-upnp-org:service:MusicServices:1#ListAvailableServices',
+                '<u:ListAvailableServices xmlns:u="urn:schemas-upnp-org:service:MusicServices:1"></u:ListAvailableServices>',
+            );
+            let descriptor = tagText(xml, 'AvailableServiceDescriptorList');
+            if (!/<(?:[\w.-]+:)?Service\b/i.test(descriptor)) {
+                descriptor = decodeXml(descriptor);
             }
-            const policy = body.match(/<Policy\b[^>]*\/?>/i)?.[0] || '';
-            services.push({
-                name,
-                id,
-                type: id * 256 + 7,
-                uri: attr(attrs, 'Uri') || attr(attrs, 'uri'),
-                secureUri: attr(attrs, 'SecureUri') || attr(attrs, 'secureUri') || attr(attrs, 'Uri'),
-                auth: parseAuth(attr(policy, 'Auth')),
+            eachTag(descriptor, 'Service', chunk => {
+                const open = chunk.match(/<(?:[\w.-]+:)?Service\b([^>]*)>/i)?.[1] || '';
+                const id = parseInt(attr(open, 'Id') || attr(open, 'id') || '0', 10);
+                const name = attr(open, 'Name') || attr(open, 'name');
+                if (!id || !name) {
+                    return;
+                }
+                const policyOpen = chunk.match(/<(?:[\w.-]+:)?Policy\b([^>]*)\/?>/i)?.[0] || '';
+                services.push({
+                    name,
+                    id,
+                    type: id * 256 + 7,
+                    uri: attr(open, 'Uri') || attr(open, 'uri'),
+                    secureUri: attr(open, 'SecureUri') || attr(open, 'secureUri') || attr(open, 'Uri'),
+                    auth: parseAuth(attr(policyOpen, 'Auth')),
+                });
             });
-            return '';
+        } catch (err) {
+            this.log.warn(`SMAPI: cannot list music services: ${err}`);
+        }
+        FALLBACK_SERVICES.forEach(fallback => {
+            if (
+                !services.some(
+                    item => item.id === fallback.id || item.name.toLowerCase() === fallback.name.toLowerCase(),
+                )
+            ) {
+                services.push(fallback);
+            }
         });
         this.services = services;
-        this.log.debug(`SMAPI: ${services.length} music services`);
+        this.log.info(
+            `SMAPI: ${services.length} music services (${services
+                .map(item => item.name)
+                .slice(0, 8)
+                .join(', ')})`,
+        );
         return services;
     }
 
@@ -568,10 +630,10 @@ export class SmapiHub {
                 if (!service) {
                     return '';
                 }
-                const token = tagText(body, 'OADevID') || tagText(body, 'UN');
+                const token = tagText(body, 'OADevID');
                 const key = tagText(body, 'Key');
                 const sn = attr(attrs, 'SerialNum') || '0';
-                if (token && !this.tokens.has(this.tokenKey(service))) {
+                if (token && key && token.length >= 16 && key.length >= 8 && !this.tokens.has(this.tokenKey(service))) {
                     this.tokens.set(this.tokenKey(service), { token, key, sn });
                     this.log.debug(`SMAPI: imported speaker account for ${service.name}`);
                 }
@@ -636,7 +698,15 @@ export class SmapiHub {
                     return this.smapiCall(baseUrl, service, action, inner, true);
                 }
             }
-            if (blob.includes('authtokenexpired') || blob.includes('notauthorized') || blob.includes('login')) {
+            if (
+                blob.includes('authtokenexpired') ||
+                blob.includes('tokenrefreshrequired') ||
+                blob.includes('notauthorized') ||
+                blob.includes('not_linked') ||
+                blob.includes('login') ||
+                blob.includes('auth')
+            ) {
+                this.tokens.delete(this.tokenKey(service));
                 throw new SmapiAuthError(fault.string || 'SMAPI authentication required');
             }
             throw new Error(`${service.name} ${action} failed: ${fault.string || fault.code || 'SOAP fault'}`);
@@ -744,31 +814,45 @@ export class SmapiHub {
         if (!service) {
             throw new Error(`Unknown music service: ${serviceName}`);
         }
+        if (!isSoapSmapi(service)) {
+            return {
+                items: [],
+                loginHint: german
+                    ? `${service.name} hat keinen klassischen SMAPI-Katalog. Suche und Ordner gehen hier nicht — gespeicherte Favoriten bleiben nutzbar.`
+                    : `${service.name} has no classic SMAPI catalog. Search and folders are unavailable here — saved favorites still work.`,
+            };
+        }
+        const loginHint = german
+            ? `${service.name}: Katalog braucht eine einmalige App-Link-Anmeldung. Link öffnen, anmelden, dann „Anmeldung abgeschlossen“.`
+            : `${service.name}: the catalog needs a one-time App-Link sign-in. Open the URL, sign in, then tap “Signed in”.`;
         try {
             const xml = await this.smapiCall(
                 baseUrl,
                 service,
                 'getMetadata',
-                `<s:id>${xmlEscape(objectId || 'root')}</s:id><s:index>0</s:index><s:count>${BROWSE_COUNT}</s:count><s:recursive>false</s:recursive>`,
+                `<s:id>${xmlEscape(objectId || 'root')}</s:id><s:index>0</s:index><s:count>${BROWSE_COUNT}</s:count><s:recursive>0</s:recursive>`,
             );
-            return { items: this.entriesToItems(service, xml) };
+            const items = this.entriesToItems(service, xml);
+            if (!items.length && needsLoginToken(service.auth) && (objectId || 'root') === 'root') {
+                throw new SmapiAuthError('empty catalog');
+            }
+            if (!items.length) {
+                this.log.warn(
+                    `SMAPI ${service.name} getMetadata(${objectId || 'root'}) parsed 0 items from ${xml.length} bytes`,
+                );
+            }
+            return { items };
         } catch (err) {
-            if (err instanceof SmapiAuthError) {
-                let loginUrl = '';
+            this.log.warn(`SMAPI browse ${service.name}: ${err}`);
+            let loginUrl = '';
+            if (needsLoginToken(service.auth)) {
                 try {
                     loginUrl = await this.beginLogin(baseUrl, service);
                 } catch (loginErr) {
                     this.log.warn(`SMAPI login for ${service.name}: ${loginErr}`);
                 }
-                return {
-                    items: [],
-                    loginUrl,
-                    loginHint: german
-                        ? `${service.name} ist am Player angemeldet, der Katalog braucht aber ein App-Link-Token. Link im Browser öffnen, anmelden, danach „Anmeldung abgeschlossen“ tippen.`
-                        : `${service.name} is linked on the player, but the catalog needs an App-Link token. Open the URL in a browser, sign in, then tap “Signed in”.`,
-                };
             }
-            throw err;
+            return { items: [], loginUrl, loginHint };
         }
     }
 
@@ -781,10 +865,12 @@ export class SmapiHub {
         if (!query) {
             return { items: [] };
         }
-        const categories = ['all', 'tracks', 'albums', 'artists', 'playlists', 'stations'];
+        if (!isSoapSmapi(service)) {
+            return this.browse(baseUrl, serviceName, 'root', german);
+        }
         const items: MediaBrowseItem[] = [];
         let lastErr: unknown;
-        for (const category of categories) {
+        for (const category of SEARCH_IDS) {
             try {
                 const xml = await this.smapiCall(
                     baseUrl,
@@ -805,6 +891,16 @@ export class SmapiHub {
         }
         if (!items.length && lastErr instanceof Error) {
             this.log.warn(`SMAPI search on ${service.name}: ${lastErr.message}`);
+        }
+        if (!items.length) {
+            return {
+                items: [
+                    mediaItem({
+                        id: '',
+                        title: german ? `Keine Treffer für „${query}“.` : `No matches for “${query}”.`,
+                    }),
+                ],
+            };
         }
         return { items };
     }

@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.0',
+        version: '4.3.1',
         _bound: {},
         _tickers: {},
         words: {
@@ -33,6 +33,8 @@ vis.binds = vis.binds || {};
                 emptyQueue: 'Queue is empty.',
                 emptyRecent: 'No recent tracks yet. They appear after something is played.',
                 search: 'Search…',
+                searchGo: 'Search',
+                noSearchHits: 'No matching titles.',
                 signedIn: 'Signed in',
                 loginOpen: 'Open this link in a browser to connect the music service.',
                 unknown: 'Unknown room',
@@ -55,6 +57,8 @@ vis.binds = vis.binds || {};
                 emptyQueue: 'Die Warteschlange ist leer.',
                 emptyRecent: 'Noch keine Titel. Die Liste füllt sich beim Abspielen.',
                 search: 'Suchen…',
+                searchGo: 'Suchen',
+                noSearchHits: 'Keine passenden Titel.',
                 signedIn: 'Anmeldung abgeschlossen',
                 loginOpen: 'Diesen Link im Browser öffnen, um den Dienst zu verbinden.',
                 unknown: 'Unbekannter Raum',
@@ -846,18 +850,19 @@ vis.binds = vis.binds || {};
                         '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(t('back')) + '</div></div></button>'
                     : '';
                 var extraHtml = '';
-                if (browse.loginUrl) {
+                if (browse.loginUrl || browse.loginHint) {
                     extraHtml += '<div class="sonos-ctrl-login">' +
-                        '<div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(t('loginOpen')) + '</div>' +
-                        '<div class="sonos-ctrl-login-url">' + vis.binds.sonos.esc(browse.loginUrl) + '</div>' +
-                        (serviceName
+                        '<div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(browse.loginHint || t('loginOpen')) + '</div>' +
+                        (browse.loginUrl ? '<div class="sonos-ctrl-login-url">' + vis.binds.sonos.esc(browse.loginUrl) + '</div>' : '') +
+                        (browse.loginUrl && serviceName
                             ? '<button type="button" class="sonos-ctrl-login-btn" data-smapi-auth="' + vis.binds.sonos.esc(serviceName) + '">' + vis.binds.sonos.esc(t('signedIn')) + '</button>'
                             : '') +
                         '</div>';
                 }
                 if (serviceName) {
                     extraHtml += '<form class="sonos-ctrl-search" data-smapi-search="' + vis.binds.sonos.esc(serviceName) + '">' +
-                        '<input type="search" class="sonos-ctrl-search-input" placeholder="' + vis.binds.sonos.esc(t('search')) + '">' +
+                        '<input type="search" class="sonos-ctrl-search-input" placeholder="' + vis.binds.sonos.esc(t('search')) + '" enterkeyhint="search">' +
+                        '<button type="submit" class="sonos-ctrl-search-btn">' + vis.binds.sonos.esc(t('searchGo')) + '</button>' +
                         '</form>';
                 }
                 listHtml = extraHtml + backHtml + (browse.items && browse.items.length
@@ -877,7 +882,7 @@ vis.binds = vis.binds || {};
                             '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || (item.folder ? '…' : '') || (item.service ? 'Service' : '')) + '</div></div></button>';
                     }).join('')
-                    : (extraHtml ? '' : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptySources')) + '</div>'));
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(path.length ? t('noSearchHits') : t('emptySources')) + '</div>');
             } else {
                 var queue = vis.binds.sonos.parseQueue(mediaId);
                 var currentNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
@@ -1043,6 +1048,12 @@ vis.binds = vis.binds || {};
                 path.push({ id: searchId, title: term });
                 $div.data('sonos-browse-path', path);
                 vis.binds.sonos.write(mediaId + '.media_browse', searchId);
+            });
+            $div.find('.sonos-ctrl-search-input').on('keydown', function (ev) {
+                if (ev.key === 'Enter' || ev.which === 13) {
+                    ev.preventDefault();
+                    $(this).closest('form').trigger('submit');
+                }
             });
             $div.find('[data-media-item]').on('click', function () {
                 var item = {};
