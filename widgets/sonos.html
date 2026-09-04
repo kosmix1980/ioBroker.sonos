@@ -385,7 +385,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.5',
+        version: '4.3.6',
         _bound: {},
         _tickers: {},
         words: {
@@ -706,6 +706,7 @@ vis.binds = vis.binds || {};
                         'current_artist',
                         'current_album',
                         'current_station',
+                        'current_type',
                         'current_cover',
                         'current_elapsed_s',
                         'current_duration_s',
@@ -857,6 +858,7 @@ vis.binds = vis.binds || {};
                     'current_artist',
                     'current_album',
                     'current_station',
+                    'current_type',
                     'current_cover',
                     'current_elapsed_s',
                     'current_duration_s',
@@ -1030,6 +1032,25 @@ vis.binds = vis.binds || {};
             });
         },
 
+        nowPlaying: function (playerId) {
+            var title = String(vis.binds.sonos.state(playerId, 'current_title') || '').trim();
+            var station = String(vis.binds.sonos.state(playerId, 'current_station') || '').trim();
+            var artist = String(vis.binds.sonos.state(playerId, 'current_artist') || '').trim();
+            var album = String(vis.binds.sonos.state(playerId, 'current_album') || '').trim();
+            var type = parseInt(vis.binds.sonos.state(playerId, 'current_type'), 10);
+            if (!title) {
+                title = station;
+            }
+            if (!title && type === 2) {
+                title = vis.binds.sonos.t('tv');
+                artist = artist || vis.binds.sonos.t('tvHdmi');
+            }
+            if (!title) {
+                title = vis.binds.sonos.t('nothing');
+            }
+            return { title: title, artist: artist, album: album, station: station };
+        },
+
         parseBrowse: function (playerId) {
             var raw = vis.binds.sonos.state(playerId, 'media_browse_result');
             if (!raw) {
@@ -1189,10 +1210,11 @@ vis.binds = vis.binds || {};
             var tab = $div.data('sonos-tab') || 'favorites';
             var mediaId = vis.binds.sonos.mediaPlayerId(selected);
             var playing = vis.binds.sonos.state(mediaId, 'state') === 'play';
-            var title = vis.binds.sonos.state(mediaId, 'current_title') || vis.binds.sonos.state(mediaId, 'current_station') || t('nothing');
-            var artist = vis.binds.sonos.state(mediaId, 'current_artist');
-            var album = vis.binds.sonos.state(mediaId, 'current_album');
-            var station = vis.binds.sonos.state(mediaId, 'current_station');
+            var now = vis.binds.sonos.nowPlaying(mediaId);
+            var title = now.title;
+            var artist = now.artist;
+            var album = now.album;
+            var station = now.station;
             var cover = vis.binds.sonos.state(mediaId, 'current_cover');
             var volume = parseInt(vis.binds.sonos.state(selected.id, 'volume'), 10);
             if (isNaN(volume)) {
@@ -1335,7 +1357,10 @@ vis.binds = vis.binds || {};
                     : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('emptyQueue')) + '</div>';
             }
 
-            var sub = [artist, album || station].filter(Boolean).join(' — ');
+            var sub = [artist, album].filter(Boolean).join(' — ');
+            if (!album && station && station !== title) {
+                sub = [sub, station].filter(Boolean).join(' — ');
+            }
             var coverStyle = cover ? ' style="background-image:url(\'' + vis.binds.sonos.esc(cover) + '\')"' : '';
 
             $div.html(

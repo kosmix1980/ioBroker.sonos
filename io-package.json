@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.5",
+    "version": "4.3.6",
     "news": {
+      "4.3.6": {
+        "en": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected.",
+        "de": "Bei TV HDMI zeigt das Widget jetzt TV statt „Nichts spielt“.",
+        "ru": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected.",
+        "pt": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected.",
+        "nl": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected.",
+        "fr": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected.",
+        "it": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected.",
+        "es": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected.",
+        "pl": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected.",
+        "uk": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected.",
+        "zh-cn": "Now-playing shows TV HDMI instead of an empty title while the TV input is selected."
+      },
       "4.3.5": {
         "en": "TV HDMI is a selectable source in the VIS widget (Arc, Beam, Playbar, Playbase, Ray, Amp).",
         "de": "TV HDMI ist im VIS-Widget als Quelle wählbar (Arc, Beam, Playbar, Playbase, Ray, Amp).",

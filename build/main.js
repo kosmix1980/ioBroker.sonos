@@ -854,17 +854,12 @@ class Sonos extends utils.Adapter {
         // Still work to do:
         // - Tracks w/o Album name keeps album name from previous track or some random album.
         //   Don't know if this is already wrong from SONOS API.
-        if (sonosState.currentTrack.type === 'radio') {
-            await this.setState({ device: 'root', channel: ip, state: 'current_type' }, { val: 1, ack: true });
-            await this.setState({ device: 'root', channel: ip, state: 'current_station' }, { val: sonosState.currentTrack.stationName || '', ack: true });
-        }
-        else {
-            await this.setState({ device: 'root', channel: ip, state: 'current_type' }, { val: sonosState.currentTrack.type === 'line_in' ? 2 : 0, ack: true });
-            await this.setState({ device: 'root', channel: ip, state: 'current_station' }, { val: '', ack: true });
-        }
-        await this.setState({ device: 'root', channel: ip, state: 'current_title' }, { val: sonosState.currentTrack.title || '', ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_album' }, { val: sonosState.currentTrack.album || '', ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_artist' }, { val: sonosState.currentTrack.artist || '', ack: true });
+        const playing = this.playbackDisplay(sonosState);
+        await this.setState({ device: 'root', channel: ip, state: 'current_type' }, { val: playing.type, ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'current_station' }, { val: playing.station, ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'current_title' }, { val: playing.title, ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'current_album' }, { val: playing.album, ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'current_artist' }, { val: playing.artist, ack: true });
         // elapsed time
         await this.setState({ device: 'root', channel: ip, state: 'current_duration' }, { val: sonosState.currentTrack.duration, ack: true });
         await this.setState({ device: 'root', channel: ip, state: 'current_duration_s' }, { val: toFormattedTime(sonosState.currentTrack.duration), ack: true });
@@ -916,14 +911,33 @@ class Sonos extends utils.Adapter {
             await this.copyPlaybackToGroupMembers(ip, sonosState, ps, coverUrl);
         }
     }
+    playbackDisplay(sonosState) {
+        const track = sonosState.currentTrack;
+        const display = (0, content_directory_1.nowPlayingLabels)(track, { tv: 'TV', tvHdmi: 'HDMI', lineIn: 'Line-In' });
+        const uri = track.uri;
+        const tv = (0, content_directory_1.isTvStreamUri)(uri);
+        const lineIn = (0, content_directory_1.isLineInStreamUri)(uri) || track.type === 'line_in';
+        if (track.type === 'radio' && !tv && !lineIn) {
+            return {
+                type: 1,
+                title: display.title,
+                artist: display.artist,
+                album: display.album,
+                station: track.stationName || display.station,
+            };
+        }
+        if (tv || lineIn) {
+            return { type: 2, ...display };
+        }
+        return { type: 0, title: display.title, artist: display.artist, album: display.album, station: '' };
+    }
     recentKey(sonosState) {
-        const title = sonosState.currentTrack.title || sonosState.currentTrack.stationName || '';
-        const artist = sonosState.currentTrack.artist || '';
-        const album = sonosState.currentTrack.album || '';
-        return `${title}|${artist}|${album}`;
+        const playing = this.playbackDisplay(sonosState);
+        return `${playing.title}|${playing.artist}|${playing.album}`;
     }
     async appendRecentTrack(ip, sonosState, coverUrl) {
-        const title = (sonosState.currentTrack.title || sonosState.currentTrack.stationName || '').trim();
+        const playing = this.playbackDisplay(sonosState);
+        const title = playing.title.trim();
         if (!title || !this.channels[ip] || isGroupingUri(sonosState.currentTrack.uri)) {
             return;
         }
@@ -950,9 +964,9 @@ class Sonos extends utils.Adapter {
         }
         const entry = {
             title,
-            artist: sonosState.currentTrack.artist || '',
-            album: sonosState.currentTrack.album || '',
-            station: sonosState.currentTrack.stationName || '',
+            artist: playing.artist,
+            album: playing.album,
+            station: playing.station,
             cover: coverUrl,
             uri: sonosState.currentTrack.uri || '',
             ts: Date.now(),
@@ -972,6 +986,7 @@ class Sonos extends utils.Adapter {
         const queue = await this.getStateAsync(`root.${coordinatorIp}.queue`);
         const queueHtml = await this.getStateAsync(`root.${coordinatorIp}.queue_html`);
         const playMode = sonosState.playMode;
+        const playing = this.playbackDisplay(sonosState);
         for (const memberIp of members) {
             if (!memberIp || memberIp === coordinatorIp || !this.channels[memberIp]) {
                 continue;
@@ -980,17 +995,11 @@ class Sonos extends utils.Adapter {
                 await this.setState({ device: 'root', channel: memberIp, state: 'state_simple' }, { val: ps.playing, ack: true });
                 await this.setState({ device: 'root', channel: memberIp, state: 'state' }, { val: ps.paused ? 'pause' : ps.playing ? 'play' : 'stop', ack: true });
             }
-            if (sonosState.currentTrack.type === 'radio') {
-                await this.setState({ device: 'root', channel: memberIp, state: 'current_type' }, { val: 1, ack: true });
-                await this.setState({ device: 'root', channel: memberIp, state: 'current_station' }, { val: sonosState.currentTrack.stationName || '', ack: true });
-            }
-            else {
-                await this.setState({ device: 'root', channel: memberIp, state: 'current_type' }, { val: sonosState.currentTrack.type === 'line_in' ? 2 : 0, ack: true });
-                await this.setState({ device: 'root', channel: memberIp, state: 'current_station' }, { val: '', ack: true });
-            }
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_title' }, { val: sonosState.currentTrack.title || '', ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_album' }, { val: sonosState.currentTrack.album || '', ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_artist' }, { val: sonosState.currentTrack.artist || '', ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_type' }, { val: playing.type, ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_station' }, { val: playing.station, ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_title' }, { val: playing.title, ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_album' }, { val: playing.album, ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_artist' }, { val: playing.artist, ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'current_duration' }, { val: sonosState.currentTrack.duration, ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'current_duration_s' }, { val: toFormattedTime(sonosState.currentTrack.duration), ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'current_track_number' }, { val: sonosState.trackNo, ack: true });

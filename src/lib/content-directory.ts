@@ -231,6 +231,68 @@ export function tvStreamUri(uuid: string): string {
     return `x-sonos-htastream:${uuid}:spdif`;
 }
 
+export function isTvStreamUri(uri: string | undefined): boolean {
+    return /^x-sonos-htastream:/i.test(String(uri || ''));
+}
+
+export function isLineInStreamUri(uri: string | undefined): boolean {
+    return /^x-rincon-stream:/i.test(String(uri || ''));
+}
+
+function isPlaceholderTitle(title: string): boolean {
+    const text = title.trim();
+    if (!text) {
+        return true;
+    }
+    if (/^(x-|https?:|rtsp:|aac:)/i.test(text)) {
+        return true;
+    }
+    return /^(spdif|rincon_)/i.test(text);
+}
+
+export interface NowPlayingLabels {
+    title: string;
+    artist: string;
+    album: string;
+    station: string;
+}
+
+/** Friendly now-playing text when Sonos leaves TV HDMI / line-in metadata empty. */
+export function nowPlayingLabels(
+    track: { uri?: string; title?: string; artist?: string; album?: string; stationName?: string },
+    labels: { tv: string; tvHdmi: string; lineIn: string },
+): NowPlayingLabels {
+    const uri = String(track.uri || '');
+    const rawTitle = String(track.title || '').trim();
+    const artist = String(track.artist || '').trim();
+    const album = String(track.album || '').trim();
+    const placeholder = isPlaceholderTitle(rawTitle);
+
+    if (isTvStreamUri(uri)) {
+        return {
+            title: placeholder ? labels.tv : rawTitle,
+            artist: artist || labels.tvHdmi,
+            album,
+            station: labels.tv,
+        };
+    }
+    if (isLineInStreamUri(uri)) {
+        return {
+            title: placeholder ? labels.lineIn : rawTitle,
+            artist,
+            album,
+            station: labels.lineIn,
+        };
+    }
+
+    return {
+        title: rawTitle,
+        artist,
+        album,
+        station: String(track.stationName || '').trim(),
+    };
+}
+
 export function getMediaRoot(
     services: Record<string, unknown> | undefined,
     labels: { radio: string; library: string; shares: string; lineIn: string; tv: string; tvHdmi: string },

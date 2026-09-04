@@ -36,6 +36,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.mediaItem = mediaItem;
 exports.matchesMusicService = matchesMusicService;
 exports.tvStreamUri = tvStreamUri;
+exports.isTvStreamUri = isTvStreamUri;
+exports.isLineInStreamUri = isLineInStreamUri;
+exports.nowPlayingLabels = nowPlayingLabels;
 exports.getMediaRoot = getMediaRoot;
 exports.browseMedia = browseMedia;
 exports.isStreamUri = isStreamUri;
@@ -220,6 +223,52 @@ function matchesMusicService(blob, serviceName, service) {
 /** HDMI / TV input on Arc, Beam, Playbar, Playbase, Ray and Amp. */
 function tvStreamUri(uuid) {
     return `x-sonos-htastream:${uuid}:spdif`;
+}
+function isTvStreamUri(uri) {
+    return /^x-sonos-htastream:/i.test(String(uri || ''));
+}
+function isLineInStreamUri(uri) {
+    return /^x-rincon-stream:/i.test(String(uri || ''));
+}
+function isPlaceholderTitle(title) {
+    const text = title.trim();
+    if (!text) {
+        return true;
+    }
+    if (/^(x-|https?:|rtsp:|aac:)/i.test(text)) {
+        return true;
+    }
+    return /^(spdif|rincon_)/i.test(text);
+}
+/** Friendly now-playing text when Sonos leaves TV HDMI / line-in metadata empty. */
+function nowPlayingLabels(track, labels) {
+    const uri = String(track.uri || '');
+    const rawTitle = String(track.title || '').trim();
+    const artist = String(track.artist || '').trim();
+    const album = String(track.album || '').trim();
+    const placeholder = isPlaceholderTitle(rawTitle);
+    if (isTvStreamUri(uri)) {
+        return {
+            title: placeholder ? labels.tv : rawTitle,
+            artist: artist || labels.tvHdmi,
+            album,
+            station: labels.tv,
+        };
+    }
+    if (isLineInStreamUri(uri)) {
+        return {
+            title: placeholder ? labels.lineIn : rawTitle,
+            artist,
+            album,
+            station: labels.lineIn,
+        };
+    }
+    return {
+        title: rawTitle,
+        artist,
+        album,
+        station: String(track.stationName || '').trim(),
+    };
 }
 function getMediaRoot(services, labels, playerUuid) {
     const available = Object.keys(services || {});
