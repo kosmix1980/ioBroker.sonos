@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.10',
+        version: '4.3.11',
         _bound: {},
         _tickers: {},
         words: {

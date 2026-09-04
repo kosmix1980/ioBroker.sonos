@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.11 (2026-09-04)
+* (kosmix1980) Do not send Play on TV HDMI (HTTP 500); log which command failed
+
 ### 4.3.10 (2026-09-04)
 * (kosmix1980) VIS widget: hide play/pause on TV HDMI (mute stays); TV HDMI is first in Sources
 

@@ -65,6 +65,25 @@ function isGroupingUri(uri) {
 function isGroupMember(player) {
     return Boolean(player.coordinator && player.coordinator.uuid !== player.uuid);
 }
+function transportUri(player) {
+    return String(player.avTransportUri || player.state?.currentTrack?.uri || '');
+}
+/** HDMI / line-in start with SetAVTransportURI. Play/Pause/Seek return HTTP 500. */
+const TV_NO_TRANSPORT = new Set([
+    'play',
+    'pause',
+    'stop',
+    'next',
+    'prev',
+    'seek',
+    'current_elapsed',
+    'current_elapsed_s',
+    'current_track_number',
+    'shuffle',
+    'repeat',
+    'crossfade',
+    'state_simple',
+]);
 /**
  * Convert seconds into "[h:]mm:ss"
  *
@@ -255,6 +274,18 @@ class Sonos extends utils.Adapter {
         // (or the group coordinator itself) always controls its own playback.
         const media = isGroupMember(player) && player.coordinator ? player.coordinator : player;
         const mediaIp = getIp(media) || id.channel;
+        const onTv = (0, content_directory_1.isTvStreamUri)(transportUri(media)) || (0, content_directory_1.isTvStreamUri)(transportUri(player));
+        if (onTv && TV_NO_TRANSPORT.has(id.state)) {
+            this.log.debug(`Ignore ${id.state} on ${id.channel}: TV HDMI has no transport control`);
+            return;
+        }
+        if (onTv && id.state === 'state') {
+            const action = String(value || '').toLowerCase();
+            if (['play', 'pause', 'stop', 'next', 'previous'].includes(action)) {
+                this.log.debug(`Ignore state=${action} on ${id.channel}: TV HDMI has no transport control`);
+                return;
+            }
+        }
         let promise;
         if (id.state === 'state_simple') {
             promise = value ? media.play() : media.pause();
@@ -461,7 +492,7 @@ class Sonos extends utils.Adapter {
         else if (id.state === 'play_uri') {
             const uri = String(value || '').trim();
             if (uri && !isGroupingUri(uri)) {
-                promise = media.setAVTransport(uri).then(() => media.play());
+                promise = this.startAvTransport(media, uri);
             }
         }
         else if (id.state === 'media_browse') {
@@ -473,7 +504,9 @@ class Sonos extends utils.Adapter {
         else {
             this.log.warn(`try to control unknown id ${JSON.stringify(id)}`);
         }
-        promise?.then(() => this.log.debug('command done')).catch(e => this.log.error(`Cannot execute command: ${e}`));
+        promise
+            ?.then(() => this.log.debug(`command done: ${id.state} on ${id.channel}`))
+            .catch(e => this.log.error(`Cannot execute command ${id.state} on ${id.channel}: ${e}`));
     }
     // New message arrived. obj is array with current messages
     onMessage(obj) {
@@ -1419,6 +1452,26 @@ class Sonos extends utils.Adapter {
         }
         await this.setState({ device: 'root', channel: ip, state: 'media_browse_result' }, { val: JSON.stringify(result), ack: true });
     }
+    /** Radio/SMAPI need Play after SetAVTransportURI. HDMI and line-in start on set and reject Play with HTTP 500. */
+    async startAvTransport(player, uri, metadata = '') {
+        await player.setAVTransport(uri, metadata);
+        if ((0, content_directory_1.isTvStreamUri)(uri) || (0, content_directory_1.isLineInStreamUri)(uri)) {
+            return;
+        }
+        await player.play();
+    }
+    /** Switch the soundbar itself to HDMI. Play is not a valid AVTransport action for TV. */
+    async playTvInput(ht) {
+        const uri = (0, content_directory_1.tvStreamUri)(ht.uuid);
+        if (transportUri(ht) === uri) {
+            this.log.debug(`TV HDMI already selected on ${ht.roomName}`);
+            return;
+        }
+        if (isGroupMember(ht)) {
+            await ht.becomeCoordinatorOfStandaloneGroup();
+        }
+        await ht.setAVTransport(uri);
+    }
     async handleMediaPlay(player, raw, sourcePlayer) {
         let uri = '';
         let metadata = '';
@@ -1440,13 +1493,11 @@ class Sonos extends utils.Adapter {
                     return;
                 }
                 if (parsed.tv) {
-                    uri = (0, content_directory_1.tvStreamUri)(sourcePlayer?.uuid || player.uuid);
-                    metadata = String(parsed.metadata || '');
+                    await this.playTvInput(sourcePlayer || player);
+                    return;
                 }
-                else {
-                    uri = String(parsed.uri || '').trim();
-                    metadata = String(parsed.metadata || '');
-                }
+                uri = String(parsed.uri || '').trim();
+                metadata = String(parsed.metadata || '');
             }
             catch {
                 uri = text;
@@ -1458,9 +1509,12 @@ class Sonos extends utils.Adapter {
         if (!uri || isGroupingUri(uri)) {
             return;
         }
+        if ((0, content_directory_1.isTvStreamUri)(uri)) {
+            await this.playTvInput(sourcePlayer || player);
+            return;
+        }
         if ((0, content_directory_1.isDirectPlayUri)(uri)) {
-            await player.setAVTransport(uri, metadata);
-            await player.play();
+            await this.startAvTransport(player, uri, metadata);
             return;
         }
         await player.clearQueue();

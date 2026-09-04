@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.10",
+    "version": "4.3.11",
     "news": {
+      "4.3.11": {
+        "en": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
+        "de": "Bei TV HDMI wird kein Play mehr gesendet (das lieferte HTTP 500). Fehler nennen jetzt den Befehl und den Raum.",
+        "ru": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
+        "pt": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
+        "nl": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
+        "fr": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
+        "it": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
+        "es": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
+        "pl": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
+        "uk": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room.",
+        "zh-cn": "TV HDMI no longer sends Play (that caused HTTP 500). Command errors now name the state and room."
+      },
       "4.3.10": {
         "en": "TV HDMI: hide play/pause (mute stays). TV HDMI is the first item in Sources.",
         "de": "TV HDMI: Play/Pause ausblenden (Mute bleibt). TV HDMI steht in den Quellen ganz oben.",
@@ -249,19 +262,6 @@
         "pl": "url",
         "uk": "фіксована кришка виворітна",
         "zh-cn": "固定的维修费"
-      },
-      "2.3.2": {
-        "en": "store the cover file in files instead of binary states",
-        "de": "speichern der coverdatei in dateien statt binären zuständen",
-        "ru": "хранить файл обложки в файлах вместо бинарных государств",
-        "pt": "armazenar o arquivo de capa em arquivos em vez de estados binários",
-        "nl": "verberg het dossier in bestanden in plaats van binaire staten",
-        "fr": "stocker le fichier de couverture dans les fichiers au lieu des états binaires",
-        "it": "memorizzare il file di copertura in file invece di stati binari",
-        "es": "almacenar el archivo de portada en archivos en lugar de estados binarios",
-        "pl": "przechowywać pliki w plikach zamiast stanów binarnych",
-        "uk": "зберігати файл кришки у файлах замість бінарних штатів",
-        "zh-cn": "储存档案,而不是超级州。"
       }
     },
     "titleLang": {

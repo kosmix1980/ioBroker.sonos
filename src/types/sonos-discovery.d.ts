@@ -68,6 +68,7 @@ declare module 'sonos-discovery' {
         state: SonosPlayerState;
         groupState: SonosGroupState;
         coordinator: SonosPlayer;
+        avTransportUri?: string;
         avTransportUriMetadata: unknown;
         /** IP address of the player. It will be stored by this adapter and is not part of the library */
         _address?: string | null;
