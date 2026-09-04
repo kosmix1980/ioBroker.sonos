@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.0.3",
+    "version": "4.1.0",
     "news": {
+      "4.1.0": {
+        "en": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
+        "de": "VIS-Widget für Räume, Gruppen, Favoriten, Playlists, Warteschlange und zuletzt gespielte Titel. Gruppenmitglieder folgen Titel, Transport und Fortschritt des Masters.",
+        "ru": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
+        "pt": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
+        "nl": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
+        "fr": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
+        "it": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
+        "es": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
+        "pl": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
+        "uk": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar.",
+        "zh-cn": "Added a VIS widget for rooms, groups, favorites, playlists, queue and recent tracks. Group members follow the coordinator's now-playing, transport and progress bar."
+      },
       "4.0.3": {
         "en": "Fixed TTS: without a volume in the file name, the announcement was played with volume 0\nFixed the immediate stop of TTS: the state before TTS was not restored and TTS stayed blocked\nA muted player is unmuted now for the announcement and muted again afterwards\nAn empty value in the `tts` state stops the running announcement\nThe adapter was migrated to TypeScript and is now based on classes\nThe \"root\" device object is created now by js-controller from io-package.json\nMissing states of the already existing devices will be created at start\nFixed the error if `favorites_set` was called with an empty value\nAdded support for treble and bass information\nstores the tts files in files instead of binary states",
         "de": "TTS-Fehler behoben: Ohne Lautstärkeangabe im Dateinamen wurde die Ansage mit Lautstärke 0 abgespielt.\nDas Problem mit dem sofortigen Stopp der Sprachausgabe wurde behoben: Der Zustand vor dem Stopp der Sprachausgabe wurde nicht wiederhergestellt und die Sprachausgabe blieb blockiert.\nEin stummgeschalteter Spieler wird nun für die Durchsage entstummt und anschließend wieder stummgeschaltet.\nEin leerer Wert im `tts`-Zustand stoppt die laufende Ansage.\nDer Adapter wurde nach TypeScript migriert und basiert nun auf Klassen.\nDas \"Root\"-Geräteobjekt wird nun von js-controller aus io-package.json erstellt.\nFehlende Zustände der bereits vorhandenen Geräte werden beim Start erstellt.\nDer Fehler wurde behoben, der auftrat, wenn `favorites_set` mit einem leeren Wert aufgerufen wurde.\nUnterstützung für Höhen- und Bassinformationen hinzugefügt.\nSpeichert die TTS-Dateien in Dateien anstatt in Binärzuständen",

@@ -136,12 +136,13 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
-### **WORK IN PROGRESS**
+### 4.1.0 (2026-09-04)
 * (kosmix1980) Added a VIS widget for rooms, groups, favorites, playlists and the queue
 * (kosmix1980) Added `playlist_list` and `playlist_list_array` states
 * (kosmix1980) Group members now show the coordinator's current track
 * (kosmix1980) Added `recent_tracks` history per room
 * (kosmix1980) Group members follow the master's progress and transport; standalone rooms keep their own control
+* (kosmix1980) Progress bar updates while a track is playing
 
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0

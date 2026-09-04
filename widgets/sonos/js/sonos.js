@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '1.1.2',
+        version: '4.1.0',
         _bound: {},
         _tickers: {},
         words: {
@@ -755,6 +755,7 @@ vis.binds = vis.binds || {};
                 '<div class="sonos-ctrl">' +
                     '<div class="sonos-ctrl-header">' +
                         '<div class="sonos-ctrl-brand">SONOS</div>' +
+                        '<span class="sonos-ctrl-ver">' + vis.binds.sonos.esc(vis.binds.sonos.version) + '</span>' +
                         '<div class="sonos-ctrl-rooms">' + roomsHtml + '</div>' +
                     '</div>' +
                     '<div class="sonos-ctrl-main">' +
