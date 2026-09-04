@@ -19,6 +19,7 @@ import { getChannelStates } from './lib/states';
 import { browseMedia, getMediaRoot, isDirectPlayUri, matchesMusicService, mediaItem } from './lib/content-directory';
 import type { MediaBrowseItem, MediaBrowseResult } from './lib/content-directory';
 import { SmapiHub, encodeSmapiId, parseSmapiId } from './lib/smapi';
+import { isYoutubeMusicName, searchYoutubeMusic } from './lib/ytmusic';
 
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
 
@@ -1530,6 +1531,35 @@ class Sonos extends utils.Adapter {
                         searchable: true,
                         loginUrl: smapi.loginUrl,
                         loginHint: smapi.loginHint,
+                    };
+                } else if (isYoutubeMusicName(name)) {
+                    const sn = await this.getSmapi().accountSerial(player.baseUrl, 284);
+                    let catalog: MediaBrowseItem[] = [];
+                    let hint: string | undefined;
+                    try {
+                        const ytm = await searchYoutubeMusic(term, sn, german);
+                        catalog = ytm.items;
+                        hint = ytm.hint;
+                    } catch (err) {
+                        this.log.warn(`YouTube Music search: ${err}`);
+                    }
+                    const local = await this.listServiceLibrary(player, name, german, term);
+                    const localItems = (local.items || []).filter(item => item.favorite || item.playlist || item.uri);
+                    const items = [...catalog, ...localItems];
+                    result = {
+                        id,
+                        title: term || name,
+                        items: items.length
+                            ? items
+                            : [
+                                  mediaItem({
+                                      id: '',
+                                      title: german ? `Keine Treffer für „${term}“.` : `No matches for “${term}”.`,
+                                  }),
+                              ],
+                        serviceName: name,
+                        searchable: true,
+                        loginHint: hint || local.loginHint,
                     };
                 } else {
                     result = await this.listServiceLibrary(player, name, german, term);

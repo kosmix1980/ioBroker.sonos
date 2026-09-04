@@ -478,6 +478,7 @@ export class SmapiHub {
     private deviceId?: string;
     private householdId?: string;
     private tokens = new Map<string, SmapiToken>();
+    private serials = new Map<string, string>();
     private pendingLink = new Map<string, string>();
     private accountsFetched = 0;
 
@@ -647,6 +648,9 @@ export class SmapiHub {
                 const token = tagText(body, 'OADevID');
                 const key = tagText(body, 'Key');
                 const sn = attr(attrs, 'SerialNum') || '0';
+                if (sn && sn !== '0') {
+                    this.serials.set(this.tokenKey(service), sn);
+                }
                 if (token && key && token.length >= 16 && key.length >= 8 && !this.tokens.has(this.tokenKey(service))) {
                     this.tokens.set(this.tokenKey(service), { token, key, sn });
                     this.log.debug(`SMAPI: imported speaker account for ${service.name}`);
@@ -813,8 +817,15 @@ export class SmapiHub {
         return true;
     }
 
+    /** Account serial (sn=) for SMAPI playback URIs, if the speaker still exposes it. */
+    async accountSerial(baseUrl: string, serviceId: number): Promise<string> {
+        await this.importSpeakerAccounts(baseUrl);
+        const key = String(serviceId);
+        return this.tokens.get(key)?.sn || this.serials.get(key) || '0';
+    }
+
     private sn(service: MusicServiceInfo): string {
-        return this.tokens.get(this.tokenKey(service))?.sn || '0';
+        return this.tokens.get(this.tokenKey(service))?.sn || this.serials.get(this.tokenKey(service)) || '0';
     }
 
     private entriesToItems(service: MusicServiceInfo, xml: string): MediaBrowseItem[] {
@@ -832,8 +843,8 @@ export class SmapiHub {
             return {
                 items: [],
                 loginHint: german
-                    ? `${service.name}: Google gibt den Katalog nicht an andere Apps frei. In der Sonos-App suchen, Favoriten oder Playlists speichern — hier erscheinen sie, und die Suche filtert diese Listen.`
-                    : `${service.name}: Google does not expose this catalog to other apps. Search in the Sonos app and save favorites or playlists — they show up here, and search filters those lists.`,
+                    ? `${service.name}: Suche im Widget nutzt YouTube Music. Play geht über den Speaker — wenn nichts startet, den Titel in der Sonos-App als Favorit speichern.`
+                    : `${service.name}: Widget search uses YouTube Music. Play goes through the speaker — if nothing starts, save the title as a favorite in the Sonos app.`,
             };
         }
         const loginHint = german

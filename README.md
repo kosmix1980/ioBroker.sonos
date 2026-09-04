@@ -22,7 +22,7 @@ The adapter includes a VIS widget **Sonos Control**. One widget can switch rooms
 5. Set the object to the instance, for example `sonos.0` — not a single `play` state.
 6. Size the widget around **900 × 520**.
 
-After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the last local title of that room. The **Recent** tab lists the last tracks of the selected room. The **Sources** tab browses TuneIn, Spotify, YouTube Music, the music library, network shares and line-in. Spotify search uses the Sonos catalog. YouTube Music search uses favorites, playlists and recently played tracks saved in the Sonos app — Google does not open that catalog to other controllers.
+After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the last local title of that room. The **Recent** tab lists the last tracks of the selected room. The **Sources** tab browses TuneIn, Spotify, YouTube Music, the music library, network shares and line-in. Spotify search uses the Sonos catalog. YouTube Music search lists catalog titles and tells the speaker to play them via `sid=284` (the official YTM account on the player). If a title does not start, save it as a favorite in the Sonos app.
 
 To install this fork over the official adapter: in Admin open **Adapters** → GitHub button → `https://github.com/kosmix1980/ioBroker.sonos`, then restart vis and hard-reload the editor.
 
@@ -136,6 +136,9 @@ Please note: highlighting current playing favorite is not supported.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### 4.3.4 (2026-09-04)
+* (kosmix1980) YouTube Music search uses the public catalog; play sends a sid=284 URI to the speaker (no stream proxy)
+
 ### 4.3.3 (2026-09-04)
 * (kosmix1980) YouTube Music is a source: search favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.
 

@@ -53,6 +53,7 @@ const tts_1 = require("./lib/tts");
 const states_1 = require("./lib/states");
 const content_directory_1 = require("./lib/content-directory");
 const smapi_1 = require("./lib/smapi");
+const ytmusic_1 = require("./lib/ytmusic");
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
 const RECENT_TRACKS_MAX = 25;
 /** Grouping URI used when a player is a slave (`x-rincon:RINCON_...`) */
@@ -1237,6 +1238,37 @@ class Sonos extends utils.Adapter {
                         searchable: true,
                         loginUrl: smapi.loginUrl,
                         loginHint: smapi.loginHint,
+                    };
+                }
+                else if ((0, ytmusic_1.isYoutubeMusicName)(name)) {
+                    const sn = await this.getSmapi().accountSerial(player.baseUrl, 284);
+                    let catalog = [];
+                    let hint;
+                    try {
+                        const ytm = await (0, ytmusic_1.searchYoutubeMusic)(term, sn, german);
+                        catalog = ytm.items;
+                        hint = ytm.hint;
+                    }
+                    catch (err) {
+                        this.log.warn(`YouTube Music search: ${err}`);
+                    }
+                    const local = await this.listServiceLibrary(player, name, german, term);
+                    const localItems = (local.items || []).filter(item => item.favorite || item.playlist || item.uri);
+                    const items = [...catalog, ...localItems];
+                    result = {
+                        id,
+                        title: term || name,
+                        items: items.length
+                            ? items
+                            : [
+                                (0, content_directory_1.mediaItem)({
+                                    id: '',
+                                    title: german ? `Keine Treffer für „${term}“.` : `No matches for “${term}”.`,
+                                }),
+                            ],
+                        serviceName: name,
+                        searchable: true,
+                        loginHint: hint || local.loginHint,
                     };
                 }
                 else {
