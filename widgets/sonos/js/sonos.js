@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.3.2',
+        version: '4.3.3',
         _bound: {},
         _tickers: {},
         words: {
@@ -696,6 +696,7 @@ vis.binds = vis.binds || {};
             return [
                 { id: 'R:0', title: vis.binds.sonos.t('radio'), folder: true },
                 { id: 'service:Spotify', title: 'Spotify', folder: true, service: true },
+                { id: 'service:YouTube Music', title: 'YouTube Music', folder: true, service: true },
                 { id: 'A:', title: vis.binds.sonos.t('library'), folder: true },
                 { id: 'S:', title: vis.binds.sonos.t('shares'), folder: true },
                 { id: 'AI:', title: vis.binds.sonos.t('lineIn'), folder: true },

@@ -197,7 +197,7 @@ function matchesMusicService(blob, serviceName, service) {
         return /spotify|x-sonos-spotify|sid=9\b|sa_rincon2311|scdn\.co/.test(text);
     }
     if (name.includes('youtube')) {
-        return /youtube|sid=677\b/.test(text);
+        return /youtube|youtu\.be|sid=284\b|sid=677\b|sa_rincon72711|googlevideo/.test(text);
     }
     if (name.includes('amazon')) {
         return /amazon|prime|sid=20199\b/.test(text);
@@ -229,6 +229,7 @@ function getMediaRoot(services, labels) {
         items.push(mediaItem({ id: `service:${name}`, title: name, folder: true, service: true }));
     };
     addService('Spotify');
+    addService('YouTube Music');
     FEATURED_SERVICES.forEach(name => {
         const match = available.find(item => item.toLowerCase() === name.toLowerCase());
         if (match) {
@@ -244,7 +245,7 @@ async function browseMedia(baseUrl, objectId) {
     return parseDidl(extractDidl(xml), baseUrl);
 }
 function isStreamUri(uri) {
-    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|pndrradio:|aac:)/i.test(uri);
+    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls(?:-static)?:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|pndrradio:|aac:)/i.test(uri);
 }
 /** URIs that the player resolves itself (radio, SMAPI containers) — use setAVTransport, not the queue. */
 function isDirectPlayUri(uri) {

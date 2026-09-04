@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "sonos",
-    "version": "4.3.2",
+    "version": "4.3.3",
     "news": {
+      "4.3.3": {
+        "en": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.",
+        "de": "YouTube Music ist eine Quelle. Die Suche filtert Sonos-Favoriten, Playlists und Zuletzt gehört. Google gibt den YTM-Katalog nicht an andere Apps frei.",
+        "ru": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.",
+        "pt": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.",
+        "nl": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.",
+        "fr": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.",
+        "it": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.",
+        "es": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.",
+        "pl": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.",
+        "uk": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps.",
+        "zh-cn": "YouTube Music is a source. Search filters Sonos favorites, playlists and recently played tracks. Google does not expose the YTM catalog to other apps."
+      },
       "4.3.2": {
         "en": "The Sources tab shows TuneIn, Spotify, library, shares and line-in again instead of the emptySources placeholder.",
         "de": "Der Quellen-Tab zeigt wieder TuneIn, Spotify, Mediathek, Netzlaufwerke und Line-In statt des emptySources-Platzhalters.",

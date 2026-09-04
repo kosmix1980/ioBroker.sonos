@@ -206,7 +206,7 @@ export function matchesMusicService(
         return /spotify|x-sonos-spotify|sid=9\b|sa_rincon2311|scdn\.co/.test(text);
     }
     if (name.includes('youtube')) {
-        return /youtube|sid=677\b/.test(text);
+        return /youtube|youtu\.be|sid=284\b|sid=677\b|sa_rincon72711|googlevideo/.test(text);
     }
     if (name.includes('amazon')) {
         return /amazon|prime|sid=20199\b/.test(text);
@@ -244,6 +244,7 @@ export function getMediaRoot(
     };
 
     addService('Spotify');
+    addService('YouTube Music');
     FEATURED_SERVICES.forEach(name => {
         const match = available.find(item => item.toLowerCase() === name.toLowerCase());
         if (match) {
@@ -268,7 +269,7 @@ export async function browseMedia(baseUrl: string, objectId: string): Promise<Me
 }
 
 export function isStreamUri(uri: string): boolean {
-    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|pndrradio:|aac:)/i.test(
+    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls(?:-static)?:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|pndrradio:|aac:)/i.test(
         uri,
     );
 }

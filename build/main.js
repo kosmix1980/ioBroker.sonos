@@ -1043,6 +1043,9 @@ class Sonos extends utils.Adapter {
         if (name.toLowerCase() === 'spotify') {
             return { id: 9, type: 2311 };
         }
+        if (name.toLowerCase().includes('youtube')) {
+            return { id: 284, type: 72711 };
+        }
         return undefined;
     }
     getSmapi() {
@@ -1059,17 +1062,28 @@ class Sonos extends utils.Adapter {
         return this.smapi;
     }
     /**
-     * Spotify and similar catalogs via SMAPI, plus matching Sonos favorites.
+     * Spotify catalog via SMAPI; YouTube Music and similar via saved Sonos
+     * favorites, playlists and recently played tracks (Google does not expose
+     * that catalog to third-party controllers).
      */
-    async listServiceLibrary(player, serviceName, german) {
+    async listServiceLibrary(player, serviceName, german, query = '') {
         const items = [];
         let loginUrl;
         let loginHint;
         const info = this.musicServiceInfo(serviceName);
+        const term = query.trim().toLowerCase();
         const blobOf = (item) => [item.title, item.uri, item.albumArtUri, item.metadata].filter(Boolean).join('\n');
+        const matchesQuery = (item) => {
+            if (!term) {
+                return true;
+            }
+            return [item.title, item.artist, item.album].some(part => String(part || '')
+                .toLowerCase()
+                .includes(term));
+        };
         try {
             const smapi = await this.getSmapi().browse(player.baseUrl, serviceName, 'root', german);
-            items.push(...smapi.items);
+            items.push(...smapi.items.filter(matchesQuery));
             loginUrl = smapi.loginUrl;
             loginHint = smapi.loginHint;
         }
@@ -1079,7 +1093,7 @@ class Sonos extends utils.Adapter {
         try {
             const favorites = this.toFavoriteList(await this.discovery?.getFavorites());
             for (const fav of favorites) {
-                if (!fav.title || !(0, content_directory_1.matchesMusicService)(blobOf(fav), serviceName, info)) {
+                if (!fav.title || !(0, content_directory_1.matchesMusicService)(blobOf(fav), serviceName, info) || !matchesQuery(fav)) {
                     continue;
                 }
                 items.push({
@@ -1102,7 +1116,9 @@ class Sonos extends utils.Adapter {
             if (this.discovery?.getPlaylists) {
                 const playlists = this.toFavoriteList(await this.discovery.getPlaylists());
                 for (const playlist of playlists) {
-                    if (!playlist.title || !(0, content_directory_1.matchesMusicService)(blobOf(playlist), serviceName, info)) {
+                    if (!playlist.title ||
+                        !(0, content_directory_1.matchesMusicService)(blobOf(playlist), serviceName, info) ||
+                        !matchesQuery(playlist)) {
                         continue;
                     }
                     items.push({
@@ -1122,16 +1138,43 @@ class Sonos extends utils.Adapter {
         catch (err) {
             this.log.warn(`Cannot list ${serviceName} playlists: ${err}`);
         }
-        if (loginHint || loginUrl) {
-            items.unshift((0, content_directory_1.mediaItem)({ id: '', title: loginHint || loginUrl || '' }));
+        try {
+            const recents = await this.loadRecentTracks(player._address || getIp(player));
+            for (const recent of recents) {
+                if (!recent.title || isGroupingUri(recent.uri)) {
+                    continue;
+                }
+                if (!(0, content_directory_1.matchesMusicService)(blobOf(recent), serviceName, info) || !matchesQuery(recent)) {
+                    continue;
+                }
+                items.push({
+                    id: `recent:${recent.uri || recent.title}`,
+                    title: recent.title,
+                    uri: recent.uri || '',
+                    metadata: '',
+                    artist: recent.artist || (german ? 'Zuletzt' : 'Recent'),
+                    album: recent.album || serviceName,
+                    cover: recent.cover || '',
+                    folder: false,
+                });
+            }
+        }
+        catch (err) {
+            this.log.warn(`Cannot list ${serviceName} recent tracks: ${err}`);
+        }
+        if (term) {
+            loginUrl = undefined;
+            loginHint = undefined;
         }
         if (!items.length) {
-            items.push((0, content_directory_1.mediaItem)({
-                id: '',
-                title: german
-                    ? `${serviceName} ist als Quelle verfügbar. Melde den Dienst in der Sonos-App an oder speichere Favoriten.`
-                    : `${serviceName} is available as a source. Sign in via the Sonos app or save favorites.`,
-            }));
+            const emptyTitle = term
+                ? german
+                    ? `Keine Treffer für „${query.trim()}“ in Favoriten, Playlists oder Zuletzt gehört.`
+                    : `No matches for “${query.trim()}” in favorites, playlists or recently played.`
+                : german
+                    ? `${serviceName} ist als Quelle verfügbar. In der Sonos-App suchen und Favoriten oder Playlists speichern.`
+                    : `${serviceName} is available as a source. Search in the Sonos app and save favorites or playlists.`;
+            items.push((0, content_directory_1.mediaItem)({ id: '', title: emptyTitle }));
         }
         return {
             id: `service:${serviceName}`,
@@ -1142,6 +1185,27 @@ class Sonos extends utils.Adapter {
             loginUrl,
             loginHint,
         };
+    }
+    async loadRecentTracks(ip) {
+        if (!ip) {
+            return [];
+        }
+        const current = await this.getStateAsync(`root.${ip}.recent_tracks`);
+        if (Array.isArray(current?.val)) {
+            return current.val;
+        }
+        if (current?.val) {
+            try {
+                const parsed = JSON.parse(String(current.val));
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            }
+            catch {
+                return [];
+            }
+        }
+        return [];
     }
     async handleMediaBrowse(player, ip, objectId) {
         const id = objectId.trim() || 'root';
@@ -1163,16 +1227,23 @@ class Sonos extends utils.Adapter {
             const name = decodeURIComponent(colon === -1 ? rest : rest.slice(0, colon));
             const term = decodeURIComponent(colon === -1 ? '' : rest.slice(colon + 1));
             try {
-                const smapi = await this.getSmapi().search(player.baseUrl, name, term, german);
-                result = {
-                    id,
-                    title: term || name,
-                    items: smapi.items,
-                    serviceName: name,
-                    searchable: true,
-                    loginUrl: smapi.loginUrl,
-                    loginHint: smapi.loginHint,
-                };
+                if (await this.getSmapi().hasSoapCatalog(player.baseUrl, name)) {
+                    const smapi = await this.getSmapi().search(player.baseUrl, name, term, german);
+                    result = {
+                        id,
+                        title: term || name,
+                        items: smapi.items,
+                        serviceName: name,
+                        searchable: true,
+                        loginUrl: smapi.loginUrl,
+                        loginHint: smapi.loginHint,
+                    };
+                }
+                else {
+                    result = await this.listServiceLibrary(player, name, german, term);
+                    result.id = id;
+                    result.title = term || name;
+                }
             }
             catch (err) {
                 this.log.warn(`SMAPI search ${name}: ${err}`);

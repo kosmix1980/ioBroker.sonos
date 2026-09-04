@@ -141,6 +141,14 @@ const FALLBACK_SERVICES: MusicServiceInfo[] = [
         secureUri: 'https://spotify-v5.ws.sonos.com/smapi',
         auth: 'AppLink',
     },
+    {
+        name: 'YouTube Music',
+        id: 284,
+        type: 72711,
+        uri: 'https://music.googleapis.com/v1:sendRequest',
+        secureUri: 'https://music.googleapis.com/v1:sendRequest',
+        auth: 'AppLink',
+    },
 ];
 
 const SEARCH_IDS = [
@@ -575,6 +583,12 @@ export class SmapiHub {
         );
     }
 
+    /** Spotify-style SOAP SMAPI. YouTube Music uses a private Google endpoint instead. */
+    async hasSoapCatalog(baseUrl: string, serviceName: string): Promise<boolean> {
+        const service = await this.findService(baseUrl, serviceName);
+        return Boolean(service && isSoapSmapi(service));
+    }
+
     private async getDeviceId(baseUrl: string): Promise<string> {
         if (this.deviceId) {
             return this.deviceId;
@@ -818,8 +832,8 @@ export class SmapiHub {
             return {
                 items: [],
                 loginHint: german
-                    ? `${service.name} hat keinen klassischen SMAPI-Katalog. Suche und Ordner gehen hier nicht — gespeicherte Favoriten bleiben nutzbar.`
-                    : `${service.name} has no classic SMAPI catalog. Search and folders are unavailable here — saved favorites still work.`,
+                    ? `${service.name}: Google gibt den Katalog nicht an andere Apps frei. In der Sonos-App suchen, Favoriten oder Playlists speichern — hier erscheinen sie, und die Suche filtert diese Listen.`
+                    : `${service.name}: Google does not expose this catalog to other apps. Search in the Sonos app and save favorites or playlists — they show up here, and search filters those lists.`,
             };
         }
         const loginHint = german
@@ -866,7 +880,12 @@ export class SmapiHub {
             return { items: [] };
         }
         if (!isSoapSmapi(service)) {
-            return this.browse(baseUrl, serviceName, 'root', german);
+            return {
+                items: [],
+                loginHint: german
+                    ? `${service.name}: Die Titelsuche läuft über gespeicherte Favoriten, Playlists und Zuletzt gehört.`
+                    : `${service.name}: Title search uses saved favorites, playlists and recently played tracks.`,
+            };
         }
         const items: MediaBrowseItem[] = [];
         let lastErr: unknown;
