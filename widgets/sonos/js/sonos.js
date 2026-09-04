@@ -1,8 +1,16 @@
 'use strict';
 
-/* global vis */
+/* global vis, jQuery */
 
-if (vis.binds && !vis.binds.sonos) {
+window.vis = window.vis || {};
+vis.binds = vis.binds || {};
+
+(function ($) {
+    if (typeof $ !== 'function') {
+        console.error('sonos widget: jQuery is not available');
+        return;
+    }
+
     vis.binds.sonos = {
         version: '1.0.0',
         _bound: {},
@@ -53,7 +61,14 @@ if (vis.binds && !vis.binds.sonos) {
                 }, 100);
             }
 
-            var instance = vis.binds.sonos.resolveInstance(data.oid);
+            var oid = '';
+            try {
+                oid = (data && data.oid) || (data && data.attr && data.attr('oid')) || '';
+            } catch (e) {
+                oid = '';
+            }
+
+            var instance = vis.binds.sonos.resolveInstance(oid);
             $div.data('sonos-tab', $div.data('sonos-tab') || 'favorites');
             $div.data('sonos-player', $div.data('sonos-player') || '');
 
@@ -64,10 +79,17 @@ if (vis.binds && !vis.binds.sonos) {
                 return;
             }
 
-            vis.binds.sonos.loadStates(instance, function () {
-                vis.binds.sonos.render(widgetID, instance);
-                vis.binds.sonos.bindStates(widgetID, instance);
-            });
+            var paint = function () {
+                try {
+                    vis.binds.sonos.render(widgetID, instance);
+                    vis.binds.sonos.bindStates(widgetID, instance);
+                } catch (err) {
+                    $div.html('<div class="sonos-ctrl"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(String(err)) + '</div></div>');
+                }
+            };
+
+            paint();
+            vis.binds.sonos.loadStates(instance, paint);
         },
 
         resolveInstance: function (oid) {
@@ -204,28 +226,16 @@ if (vis.binds && !vis.binds.sonos) {
             return players;
         },
 
-        loadStates: function (instance, done) {
-            var prefix = instance + '.root.';
-            var finish = function () {
-                if (typeof done === 'function') {
-                    done();
-                }
-            };
-
-            if (!vis.conn || typeof vis.conn.getStates !== 'function') {
-                finish();
+        applyStates: function (data) {
+            if (!data || !vis.states) {
                 return;
             }
-
-            var apply = function (data) {
-                if (!data || !vis.states) {
+            Object.keys(data).forEach(function (id) {
+                var state = data[id];
+                if (!state || id.indexOf('.') === -1) {
                     return;
                 }
-                Object.keys(data).forEach(function (id) {
-                    var state = data[id];
-                    if (!state) {
-                        return;
-                    }
+                try {
                     if (vis.states.attr) {
                         vis.states.attr(id + '.val', state.val);
                         vis.states.attr(id + '.ack', state.ack);
@@ -233,20 +243,130 @@ if (vis.binds && !vis.binds.sonos) {
                     } else {
                         vis.states[id + '.val'] = state.val;
                     }
-                });
+                } catch (e) {
+                    vis.states[id + '.val'] = state.val;
+                }
+            });
+        },
+
+        rememberChannel: function (id, obj) {
+            if (!id) {
+                return;
+            }
+            vis.objects = vis.objects || {};
+            if (!vis.objects[id]) {
+                vis.objects[id] = obj || { type: 'channel', common: { name: id.split('.').pop() } };
+            }
+        },
+
+        loadStates: function (instance, done) {
+            var prefix = instance + '.root.';
+            var finished = false;
+            var finish = function () {
+                if (finished) {
+                    return;
+                }
+                finished = true;
+                if (typeof done === 'function') {
+                    done();
+                }
             };
 
-            vis.conn.getStates(prefix + '*', function (error, data) {
-                apply(data);
-                if (typeof vis.conn.subscribe === 'function') {
-                    try {
-                        vis.conn.subscribe(prefix + '*');
-                    } catch (e) {
-                        // older vis versions may not accept wildcards
-                    }
+            setTimeout(finish, 600);
+
+            var afterChannels = function () {
+                var players = vis.binds.sonos.findPlayers(instance);
+                var ids = [];
+                players.forEach(function (player) {
+                    [
+                        'alive',
+                        'state',
+                        'volume',
+                        'muted',
+                        'current_title',
+                        'current_artist',
+                        'current_album',
+                        'current_station',
+                        'current_cover',
+                        'current_elapsed_s',
+                        'current_duration_s',
+                        'current_track_number',
+                        'seek',
+                        'shuffle',
+                        'repeat',
+                        'coordinator',
+                        'membersChannels',
+                        'group_volume',
+                        'favorites_list_array',
+                        'favorites_list',
+                        'favorites_list_html',
+                        'playlist_list_array',
+                        'playlist_list',
+                        'queue',
+                        'queue_html',
+                    ].forEach(function (name) {
+                        ids.push(player.id + '.' + name);
+                    });
+                });
+
+                if (!vis.conn || typeof vis.conn.getStates !== 'function') {
+                    finish();
+                    return;
                 }
-                finish();
-            });
+
+                var onStates = function (error, data) {
+                    vis.binds.sonos.applyStates(data);
+                    if (typeof vis.conn.subscribe === 'function' && ids.length) {
+                        try {
+                            vis.conn.subscribe(ids);
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+                    finish();
+                };
+
+                try {
+                    if (ids.length) {
+                        vis.conn.getStates(ids, onStates);
+                    } else {
+                        vis.conn.getStates(onStates);
+                    }
+                } catch (e) {
+                    finish();
+                }
+            };
+
+            var onChannels = function (error, result) {
+                var rows = (result && result.rows) || [];
+                rows.forEach(function (row) {
+                    var id = row.id || row._id;
+                    if (!id || id.indexOf(prefix) !== 0) {
+                        return;
+                    }
+                    if (id.substring(prefix.length).indexOf('.') !== -1) {
+                        return;
+                    }
+                    vis.binds.sonos.rememberChannel(id, row.value);
+                });
+                afterChannels();
+            };
+
+            try {
+                if (vis.conn && typeof vis.conn.getObjectView === 'function') {
+                    vis.conn.getObjectView('system', 'channel', { startkey: prefix, endkey: prefix + '\u9999' }, onChannels);
+                    return;
+                }
+                var socket = vis.conn && (vis.conn._socket || vis.conn.socket);
+                if (socket && typeof socket.emit === 'function') {
+                    socket.emit('getObjectView', 'system', 'channel', { startkey: prefix, endkey: prefix + '\u9999' }, onChannels);
+                    return;
+                }
+            } catch (e) {
+                // fall through
+            }
+
+            afterChannels();
         },
 
         unbind: function (widgetID) {
@@ -306,8 +426,12 @@ if (vis.binds && !vis.binds.sonos) {
                         vis.binds.sonos.render(widgetID, instance);
                     }
                 };
-                vis.states.bind(id + '.val', handler);
-                vis.binds.sonos._bound[widgetID].push({ id: id + '.val', handler: handler });
+                try {
+                    vis.states.bind(id + '.val', handler);
+                    vis.binds.sonos._bound[widgetID].push({ id: id + '.val', handler: handler });
+                } catch (e) {
+                    // ignore missing canJS keys
+                }
             });
         },
 
@@ -615,4 +739,4 @@ if (vis.binds && !vis.binds.sonos) {
             });
         },
     };
-}
+})(window.jQuery || window.$);
