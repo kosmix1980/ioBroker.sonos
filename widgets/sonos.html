@@ -317,8 +317,9 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '1.1.1',
+        version: '1.1.2',
         _bound: {},
+        _tickers: {},
         words: {
             en: {
                 hint: 'Set the object to the Sonos instance, e.g. sonos.0',
@@ -692,6 +693,48 @@ vis.binds = vis.binds || {};
             afterChannels();
         },
 
+        parseTime: function (value) {
+            var parts = String(value == null ? '' : value).split(':');
+            var sec = 0;
+            if (parts.length === 3) {
+                sec = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]);
+            } else if (parts.length === 2) {
+                sec = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+            } else {
+                sec = parseFloat(parts[0]);
+            }
+            return isNaN(sec) ? 0 : sec;
+        },
+
+        formatTime: function (sec) {
+            sec = Math.max(0, Math.floor(sec || 0));
+            var hours = Math.floor(sec / 3600);
+            var min = Math.floor((sec % 3600) / 60);
+            var rest = sec % 60;
+            var mm = (min < 10 ? '0' : '') + min;
+            var ss = (rest < 10 ? '0' : '') + rest;
+            return hours ? hours + ':' + mm + ':' + ss : mm + ':' + ss;
+        },
+
+        stopTicker: function (widgetID) {
+            if (vis.binds.sonos._tickers[widgetID]) {
+                clearInterval(vis.binds.sonos._tickers[widgetID]);
+                vis.binds.sonos._tickers[widgetID] = null;
+            }
+        },
+
+        startTicker: function (widgetID, instance) {
+            vis.binds.sonos.stopTicker(widgetID);
+            vis.binds.sonos._tickers[widgetID] = setInterval(function () {
+                var $div = $('#' + widgetID);
+                if (!$div.length) {
+                    vis.binds.sonos.stopTicker(widgetID);
+                    return;
+                }
+                vis.binds.sonos.patchLive($div, instance);
+            }, 500);
+        },
+
         unbind: function (widgetID) {
             var bound = vis.binds.sonos._bound[widgetID] || [];
             bound.forEach(function (item) {
@@ -772,13 +815,39 @@ vis.binds = vis.binds || {};
                 id: selectedId,
                 ip: selectedIp,
             });
+            var playing = vis.binds.sonos.state(playerId, 'state') === 'play';
+            var durationS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_duration_s'));
+            var elapsedS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_elapsed_s'));
+            var seek = parseFloat(vis.binds.sonos.state(playerId, 'seek'));
+            if (isNaN(seek)) {
+                seek = durationS > 0 ? (elapsedS / durationS) * 100 : 0;
+            }
+
+            var stamp = playerId + '|' + playing + '|' + durationS + '|' + elapsedS.toFixed(1);
+            var snap = $div.data('sonos-progress') || {};
+            if (snap.stamp !== stamp) {
+                snap = {
+                    stamp: stamp,
+                    elapsed: elapsedS,
+                    duration: durationS,
+                    playing: playing,
+                    at: Date.now(),
+                };
+                $div.data('sonos-progress', snap);
+            }
+
+            var elapsed = snap.elapsed;
+            if (snap.playing && snap.duration > 0) {
+                elapsed = Math.min(snap.duration, snap.elapsed + (Date.now() - snap.at) / 1000);
+            }
+            var percent = snap.duration > 0 ? (elapsed / snap.duration) * 100 : seek;
+
             if (!$div.find('.sonos-ctrl-seek-input:focus').length) {
-                var seek = parseFloat(vis.binds.sonos.state(playerId, 'seek'));
-                if (!isNaN(seek)) {
-                    $div.find('.sonos-ctrl-seek-input').val(seek);
-                }
-                $div.find('.sonos-ctrl-seek .sonos-ctrl-time').first().text(vis.binds.sonos.state(playerId, 'current_elapsed_s') || '00:00');
-                $div.find('.sonos-ctrl-seek .sonos-ctrl-time').last().text(vis.binds.sonos.state(playerId, 'current_duration_s') || '00:00');
+                $div.find('.sonos-ctrl-seek-input').val(percent);
+                $div.find('.sonos-ctrl-seek .sonos-ctrl-time').first().text(vis.binds.sonos.formatTime(elapsed));
+                $div.find('.sonos-ctrl-seek .sonos-ctrl-time').last().text(
+                    vis.binds.sonos.state(playerId, 'current_duration_s') || vis.binds.sonos.formatTime(snap.duration)
+                );
             }
             if (!$div.find('.sonos-ctrl-volume-input:focus').length) {
                 var volume = parseInt(vis.binds.sonos.state(selectedId, 'volume'), 10);
@@ -1030,6 +1099,7 @@ vis.binds = vis.binds || {};
             );
 
             vis.binds.sonos.bindUi($div, selected, players, coordinator, mediaId);
+            vis.binds.sonos.startTicker(widgetID, instance);
         },
 
         bindUi: function ($div, selected, players, coordinator, mediaId) {
