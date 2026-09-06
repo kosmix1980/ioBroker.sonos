@@ -234,7 +234,12 @@ vis.binds = vis.binds || {};
 
         parseList: function (value) {
             if (Array.isArray(value)) {
-                return value.filter(Boolean);
+                return value.map(function (item) {
+                    if (item && typeof item === 'object') {
+                        return String(item.title || item.name || '').trim();
+                    }
+                    return String(item || '').trim();
+                }).filter(Boolean);
             }
             if (value == null || value === '') {
                 return [];
@@ -243,7 +248,7 @@ vis.binds = vis.binds || {};
                 try {
                     var parsed = JSON.parse(value);
                     if (Array.isArray(parsed)) {
-                        return parsed.filter(Boolean);
+                        return vis.binds.sonos.parseList(parsed);
                     }
                 } catch (e) {
                     // comma-separated fallback
@@ -251,6 +256,32 @@ vis.binds = vis.binds || {};
                 return value.split(/\s*,\s*/).filter(Boolean);
             }
             return [];
+        },
+
+        parsePlaylists: function (playerId) {
+            var raw = vis.binds.sonos.state(playerId, 'playlist_list_array') || vis.binds.sonos.state(playerId, 'playlist_list');
+            var list = [];
+            if (Array.isArray(raw)) {
+                list = raw;
+            } else if (typeof raw === 'string' && raw) {
+                try {
+                    var parsed = JSON.parse(raw);
+                    list = Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    list = vis.binds.sonos.parseList(raw);
+                }
+            }
+            return list.map(function (item) {
+                if (item && typeof item === 'object') {
+                    return {
+                        title: String(item.title || item.name || '').trim(),
+                        cover: String(item.cover || item.albumArtUri || '').trim(),
+                    };
+                }
+                return { title: String(item || '').trim(), cover: '' };
+            }).filter(function (item) {
+                return item.title;
+            });
         },
 
         state: function (playerId, name) {
@@ -1235,13 +1266,14 @@ vis.binds = vis.binds || {};
                     }).join('')
                     : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyFavorites')) + '</div>';
             } else if (sheetOpen && tab === 'playlists') {
-                var playlists = vis.binds.sonos.filterQuery(vis.binds.sonos.parseList(
-                    vis.binds.sonos.state(mediaId, 'playlist_list_array') || vis.binds.sonos.state(mediaId, 'playlist_list')
-                ), query, function (name) { return name; });
+                var playlists = vis.binds.sonos.filterQuery(vis.binds.sonos.parsePlaylists(mediaId), query, function (item) {
+                    return item.title;
+                });
                 listHtml = playlists.length
-                    ? playlists.map(function (name) {
-                        return '<button type="button" class="sonos-ctrl-item" data-playlist="' + vis.binds.sonos.esc(name) + '">' +
-                            '<div class="sonos-ctrl-thumb"></div><div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(name) + '</div></div></button>';
+                    ? playlists.map(function (item) {
+                        return '<button type="button" class="sonos-ctrl-item" data-playlist="' + vis.binds.sonos.esc(item.title) + '">' +
+                            (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
+                            '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div></div></button>';
                     }).join('')
                     : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyPlaylists')) + '</div>';
             } else if (sheetOpen && tab === 'recent') {

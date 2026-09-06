@@ -1839,14 +1839,11 @@ class Sonos extends utils.Adapter {
         if (fromMeta) {
             return fromMeta;
         }
-        const uri = String(sonosState.currentTrack.uri || '');
-        if (sonosState.currentTrack.type === 'radio' || (0, content_directory_1.isStreamUri)(uri) || (0, content_directory_1.isRadioLikeUri)(uri)) {
-            try {
-                return (0, content_directory_1.albumArtFromXml)(await (0, content_directory_1.soapGetPositionInfo)(player.baseUrl));
-            }
-            catch (err) {
-                this.log.debug(`Radio cover: ${err}`);
-            }
+        try {
+            return (0, content_directory_1.albumArtFromXml)(await (0, content_directory_1.soapGetPositionInfo)(player.baseUrl));
+        }
+        catch (err) {
+            this.log.debug(`Cover from GetPositionInfo: ${err}`);
         }
         return '';
     }
@@ -2029,11 +2026,28 @@ class Sonos extends utils.Adapter {
         await this.repairAllRecentCovers(arts);
     }
     async takeSonosPlaylists(ip, playlists) {
-        const names = this.toFavoriteList(playlists)
-            .map(item => item.title)
-            .filter((title) => Boolean(title));
+        const player = this.channels[ip]?.player ||
+            (this.channels[ip]?.uuid ? this.discovery?.getPlayerByUUID(this.channels[ip].uuid) : undefined);
+        const base = String(player?.baseUrl || '').replace(/\/$/, '');
+        const absCover = (cover) => {
+            const value = String(cover || '').trim();
+            if (!value) {
+                return '';
+            }
+            if (/^https?:\/\//i.test(value)) {
+                return value;
+            }
+            return `${base}${value.startsWith('/') ? '' : '/'}${value}`;
+        };
+        const rows = this.toFavoriteList(playlists)
+            .map(item => ({
+            title: String(item.title || '').trim(),
+            cover: absCover(item.albumArtUri || ''),
+        }))
+            .filter(item => item.title);
+        const names = rows.map(item => item.title);
         await this.setState({ device: 'root', channel: ip, state: 'playlist_list' }, { val: names.join(', '), ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'playlist_list_array' }, { val: JSON.stringify(names), ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'playlist_list_array' }, { val: JSON.stringify(rows), ack: true });
     }
     /** Read Sonos playlists and write them to all known players */
     async updatePlaylists() {

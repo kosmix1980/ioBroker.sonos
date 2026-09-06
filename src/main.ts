@@ -2239,13 +2239,10 @@ class Sonos extends utils.Adapter {
         if (fromMeta) {
             return fromMeta;
         }
-        const uri = String(sonosState.currentTrack.uri || '');
-        if (sonosState.currentTrack.type === 'radio' || isStreamUri(uri) || isRadioLikeUri(uri)) {
-            try {
-                return albumArtFromXml(await soapGetPositionInfo(player.baseUrl));
-            } catch (err) {
-                this.log.debug(`Radio cover: ${err}`);
-            }
+        try {
+            return albumArtFromXml(await soapGetPositionInfo(player.baseUrl));
+        } catch (err) {
+            this.log.debug(`Cover from GetPositionInfo: ${err}`);
         }
         return '';
     }
@@ -2474,9 +2471,27 @@ class Sonos extends utils.Adapter {
         ip: string,
         playlists: Record<string, SonosFavorite> | SonosFavorite[],
     ): Promise<void> {
-        const names = this.toFavoriteList(playlists)
-            .map(item => item.title)
-            .filter((title): title is string => Boolean(title));
+        const player =
+            this.channels[ip]?.player ||
+            (this.channels[ip]?.uuid ? this.discovery?.getPlayerByUUID(this.channels[ip].uuid) : undefined);
+        const base = String(player?.baseUrl || '').replace(/\/$/, '');
+        const absCover = (cover: string): string => {
+            const value = String(cover || '').trim();
+            if (!value) {
+                return '';
+            }
+            if (/^https?:\/\//i.test(value)) {
+                return value;
+            }
+            return `${base}${value.startsWith('/') ? '' : '/'}${value}`;
+        };
+        const rows = this.toFavoriteList(playlists)
+            .map(item => ({
+                title: String(item.title || '').trim(),
+                cover: absCover(item.albumArtUri || ''),
+            }))
+            .filter(item => item.title);
+        const names = rows.map(item => item.title);
 
         await this.setState(
             { device: 'root', channel: ip, state: 'playlist_list' },
@@ -2484,7 +2499,7 @@ class Sonos extends utils.Adapter {
         );
         await this.setState(
             { device: 'root', channel: ip, state: 'playlist_list_array' },
-            { val: JSON.stringify(names), ack: true },
+            { val: JSON.stringify(rows), ack: true },
         );
     }
 

@@ -162,6 +162,7 @@ Please note: highlighting current playing favorite is not supported.
 * (kosmix1980) Added `playlist_list` / `playlist_list_array` and per-room `recent_tracks`
 * (kosmix1980) Group members follow the coordinator's now-playing and transport
 * (kosmix1980) VIS widget: eight quick-start buttons with station/album logos; edit in the widget or under adapter settings
+* (kosmix1980) VIS widget: show playlist covers; restore album art for tracks after leaving radio
 * (kosmix1980) VIS widget: dark / light / midnight themes; default width 935 px
 * (kosmix1980) Update the now-playing cover for TuneIn radio (metadata / station logo, no stale image)
 * (kosmix1980) VIS widget: hide the seek bar while radio is playing; show it again for playlists and tracks
