@@ -1,0 +1,432 @@
+.vis-widget .sonos-ctrl {
+    width: 100%;
+    height: 100%;
+}
+
+.sonos-ctrl {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    background: #141414;
+    color: #f3f3f3;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 13px;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+}
+
+.sonos-ctrl *,
+.sonos-ctrl *::before,
+.sonos-ctrl *::after {
+    box-sizing: border-box;
+}
+
+.sonos-ctrl-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 36px;
+}
+
+.sonos-ctrl-brand {
+    flex: 0 0 auto;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    font-size: 14px;
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.sonos-ctrl-ver {
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 600;
+    color: #9a9a9a;
+    letter-spacing: 0;
+}
+
+.sonos-ctrl-rooms {
+    flex: 1 1 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.sonos-ctrl-chip {
+    border: 0;
+    background: #2a2a2a;
+    color: var(--sonos-name, #fff);
+    box-shadow: inset 0 0 0 1px var(--sonos-name, transparent);
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sonos-ctrl-chip.is-active {
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    color: var(--sonos-name, #fff);
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+}
+
+.sonos-ctrl-chip.is-master:not(.is-active) {
+    background: #454545;
+    font-weight: 700;
+}
+
+.sonos-ctrl-chip.is-playing::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: #4ade80;
+    vertical-align: middle;
+}
+
+.sonos-ctrl-chip.is-offline {
+    opacity: 0.45;
+}
+
+.sonos-ctrl-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.sonos-ctrl-main {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 148px 1fr;
+    gap: 14px;
+    align-content: start;
+    min-height: 148px;
+}
+
+.sonos-ctrl-cover {
+    width: 148px;
+    height: 148px;
+    border-radius: 10px;
+    background: #222 center / cover no-repeat;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+
+.sonos-ctrl-cover.is-tv {
+    background: #1a1a1a;
+    color: transparent;
+}
+
+.sonos-ctrl-meta {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sonos-ctrl-title {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sonos-ctrl-sub {
+    color: #b0b0b0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sonos-ctrl-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.sonos-ctrl-btn {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: #2b2b2b;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.sonos-ctrl-btn:hover {
+    background: #3a3a3a;
+}
+
+.sonos-ctrl-btn.is-on {
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+}
+
+.sonos-ctrl-btn-play {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+}
+
+.sonos-ctrl-ht {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sonos-ctrl-ht-btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: #2b2b2b;
+    color: #fff;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.sonos-ctrl-ht-btn:hover {
+    background: #3a3a3a;
+}
+
+.sonos-ctrl-ht-btn.is-on {
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+}
+
+.sonos-ctrl-seek,
+.sonos-ctrl-volume {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sonos-ctrl-seek input,
+.sonos-ctrl-volume input {
+    flex: 1 1 auto;
+    accent-color: #f15b2a;
+}
+
+.sonos-ctrl-time {
+    color: #9a9a9a;
+    font-variant-numeric: tabular-nums;
+    min-width: 42px;
+}
+
+.sonos-ctrl-groups {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    color: #cfcfcf;
+}
+
+.sonos-ctrl-groups label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #242424;
+    border-radius: 999px;
+    padding: 4px 10px;
+    cursor: pointer;
+    color: var(--sonos-name, #cfcfcf);
+}
+
+.sonos-ctrl-groups button {
+    border: 0;
+    background: #2b2b2b;
+    color: #fff;
+    border-radius: 999px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.sonos-ctrl-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.sonos-ctrl-tab {
+    border: 0;
+    background: #2a2a2a;
+    color: #f3f3f3;
+    padding: 7px 12px;
+    cursor: pointer;
+    border-radius: 999px;
+    flex: 0 0 auto;
+    font: inherit;
+}
+
+.sonos-ctrl-tab:hover {
+    background: #3a3a3a;
+}
+
+.sonos-ctrl-tab.is-active {
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    color: #fff;
+    font-weight: 600;
+}
+
+.sonos-ctrl-sheet-dismiss {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: rgba(0, 0, 0, 0.35);
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+.sonos-ctrl-sheet {
+    position: absolute;
+    inset: 6px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: rgba(27, 27, 27, 0.82);
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+}
+
+.sonos-ctrl-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background: transparent;
+    border-radius: 0 0 10px 10px;
+}
+
+.sonos-ctrl-item {
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.sonos-ctrl-item:hover,
+.sonos-ctrl-item.is-current {
+    background: #262626;
+}
+
+.sonos-ctrl-item img,
+.sonos-ctrl-thumb {
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: #333;
+}
+
+.sonos-ctrl-item-title {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sonos-ctrl-item-sub {
+    color: #9a9a9a;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sonos-ctrl-search {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px 4px;
+}
+
+.sonos-ctrl-search-input {
+    flex: 1 1 auto;
+    width: auto;
+    border: 0;
+    border-radius: 8px;
+    background: #2a2a2a;
+    color: #f3f3f3;
+    padding: 8px 10px;
+    font: inherit;
+}
+
+.sonos-ctrl-search-btn {
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    color: #fff;
+    padding: 8px 12px;
+    cursor: pointer;
+    font: inherit;
+}
+
+.sonos-ctrl-login {
+    padding: 10px 12px 6px;
+    color: #cfcfcf;
+}
+
+.sonos-ctrl-login-url {
+    margin: 6px 0;
+    font-size: 11px;
+    color: #7dd3fc;
+    word-break: break-all;
+    user-select: text;
+}
+
+.sonos-ctrl-login-btn {
+    border: 0;
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    color: #fff;
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font: inherit;
+}
+
+.sonos-ctrl-empty,
+.sonos-ctrl-hint {
+    padding: 18px;
+    color: #9a9a9a;
+}
+
+.sonos-ctrl-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+}
