@@ -63,6 +63,14 @@ describe('content-directory playback helpers', () => {
         assert.match(didl, /https:\/\/art\.example\/a\.png/);
     });
 
+    it('plays recent songs as tracks even with leftover radio metadata', () => {
+        const radio = cd.radioBroadcastDidl('Bayern 3');
+        assert.equal(cd.shouldPlayAsTrack('x-sonos-spotify:spotify:track:1', radio, { title: 'Song', artist: 'Artist' }), true);
+        assert.equal(cd.shouldPlayAsTrack('http://cdn.example/song.mp3', radio, { title: 'Song', duration: 200 }), true);
+        assert.equal(cd.shouldPlayAsTrack('x-sonosapi-stream:s1', radio, { title: 'Bayern 3' }), false);
+        assert.equal(cd.shouldPlayAsTrack('x-sonos-http:file.mp3', '', { title: 'Song' }), true);
+    });
+
     it('keeps existing track DIDL', () => {
         const existing = cd.trackDidl({ title: 'Keep', uri: 'x-file-cifs://share/a.mp3' });
         const again = cd.trackDidl({ title: 'Other', metadata: existing });

@@ -188,6 +188,7 @@ class Sonos extends utils.Adapter {
     htHealRetryTimer = null;
     htRefreshTimer = null;
     lastPositionInfo = {};
+    lastPlaybackHint = {};
     constructor(options = {}) {
         super({
             ...options,
@@ -1072,7 +1073,11 @@ class Sonos extends utils.Adapter {
             // if duration is 0 (type is radio):
             // - no changes expected and a state update is not necessary!
             // - division by 0
-            if (ps.playing && this.channels[ip].duration > 0) {
+            const keepElapsed = this.channels[ip].duration > 0 ||
+                Boolean(this.lastPlaybackHint[ip] &&
+                    Date.now() - this.lastPlaybackHint[ip].at < 15000 &&
+                    this.lastPlaybackHint[ip].duration);
+            if (ps.playing && keepElapsed) {
                 if (!this.channels[ip].elapsedTimer) {
                     this.channels[ip].elapsedTimer = setInterval(() => this.updateElapsed(ip), this.config.elapsedInterval || 5000);
                 }
@@ -1094,6 +1099,29 @@ class Sonos extends utils.Adapter {
         //   Don't know if this is already wrong from SONOS API.
         const meta = typeof player.avTransportUriMetadata === 'string' ? player.avTransportUriMetadata : '';
         let playing = this.playbackDisplay(sonosState, meta, transportUri(player));
+        const hint = this.lastPlaybackHint[ip];
+        const hintFresh = Boolean(hint && Date.now() - hint.at < 15000);
+        if (hintFresh && hint) {
+            if (!playing.title) {
+                playing = {
+                    type: 0,
+                    title: hint.title,
+                    artist: hint.artist || playing.artist,
+                    album: hint.album || playing.album,
+                    station: '',
+                };
+            }
+            else if (playing.type === 1 &&
+                (hint.duration > 0 || hint.artist || (0, content_directory_1.shouldPlayAsTrack)(hint.uri, hint.metadata, hint))) {
+                playing = {
+                    type: 0,
+                    title: hint.title || playing.title,
+                    artist: hint.artist || playing.artist,
+                    album: hint.album || playing.album,
+                    station: '',
+                };
+            }
+        }
         if ((0, content_directory_1.isTvStreamUri)(sonosState.currentTrack.uri)) {
             const format = await this.resolveTvFormat(player, sonosState.currentTrack, meta);
             playing = { ...playing, artist: format };
@@ -1113,8 +1141,12 @@ class Sonos extends utils.Adapter {
         await this.setState({ device: 'root', channel: ip, state: 'current_uri' }, { val: resume.uri, ack: true });
         await this.setState({ device: 'root', channel: ip, state: 'current_metadata' }, { val: resume.metadata, ack: true });
         // elapsed time
-        await this.setState({ device: 'root', channel: ip, state: 'current_duration' }, { val: sonosState.currentTrack.duration, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_duration_s' }, { val: toFormattedTime(sonosState.currentTrack.duration), ack: true });
+        let duration = Number(sonosState.currentTrack.duration) || 0;
+        if (!duration && hintFresh && hint?.duration) {
+            duration = hint.duration;
+        }
+        await this.setState({ device: 'root', channel: ip, state: 'current_duration' }, { val: duration, ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'current_duration_s' }, { val: toFormattedTime(duration), ack: true });
         // Track number
         await this.setState({ device: 'root', channel: ip, state: 'current_track_number' }, { val: sonosState.trackNo, ack: true });
         // Update html-queue: highlight current track
@@ -1122,20 +1154,28 @@ class Sonos extends utils.Adapter {
             await this.updateHtmlQueue(player._address, sonosState.trackNo);
         }
         const tvCover = (0, content_directory_1.isTvStreamUri)(sonosState.currentTrack.uri);
-        const albumArt = tvCover ? '' : await this.resolveAlbumArt(player, sonosState, meta);
+        let albumArt = tvCover ? '' : await this.resolveAlbumArt(player, sonosState, meta);
+        if (!albumArt && hintFresh && hint?.cover && !this.isSharedLiveCover(hint.cover)) {
+            albumArt = hint.cover;
+        }
         const coverKey = tvCover ? 'tv' : `${albumArt}|${playing.station}|${transportUri(player)}`;
         if (this.lastCover[ip] !== coverKey) {
             if (tvCover) {
                 await this.syncCoverFileToStorage(TV_IMAGE, ip);
+            }
+            else if (albumArt && /(?:^|\/)coverImage\/art\//i.test(albumArt)) {
+                this.lastStableCover[ip] = albumArt;
+                await this.setState({ device: 'root', channel: ip, state: 'current_art' }, { val: albumArt, ack: true });
             }
             else {
                 await this.updateCover(ip, albumArt);
             }
             this.lastCover[ip] = coverKey || null;
             await this.repairRecentCovers(ip);
+            await this.stampRecentCover(ip, playing.title, playing.artist, this.lastStableCover[ip] || albumArt);
         }
         this.channels[ip].elapsed = sonosState.elapsedTime;
-        this.channels[ip].duration = sonosState.currentTrack.duration;
+        this.channels[ip].duration = duration;
         // only if duration !== 0, see above
         if (this.channels[ip].duration > 0) {
             await this.setState({ device: 'root', channel: ip, state: 'current_elapsed' }, { val: sonosState.elapsedTime, ack: true });
@@ -1924,12 +1964,11 @@ class Sonos extends utils.Adapter {
             await this.playTvInput(sourcePlayer || player);
             return;
         }
-        const playUri = (0, content_directory_1.wrapHttpRadioUri)(uri);
-        const asRadio = ((0, content_directory_1.isRadioLikeUri)(playUri) ||
-            (0, content_directory_1.isStreamUri)(playUri) ||
-            ((0, content_directory_1.isBroadcastDidl)(metadata) && !(0, content_directory_1.isOnDemandUri)(playUri))) &&
-            !(0, content_directory_1.isOnDemandUri)(playUri);
-        if (asRadio || ((0, content_directory_1.isDirectPlayUri)(playUri) && !(0, content_directory_1.isOnDemandUri)(playUri))) {
+        const asTrack = (0, content_directory_1.shouldPlayAsTrack)(uri, metadata, hint);
+        const playUri = asTrack ? uri : (0, content_directory_1.wrapHttpRadioUri)(uri);
+        const asRadio = !asTrack &&
+            ((0, content_directory_1.isRadioLikeUri)(playUri) || (0, content_directory_1.isStreamUri)(playUri) || ((0, content_directory_1.isBroadcastDidl)(metadata) && !(0, content_directory_1.isOnDemandUri)(playUri)));
+        if (asRadio || (!asTrack && (0, content_directory_1.isDirectPlayUri)(playUri))) {
             await this.startAvTransport(player, playUri, metadata);
             return;
         }
@@ -2027,6 +2066,7 @@ class Sonos extends utils.Adapter {
         if (!hint.title && !hint.uri) {
             return;
         }
+        this.lastPlaybackHint[ip] = { ...hint, at: Date.now() };
         await this.setState({ device: 'root', channel: ip, state: 'current_type' }, { val: 0, ack: true });
         await this.setState({ device: 'root', channel: ip, state: 'current_station' }, { val: '', ack: true });
         if (hint.title) {
@@ -2038,8 +2078,15 @@ class Sonos extends utils.Adapter {
         await this.setState({ device: 'root', channel: ip, state: 'current_metadata' }, { val: hint.metadata, ack: true });
         if (hint.duration > 0) {
             this.channels[ip].duration = hint.duration;
+            this.channels[ip].elapsed = 0;
             await this.setState({ device: 'root', channel: ip, state: 'current_duration' }, { val: hint.duration, ack: true });
             await this.setState({ device: 'root', channel: ip, state: 'current_duration_s' }, { val: toFormattedTime(hint.duration), ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'current_elapsed' }, { val: 0, ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'current_elapsed_s' }, { val: '00:00', ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'seek' }, { val: 0, ack: true });
+            if (!this.channels[ip].elapsedTimer) {
+                this.channels[ip].elapsedTimer = setInterval(() => this.updateElapsed(ip), this.config.elapsedInterval || 5000);
+            }
         }
         const cover = hint.cover && !this.isSharedLiveCover(hint.cover) ? hint.cover : '';
         if (cover) {
@@ -2072,19 +2119,41 @@ class Sonos extends utils.Adapter {
             return;
         }
         const info = await this.peekPositionInfo(player);
-        if (!info || (!info.title && !info.uri && !info.duration)) {
+        const hint = this.lastPlaybackHint[ip];
+        if (!info || (!info.title && !info.duration && !info.cover && !hint?.title)) {
             return;
         }
         const merged = this.playbackStateFromHint(player, {
-            title: info.title,
-            artist: info.artist,
-            album: info.album,
-            cover: info.cover,
-            uri: info.uri,
-            metadata: info.metadata,
-            duration: info.duration,
+            title: info.title || hint?.title || '',
+            artist: info.artist || hint?.artist || '',
+            album: info.album || hint?.album || '',
+            cover: info.cover || hint?.cover || '',
+            uri: info.uri || hint?.uri || '',
+            metadata: info.metadata || hint?.metadata || '',
+            duration: info.duration || hint?.duration || 0,
         }, info);
         await this.takeSonosState(ip, merged);
+    }
+    async stampRecentCover(ip, title, artist, cover) {
+        const art = String(cover || '').trim();
+        const name = String(title || '').trim();
+        if (!name || !art || this.isSharedLiveCover(art)) {
+            return;
+        }
+        const list = await this.readRecentTracks(ip);
+        let changed = false;
+        const next = list.map(item => {
+            const sameTitle = item.title === name;
+            const sameArtist = !artist || !item.artist || item.artist === artist;
+            if (!sameTitle || !sameArtist || item.cover === art) {
+                return item;
+            }
+            changed = true;
+            return { ...item, cover: art };
+        });
+        if (changed) {
+            await this.writeRecentTracks(ip, next);
+        }
     }
     /** Players that currently share playback with this coordinator (includes itself) */
     getGroupMemberIps(coordinatorIp) {

@@ -1399,11 +1399,16 @@ vis.binds = vis.binds || {};
             });
             var playing = vis.binds.sonos.state(playerId, 'state') === 'play';
             var now = vis.binds.sonos.nowPlaying(playerId);
-            if (now.isTv || now.isRadio) {
+            var hint = vis.binds.sonos.readNowHint($div);
+            if (now.isTv || (now.isRadio && !hint)) {
                 return;
             }
             var durationS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_duration_s'));
             var elapsedS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_elapsed_s'));
+            if (hint && hint.duration > 0 && durationS <= 0) {
+                durationS = hint.duration;
+                elapsedS = Math.min(hint.duration, (Date.now() - hint.ts) / 1000);
+            }
             var seek = parseFloat(vis.binds.sonos.state(playerId, 'seek'));
             if (isNaN(seek)) {
                 seek = durationS > 0 ? (elapsedS / durationS) * 100 : 0;
@@ -1513,20 +1518,81 @@ vis.binds = vis.binds || {};
                     list = [];
                 }
             }
+            var queue = vis.binds.sonos.parseQueue(vis.binds.sonos.mediaPlayerId({
+                id: playerId,
+                ip: playerId.split('.').pop(),
+            }));
+            var nowTitle = String(vis.binds.sonos.state(playerId, 'current_title') || '').trim();
+            var nowArt = String(vis.binds.sonos.state(playerId, 'current_art') || '').trim();
             return list.filter(function (item) {
                 return item && item.title;
             }).map(function (item) {
                 var cover = String(item.cover || '');
-                if (cover && !vis.binds.sonos.isLiveCover(cover)) {
-                    return item;
+                if (cover && vis.binds.sonos.isLiveCover(cover)) {
+                    cover = '';
                 }
-                var restored = vis.binds.sonos.artFromMeta(item.metadata) ||
-                    vis.binds.sonos.favoriteCover(playerId, item.station || item.title);
-                if (!restored) {
-                    return cover ? Object.assign({}, item, { cover: '' }) : item;
+                if (!cover) {
+                    cover = vis.binds.sonos.artFromMeta(item.metadata) ||
+                        vis.binds.sonos.favoriteCover(playerId, item.station || item.title);
                 }
-                return Object.assign({}, item, { cover: restored });
+                if (!cover) {
+                    queue.forEach(function (track) {
+                        if (cover) {
+                            return;
+                        }
+                        if (track.title === item.title && (!item.artist || track.artist === item.artist) && track.cover) {
+                            cover = track.cover;
+                        }
+                    });
+                }
+                if (!cover && nowArt && !vis.binds.sonos.isLiveCover(nowArt) && item.title === nowTitle) {
+                    cover = nowArt;
+                }
+                return cover && cover !== item.cover ? Object.assign({}, item, { cover: cover }) : Object.assign({}, item, { cover: cover });
             });
+        },
+
+        recentNowHint: function ($div, item) {
+            if (!$div || !item) {
+                return;
+            }
+            $div.data('sonos-now', {
+                title: String(item.title || '').trim(),
+                artist: String(item.artist || '').trim(),
+                album: String(item.album || '').trim(),
+                cover: String(item.cover || '').trim(),
+                duration: parseInt(item.duration, 10) || 0,
+                ts: Date.now(),
+            });
+        },
+
+        readNowHint: function ($div) {
+            var hint = $div && $div.data('sonos-now');
+            if (!hint || Date.now() - hint.ts > 20000) {
+                return null;
+            }
+            return hint;
+        },
+
+        playRecentItem: function (mediaId, item) {
+            if (!item) {
+                return;
+            }
+            if (item.uri || item.metadata) {
+                vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({
+                    uri: item.uri || '',
+                    metadata: item.metadata || '',
+                    title: item.title || '',
+                    artist: item.artist || '',
+                    album: item.album || '',
+                    cover: item.cover || '',
+                    duration: item.duration || 0,
+                }));
+                return;
+            }
+            if (item.station || item.title) {
+                vis.binds.sonos.write(mediaId + '.favorites_set', item.station || item.title);
+            }
         },
 
         nowPlaying: function (playerId) {
@@ -1942,11 +2008,22 @@ vis.binds = vis.binds || {};
             var mediaId = vis.binds.sonos.mediaPlayerId(selected);
             var playing = vis.binds.sonos.state(mediaId, 'state') === 'play';
             var now = vis.binds.sonos.nowPlaying(mediaId);
+            var hint = vis.binds.sonos.readNowHint($div);
+            var nothing = vis.binds.sonos.t('nothing');
+            if (hint && (now.title === nothing || !String(vis.binds.sonos.state(mediaId, 'current_title') || '').trim())) {
+                now.title = hint.title || now.title;
+                now.artist = hint.artist || now.artist;
+                now.album = hint.album || now.album;
+                now.isRadio = false;
+            }
             var title = now.title;
             var artist = now.artist;
             var album = now.album;
             var station = now.station;
             var cover = vis.binds.sonos.state(mediaId, 'current_art') || vis.binds.sonos.state(mediaId, 'current_cover');
+            if (hint && hint.cover && (!cover || vis.binds.sonos.isLiveCover(cover))) {
+                cover = hint.cover;
+            }
             var volume = parseInt(vis.binds.sonos.state(selected.id, 'volume'), 10);
             if (isNaN(volume)) {
                 volume = 0;
@@ -1962,6 +2039,13 @@ vis.binds = vis.binds || {};
             var repeat = parseInt(vis.binds.sonos.state(mediaId, 'repeat'), 10) || 0;
             var elapsed = vis.binds.sonos.state(mediaId, 'current_elapsed_s') || '00:00';
             var duration = vis.binds.sonos.state(mediaId, 'current_duration_s') || '00:00';
+            if (hint && hint.duration > 0 && !(vis.binds.sonos.parseTime(duration) > 0)) {
+                now.isRadio = false;
+                duration = vis.binds.sonos.formatTime(hint.duration);
+                var hintedElapsed = Math.min(hint.duration, (Date.now() - hint.ts) / 1000);
+                elapsed = vis.binds.sonos.formatTime(hintedElapsed);
+                seek = (hintedElapsed / hint.duration) * 100;
+            }
             var coordinator = String(vis.binds.sonos.state(selected.id, 'coordinator') || selected.ip);
             var groupVolume = parseInt(vis.binds.sonos.state(mediaId, 'group_volume'), 10);
             var grouped = players.filter(function (player) {
@@ -2030,15 +2114,8 @@ vis.binds = vis.binds || {};
                     return [item.title, item.artist, item.album, item.station].join(' ');
                 });
                 listHtml = recent.length
-                    ? recent.map(function (item) {
-                        return '<button type="button" class="sonos-ctrl-item" data-recent-uri="' + vis.binds.sonos.esc(item.uri || '') +
-                            '" data-recent-meta="' + vis.binds.sonos.esc(encodeURIComponent(item.metadata || '')) +
-                            '" data-recent-station="' + vis.binds.sonos.esc(item.station || '') +
-                            '" data-recent-artist="' + vis.binds.sonos.esc(item.artist || '') +
-                            '" data-recent-album="' + vis.binds.sonos.esc(item.album || '') +
-                            '" data-recent-cover="' + vis.binds.sonos.esc(encodeURIComponent(item.cover || '')) +
-                            '" data-recent-duration="' + vis.binds.sonos.esc(String(item.duration || '')) +
-                            '" data-recent-title="' + vis.binds.sonos.esc(item.title) + '">' +
+                    ? recent.map(function (item, index) {
+                        return '<button type="button" class="sonos-ctrl-item" data-recent-i="' + index + '">' +
                             (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
                             '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || item.station || '') + '</div></div></button>';
@@ -2345,40 +2422,18 @@ vis.binds = vis.binds || {};
                 vis.binds.sonos.write(mediaId + '.current_track_number', parseInt($(this).data('track'), 10));
                 vis.binds.sonos.closeLibrary($div, instance);
             });
-            $div.find('[data-recent-title]').on('click', function () {
-                var uri = String($(this).attr('data-recent-uri') || '');
-                var recentTitle = String($(this).attr('data-recent-title') || '');
-                var station = String($(this).attr('data-recent-station') || '');
-                var artist = String($(this).attr('data-recent-artist') || '');
-                var album = String($(this).attr('data-recent-album') || '');
-                var duration = parseInt(String($(this).attr('data-recent-duration') || ''), 10) || 0;
-                var metadata = '';
-                var cover = '';
-                try {
-                    metadata = decodeURIComponent(String($(this).attr('data-recent-meta') || ''));
-                } catch (e) {
-                    metadata = '';
+            $div.find('[data-recent-i]').on('click', function () {
+                var index = parseInt(String($(this).attr('data-recent-i') || ''), 10);
+                var query = String($div.data('sonos-sheet-query') || '');
+                var items = vis.binds.sonos.filterQuery(vis.binds.sonos.parseRecent(selected.id), query, function (item) {
+                    return [item.title, item.artist, item.album, item.station].join(' ');
+                });
+                var item = items[index];
+                if (!item) {
+                    return;
                 }
-                try {
-                    cover = decodeURIComponent(String($(this).attr('data-recent-cover') || ''));
-                } catch (e) {
-                    cover = '';
-                }
-                var sonosUri = /^(x-sonos|x-rincon-mp3radio|x-rincon-stream|x-rincon-cpcontainer|x-file-cifs|spotify:|file:|aac:|pndrradio:|https?:)/i.test(uri) &&
-                    !/^x-rincon:RINCON_/i.test(uri);
-                if (sonosUri || metadata) {
-                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({
-                        uri: uri,
-                        metadata: metadata,
-                        title: recentTitle,
-                        artist: artist,
-                        album: album,
-                        cover: cover,
-                        duration: duration,
-                    }));
-                } else if (station || recentTitle) {
-                    vis.binds.sonos.write(mediaId + '.favorites_set', station || recentTitle);
-                }
+                vis.binds.sonos.recentNowHint($div, item);
+                vis.binds.sonos.playRecentItem(mediaId, item);
                 vis.binds.sonos.closeLibrary($div, instance);
             });
             $div.find('[data-browse-back]').on('click', function () {

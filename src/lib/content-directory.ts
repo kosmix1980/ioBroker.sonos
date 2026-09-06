@@ -574,6 +574,32 @@ export function isBroadcastDidl(xml: string | undefined): boolean {
     return /audioBroadcast/i.test(String(xml || ''));
 }
 
+export function isTrackDidl(xml: string | undefined): boolean {
+    return /musicTrack/i.test(String(xml || ''));
+}
+
+/** Recent/queue songs must not follow the TuneIn SetAVTransport path. */
+export function shouldPlayAsTrack(
+    uri: string,
+    metadata?: string,
+    hint?: { title?: string; artist?: string; album?: string; duration?: number },
+): boolean {
+    const playUri = String(uri || '');
+    if (isTvStreamUri(playUri) || isLineInStreamUri(playUri)) {
+        return false;
+    }
+    if (isOnDemandUri(playUri) || isTrackDidl(metadata)) {
+        return true;
+    }
+    if (hint && (Number(hint.duration) > 0 || hint.artist || hint.album)) {
+        return true;
+    }
+    if (isRadioLikeUri(playUri) || isStreamUri(playUri) || isBroadcastDidl(metadata)) {
+        return false;
+    }
+    return Boolean(hint?.title || playUri);
+}
+
 /** `H:MM:SS` / `MM:SS` from GetPositionInfo. */
 export function parseClock(text: string | undefined): number {
     const value = String(text || '').trim();

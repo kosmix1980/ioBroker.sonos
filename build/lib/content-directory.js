@@ -52,6 +52,8 @@ exports.browseMedia = browseMedia;
 exports.isStreamUri = isStreamUri;
 exports.isOnDemandUri = isOnDemandUri;
 exports.isBroadcastDidl = isBroadcastDidl;
+exports.isTrackDidl = isTrackDidl;
+exports.shouldPlayAsTrack = shouldPlayAsTrack;
 exports.parseClock = parseClock;
 exports.parsePositionInfo = parsePositionInfo;
 exports.trackDidl = trackDidl;
@@ -519,6 +521,26 @@ function isOnDemandUri(uri) {
 }
 function isBroadcastDidl(xml) {
     return /audioBroadcast/i.test(String(xml || ''));
+}
+function isTrackDidl(xml) {
+    return /musicTrack/i.test(String(xml || ''));
+}
+/** Recent/queue songs must not follow the TuneIn SetAVTransport path. */
+function shouldPlayAsTrack(uri, metadata, hint) {
+    const playUri = String(uri || '');
+    if (isTvStreamUri(playUri) || isLineInStreamUri(playUri)) {
+        return false;
+    }
+    if (isOnDemandUri(playUri) || isTrackDidl(metadata)) {
+        return true;
+    }
+    if (hint && (Number(hint.duration) > 0 || hint.artist || hint.album)) {
+        return true;
+    }
+    if (isRadioLikeUri(playUri) || isStreamUri(playUri) || isBroadcastDidl(metadata)) {
+        return false;
+    }
+    return Boolean(hint?.title || playUri);
 }
 /** `H:MM:SS` / `MM:SS` from GetPositionInfo. */
 function parseClock(text) {
