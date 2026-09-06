@@ -850,22 +850,18 @@ vis.binds = vis.binds || {};
             if (!match) {
                 return '';
             }
-            return String(match[1] || '')
-                .replace(/&amp;/g, '&')
-                .replace(/&quot;/g, '"')
-                .replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>')
-                .trim();
+            return String(match[1] || '').trim();
         },
 
         favoriteCover: function (mediaId, title) {
-            var cover = '';
-            if (!title) {
+            var want = String(title || '').trim().toLowerCase();
+            if (!want) {
                 return '';
             }
-            var want = String(title || '').trim().toLowerCase();
+            var cover = '';
             vis.binds.sonos.parseFavorites(mediaId).forEach(function (item) {
-                if (item.title && item.cover && String(item.title).trim().toLowerCase() === want) {
+                var name = String(item.title || '').trim().toLowerCase();
+                if (name && item.cover && name === want) {
                     cover = item.cover;
                 }
             });
