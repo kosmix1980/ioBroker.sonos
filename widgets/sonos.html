@@ -1407,6 +1407,17 @@ vis.binds = vis.binds || {};
             }
             return list.filter(function (item) {
                 return item && item.title;
+            }).map(function (item) {
+                var cover = String(item.cover || '');
+                if (cover && !vis.binds.sonos.isLiveCover(cover)) {
+                    return item;
+                }
+                var restored = vis.binds.sonos.artFromMeta(item.metadata) ||
+                    vis.binds.sonos.favoriteCover(playerId, item.station || item.title);
+                if (!restored) {
+                    return cover ? Object.assign({}, item, { cover: '' }) : item;
+                }
+                return Object.assign({}, item, { cover: restored });
             });
         },
 
@@ -1498,7 +1509,20 @@ vis.binds = vis.binds || {};
         },
 
         isLiveCover: function (cover) {
-            return /\/coverImage\/\d{1,3}(?:_\d{1,3}){3}\.png(?:\?|$)/i.test(String(cover || ''));
+            return /(?:^|\/)coverImage\/(?!art\/)[^/?#]+\.png(?:\?|#|$)/i.test(String(cover || ''));
+        },
+
+        artFromMeta: function (xml) {
+            var match = String(xml || '').match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i);
+            if (!match) {
+                return '';
+            }
+            return String(match[1] || '')
+                .replace(/&amp;/g, '&')
+                .replace(/&quot;/g, '"')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .trim();
         },
 
         favoriteCover: function (mediaId, title) {
@@ -1506,8 +1530,9 @@ vis.binds = vis.binds || {};
             if (!title) {
                 return '';
             }
+            var want = String(title || '').trim().toLowerCase();
             vis.binds.sonos.parseFavorites(mediaId).forEach(function (item) {
-                if (item.title && item.cover && item.title === title) {
+                if (item.title && item.cover && String(item.title).trim().toLowerCase() === want) {
                     cover = item.cover;
                 }
             });

@@ -1182,7 +1182,7 @@ class Sonos extends utils.Adapter {
                 await this.updateCover(ip, albumArt);
             }
             this.lastCover[ip] = coverKey || null;
-            await this.scrubSharedRecentCovers(ip);
+            await this.repairRecentCovers(ip);
         }
 
         this.channels[ip].elapsed = sonosState.elapsedTime;
@@ -1400,7 +1400,45 @@ class Sonos extends utils.Adapter {
 
     /** Live now-playing file is overwritten; unique art lives under coverImage/art/. */
     private isSharedLiveCover(cover: string): boolean {
-        return /\/coverImage\/\d{1,3}(?:_\d{1,3}){3}\.png(?:\?|$)/i.test(cover);
+        return /(?:^|\/)coverImage\/(?!art\/)[^/?#]+\.png(?:\?|#|$)/i.test(String(cover || ''));
+    }
+
+    private async favoriteArtMap(): Promise<Map<string, string>> {
+        const arts = new Map<string, string>();
+        if (!this.discovery) {
+            return arts;
+        }
+        try {
+            for (const fav of this.toFavoriteList(await this.discovery.getFavorites())) {
+                const title = String(fav.title || '')
+                    .trim()
+                    .toLowerCase();
+                if (title && fav.albumArtUri) {
+                    arts.set(title, fav.albumArtUri);
+                }
+            }
+        } catch (err) {
+            this.log.debug(`Favorite art map: ${err}`);
+        }
+        return arts;
+    }
+
+    private restoredRecentCover(item: RecentTrack, arts: Map<string, string>): string {
+        const cover = String(item.cover || '');
+        if (cover && !this.isSharedLiveCover(cover)) {
+            return cover;
+        }
+        const fromMeta = albumArtFromXml(item.metadata);
+        if (fromMeta) {
+            return fromMeta;
+        }
+        const station = String(item.station || '')
+            .trim()
+            .toLowerCase();
+        const title = String(item.title || '')
+            .trim()
+            .toLowerCase();
+        return (station && arts.get(station)) || (title && arts.get(title)) || '';
     }
 
     private async readRecentTracks(ip: string): Promise<RecentTrack[]> {
@@ -1428,19 +1466,31 @@ class Sonos extends utils.Adapter {
         );
     }
 
-    /** Old recent rows stored the live now-playing file; that file is overwritten by the next cover. */
-    private async scrubSharedRecentCovers(ip: string): Promise<void> {
+    /**
+     * Old recent rows still point at the live now-playing file.
+     * Drop that path and restore station/track art from metadata or favorites.
+     */
+    private async repairRecentCovers(ip: string, arts?: Map<string, string>): Promise<void> {
         const list = await this.readRecentTracks(ip);
+        const logos = arts || (await this.favoriteArtMap());
         let changed = false;
         const next = list.map(item => {
-            if (!this.isSharedLiveCover(String(item.cover || ''))) {
+            const cover = this.restoredRecentCover(item, logos);
+            if (cover === String(item.cover || '')) {
                 return item;
             }
             changed = true;
-            return { ...item, cover: '' };
+            return { ...item, cover };
         });
         if (changed) {
             await this.writeRecentTracks(ip, next);
+        }
+    }
+
+    private async repairAllRecentCovers(arts?: Map<string, string>): Promise<void> {
+        const logos = arts || (await this.favoriteArtMap());
+        for (const ip of Object.keys(this.channels)) {
+            await this.repairRecentCovers(ip, logos);
         }
     }
 
@@ -2386,6 +2436,15 @@ class Sonos extends utils.Adapter {
         }
 
         const favorites = await this.discovery.getFavorites();
+        const arts = new Map<string, string>();
+        for (const fav of this.toFavoriteList(favorites)) {
+            const title = String(fav.title || '')
+                .trim()
+                .toLowerCase();
+            if (title && fav.albumArtUri) {
+                arts.set(title, fav.albumArtUri);
+            }
+        }
 
         // Go through all players
         for (const player of this.discovery.players) {
@@ -2400,6 +2459,7 @@ class Sonos extends utils.Adapter {
                 await this.takeSonosFavorites(ip, favorites);
             }
         }
+        await this.repairAllRecentCovers(arts);
     }
 
     private async takeSonosPlaylists(
@@ -2739,6 +2799,7 @@ class Sonos extends utils.Adapter {
 
         await this.ensureQuickstarts();
         await this.syncConfig();
+        await this.repairAllRecentCovers();
 
         this.cacheDir = path.join(utils.getAbsoluteDefaultDataDir(), 'sonosCache') + path.sep;
 

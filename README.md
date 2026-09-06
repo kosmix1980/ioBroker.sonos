@@ -166,6 +166,7 @@ Please note: highlighting current playing favorite is not supported.
 * (kosmix1980) Update the now-playing cover for TuneIn radio (metadata / station logo, no stale image)
 * (kosmix1980) VIS widget: hide the seek bar while radio is playing
 * (kosmix1980) Replay TuneIn from Recent with the station URI and metadata; keep recent covers unique
+* (kosmix1980) Repair older Recent rows that still pointed at the live now-playing cover
 
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0
