@@ -1248,7 +1248,7 @@ vis.binds = vis.binds || {};
                 groupHtml = '<span>' + vis.binds.sonos.esc(t('group')) + '</span>' + groupHtml +
                     '<button type="button" class="sonos-ctrl-ungroup">' + vis.binds.sonos.esc(t('dissolve')) + '</button>';
                 if (grouped.length > 1 && !isNaN(groupVolume)) {
-                    groupHtml += '<span>Grp</span><input type="range" min="0" max="100" class="sonos-ctrl-group-volume" value="' + groupVolume + '">';
+                    groupHtml += '<div class="sonos-ctrl-group-vol"><span>Grp</span><input type="range" min="0" max="100" class="sonos-ctrl-slider sonos-ctrl-group-volume" value="' + groupVolume + '"></div>';
                 }
             }
 
@@ -1382,7 +1382,7 @@ vis.binds = vis.binds || {};
                 ? ''
                 : '<div class="sonos-ctrl-seek">' +
                     '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(elapsed) + '</span>' +
-                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-seek-input" value="' + seek + '">' +
+                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-slider sonos-ctrl-seek-input" value="' + seek + '">' +
                     '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(duration) + '</span>' +
                 '</div>';
 
@@ -1455,7 +1455,7 @@ vis.binds = vis.binds || {};
                                 seekHtml +
                                 '<div class="sonos-ctrl-volume">' +
                                     '<span>Vol</span>' +
-                                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-volume-input" value="' + volume + '">' +
+                                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-slider sonos-ctrl-volume-input" value="' + volume + '">' +
                                     '<span class="sonos-ctrl-time">' + volume + '</span>' +
                                 '</div>' +
                                 htHtml +

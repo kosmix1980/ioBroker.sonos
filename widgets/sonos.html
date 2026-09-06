@@ -227,7 +227,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
 .sonos-ctrl-title {
@@ -306,16 +306,57 @@
 }
 
 .sonos-ctrl-seek,
-.sonos-ctrl-volume {
+.sonos-ctrl-volume,
+.sonos-ctrl-group-vol {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    min-height: 36px;
+    padding: 2px 0;
 }
 
-.sonos-ctrl-seek input,
-.sonos-ctrl-volume input {
+.sonos-ctrl-slider {
+    -webkit-appearance: none;
+    appearance: none;
     flex: 1 1 auto;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    background: transparent;
     accent-color: var(--sonos-accent);
+}
+
+.sonos-ctrl-slider::-webkit-slider-runnable-track {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--sonos-thumb);
+}
+
+.sonos-ctrl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -6px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--sonos-accent);
+    box-shadow: 0 0 0 2px var(--sonos-bg);
+}
+
+.sonos-ctrl-slider::-moz-range-track {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--sonos-thumb);
+}
+
+.sonos-ctrl-slider::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--sonos-accent);
+    box-shadow: 0 0 0 2px var(--sonos-bg);
 }
 
 .sonos-ctrl-time {
@@ -330,6 +371,10 @@
     align-items: center;
     gap: 8px;
     color: var(--sonos-sub);
+}
+
+.sonos-ctrl-group-vol {
+    flex: 1 1 100%;
 }
 
 .sonos-ctrl-groups label {
@@ -1915,7 +1960,7 @@ vis.binds = vis.binds || {};
                 groupHtml = '<span>' + vis.binds.sonos.esc(t('group')) + '</span>' + groupHtml +
                     '<button type="button" class="sonos-ctrl-ungroup">' + vis.binds.sonos.esc(t('dissolve')) + '</button>';
                 if (grouped.length > 1 && !isNaN(groupVolume)) {
-                    groupHtml += '<span>Grp</span><input type="range" min="0" max="100" class="sonos-ctrl-group-volume" value="' + groupVolume + '">';
+                    groupHtml += '<div class="sonos-ctrl-group-vol"><span>Grp</span><input type="range" min="0" max="100" class="sonos-ctrl-slider sonos-ctrl-group-volume" value="' + groupVolume + '"></div>';
                 }
             }
 
@@ -2049,7 +2094,7 @@ vis.binds = vis.binds || {};
                 ? ''
                 : '<div class="sonos-ctrl-seek">' +
                     '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(elapsed) + '</span>' +
-                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-seek-input" value="' + seek + '">' +
+                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-slider sonos-ctrl-seek-input" value="' + seek + '">' +
                     '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(duration) + '</span>' +
                 '</div>';
 
@@ -2122,7 +2167,7 @@ vis.binds = vis.binds || {};
                                 seekHtml +
                                 '<div class="sonos-ctrl-volume">' +
                                     '<span>Vol</span>' +
-                                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-volume-input" value="' + volume + '">' +
+                                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-slider sonos-ctrl-volume-input" value="' + volume + '">' +
                                     '<span class="sonos-ctrl-time">' + volume + '</span>' +
                                 '</div>' +
                                 htHtml +
