@@ -1849,7 +1849,6 @@ vis.binds = vis.binds || {};
             var repeat = parseInt(vis.binds.sonos.state(mediaId, 'repeat'), 10) || 0;
             var elapsed = vis.binds.sonos.state(mediaId, 'current_elapsed_s') || '00:00';
             var duration = vis.binds.sonos.state(mediaId, 'current_duration_s') || '00:00';
-            var durationSec = vis.binds.sonos.parseTime(duration);
             var coordinator = String(vis.binds.sonos.state(selected.id, 'coordinator') || selected.ip);
             var groupVolume = parseInt(vis.binds.sonos.state(mediaId, 'group_volume'), 10);
             var grouped = players.filter(function (player) {
