@@ -2228,7 +2228,7 @@ class Sonos extends utils.Adapter {
             return;
         }
 
-        const filePath = this.cacheDir + crypto.createHash('md5').update(source).digest('hex');
+        const filePath = this.cacheDir + crypto.createHash('sha256').update(source).digest('hex');
         if (fs.existsSync(filePath)) {
             this.log.debug('Cover exists. Try reading from fs');
             await this.syncCoverFileToStorage(filePath, ip);
@@ -2282,7 +2282,7 @@ class Sonos extends utils.Adapter {
 
         if (fileData) {
             const storagePath = `coverImage/${ip}.png`;
-            const stamp = crypto.createHash('md5').update(fileData).digest('hex').slice(0, 12);
+            const stamp = crypto.createHash('sha256').update(fileData).digest('hex').slice(0, 12);
             const uniquePath = `coverImage/art/${stamp}.png`;
             await this.writeFileAsync(this.name, storagePath, fileData);
             await this.writeFileAsync(this.name, uniquePath, fileData);

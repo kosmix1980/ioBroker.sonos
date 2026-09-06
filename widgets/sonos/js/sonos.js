@@ -122,7 +122,7 @@ vis.binds = vis.binds || {};
             }
 
             var instance = vis.binds.sonos.resolveInstance(oid);
-            var theme = 'dark';
+            var theme;
             try {
                 theme = String((data && data.theme) || (data && data.attr && data.attr('theme')) || 'dark');
             } catch (e) {
