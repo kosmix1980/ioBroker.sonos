@@ -1,41 +1,78 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mediaItem = mediaItem;
+exports.matchesMusicService = matchesMusicService;
+exports.tvStreamUri = tvStreamUri;
+exports.isTvStreamUri = isTvStreamUri;
+exports.isLineInStreamUri = isLineInStreamUri;
+exports.tvAudioFormat = tvAudioFormat;
+exports.albumArtFromXml = albumArtFromXml;
+exports.streamContentFromDidl = streamContentFromDidl;
+exports.isHtAudioSilent = isHtAudioSilent;
+exports.htAudioInLabel = htAudioInLabel;
+exports.parseHtAudioIn = parseHtAudioIn;
+exports.soapGetZoneInfo = soapGetZoneInfo;
+exports.soapGetPositionInfo = soapGetPositionInfo;
+exports.nowPlayingLabels = nowPlayingLabels;
+exports.getMediaRoot = getMediaRoot;
+exports.browseMedia = browseMedia;
+exports.isStreamUri = isStreamUri;
+exports.isOnDemandUri = isOnDemandUri;
+exports.isBroadcastDidl = isBroadcastDidl;
+exports.isTrackDidl = isTrackDidl;
+exports.shouldPlayAsTrack = shouldPlayAsTrack;
+exports.parseClock = parseClock;
+exports.parsePositionInfo = parsePositionInfo;
+exports.trackDidl = trackDidl;
+exports.isRadioLikeUri = isRadioLikeUri;
+exports.isLanHttpUri = isLanHttpUri;
+exports.wrapHttpRadioUri = wrapHttpRadioUri;
+exports.radioBroadcastDidl = radioBroadcastDidl;
+exports.isDirectPlayUri = isDirectPlayUri;
 /**
  * Browse Sonos ContentDirectory (TuneIn, music library, network shares, line-in).
  * Spotify and similar services are listed as sources; their catalogs are browsed
  * via SMAPI in src/lib/smapi.ts.
  */
-import * as http from 'node:http';
-
-export interface MediaBrowseItem {
-    id: string;
-    title: string;
-    uri: string;
-    metadata: string;
-    artist: string;
-    album: string;
-    cover: string;
-    folder: boolean;
-    service?: boolean;
-    favorite?: string;
-    playlist?: string;
-}
-
-export interface MediaBrowseResult {
-    id: string;
-    title: string;
-    items: MediaBrowseItem[];
-    serviceName?: string;
-    searchable?: boolean;
-    loginUrl?: string;
-    loginHint?: string;
-}
-
+const http = __importStar(require("node:http"));
 const BROWSE_LIMIT = 200;
-
-function xmlEscape(value: string): string {
+function xmlEscape(value) {
     return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-
-function decodeXml(value: string): string {
+function decodeXml(value) {
     return String(value)
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
@@ -44,18 +81,15 @@ function decodeXml(value: string): string {
         .replace(/&#39;/g, "'")
         .replace(/&amp;/g, '&');
 }
-
-function tagText(xml: string, tag: string): string {
+function tagText(xml, tag) {
     const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i'));
     return match ? decodeXml(match[1]).trim() : '';
 }
-
-function attr(xml: string, name: string): string {
+function attr(xml, name) {
     const match = xml.match(new RegExp(`\\b${name}="([^"]*)"`, 'i'));
     return match ? decodeXml(match[1]) : '';
 }
-
-function absoluteCover(cover: string, baseUrl: string): string {
+function absoluteCover(cover, baseUrl) {
     if (!cover) {
         return '';
     }
@@ -64,11 +98,9 @@ function absoluteCover(cover: string, baseUrl: string): string {
     }
     return `${baseUrl.replace(/\/$/, '')}${cover.startsWith('/') ? '' : '/'}${cover}`;
 }
-
-function parseDidl(didl: string, baseUrl: string): MediaBrowseItem[] {
-    const items: MediaBrowseItem[] = [];
-
-    const push = (chunk: string, isContainer: boolean): void => {
+function parseDidl(didl, baseUrl) {
+    const items = [];
+    const push = (chunk, isContainer) => {
         const id = attr(chunk, 'id');
         const title = tagText(chunk, 'dc:title');
         if (!id && !title) {
@@ -88,7 +120,6 @@ function parseDidl(didl: string, baseUrl: string): MediaBrowseItem[] {
             folder: folder && !uri.startsWith('x-rincon-stream:') && !uri.startsWith('x-sonos-htastream:'),
         });
     };
-
     didl.replace(/<container\b[\s\S]*?<\/container>/gi, chunk => {
         push(chunk, true);
         return '';
@@ -97,11 +128,9 @@ function parseDidl(didl: string, baseUrl: string): MediaBrowseItem[] {
         push(chunk, false);
         return '';
     });
-
     return items;
 }
-
-function extractDidl(soapXml: string): string {
+function extractDidl(soapXml) {
     const cdata = soapXml.match(/<Result[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/Result>/i);
     if (cdata) {
         return cdata[1];
@@ -112,8 +141,7 @@ function extractDidl(soapXml: string): string {
     }
     return decodeXml(tagged[1]);
 }
-
-function soapBrowse(baseUrl: string, objectId: string): Promise<string> {
+function soapBrowse(baseUrl, objectId) {
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
   <s:Body>
@@ -127,36 +155,31 @@ function soapBrowse(baseUrl: string, objectId: string): Promise<string> {
     </u:Browse>
   </s:Body>
 </s:Envelope>`;
-
     const url = new URL(`${baseUrl.replace(/\/$/, '')}/MediaServer/ContentDirectory/Control`);
     const payload = Buffer.from(body, 'utf8');
-
     return new Promise((resolve, reject) => {
-        const req = http.request(
-            {
-                hostname: url.hostname,
-                port: url.port || 1400,
-                path: url.pathname,
-                method: 'POST',
-                headers: {
-                    'CONTENT-TYPE': 'text/xml; charset="utf-8"',
-                    SOAPACTION: '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"',
-                    'CONTENT-LENGTH': payload.length,
-                },
+        const req = http.request({
+            hostname: url.hostname,
+            port: url.port || 1400,
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+                'CONTENT-TYPE': 'text/xml; charset="utf-8"',
+                SOAPACTION: '"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"',
+                'CONTENT-LENGTH': payload.length,
             },
-            res => {
-                const chunks: Buffer[] = [];
-                res.on('data', chunk => chunks.push(chunk as Buffer));
-                res.on('end', () => {
-                    const xml = Buffer.concat(chunks).toString('utf8');
-                    if ((res.statusCode || 500) >= 400) {
-                        reject(new Error(`Browse ${objectId} failed: HTTP ${res.statusCode}`));
-                        return;
-                    }
-                    resolve(xml);
-                });
-            },
-        );
+        }, res => {
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => {
+                const xml = Buffer.concat(chunks).toString('utf8');
+                if ((res.statusCode || 500) >= 400) {
+                    reject(new Error(`Browse ${objectId} failed: HTTP ${res.statusCode}`));
+                    return;
+                }
+                resolve(xml);
+            });
+        });
         req.on('error', reject);
         req.setTimeout(8000, () => {
             req.destroy();
@@ -166,7 +189,6 @@ function soapBrowse(baseUrl: string, objectId: string): Promise<string> {
         req.end();
     });
 }
-
 const FEATURED_SERVICES = [
     'Spotify',
     'YouTube Music',
@@ -177,8 +199,7 @@ const FEATURED_SERVICES = [
     'Tidal',
     'SoundCloud',
 ];
-
-export function mediaItem(partial: Partial<MediaBrowseItem> & Pick<MediaBrowseItem, 'id' | 'title'>): MediaBrowseItem {
+function mediaItem(partial) {
     return {
         uri: '',
         metadata: '',
@@ -189,19 +210,12 @@ export function mediaItem(partial: Partial<MediaBrowseItem> & Pick<MediaBrowseIt
         ...partial,
     };
 }
-
-export function matchesMusicService(
-    blob: string,
-    serviceName: string,
-    service?: { id?: number; type?: number },
-): boolean {
+function matchesMusicService(blob, serviceName, service) {
     const name = serviceName.toLowerCase();
     const text = blob.toLowerCase();
-
     if (service?.id != null && new RegExp(`(?:^|[?&;])sid=${service.id}(?:\\b|&|$)`).test(text)) {
         return true;
     }
-
     if (name === 'spotify') {
         return /spotify|x-sonos-spotify|sid=9\b|sa_rincon2311|scdn\.co/.test(text);
     }
@@ -225,21 +239,17 @@ export function matchesMusicService(
     }
     return text.includes(name);
 }
-
 /** HDMI / TV input on Arc, Beam, Playbar, Playbase, Ray and Amp. */
-export function tvStreamUri(uuid: string): string {
+function tvStreamUri(uuid) {
     return `x-sonos-htastream:${uuid}:spdif`;
 }
-
-export function isTvStreamUri(uri: string | undefined): boolean {
+function isTvStreamUri(uri) {
     return /^x-sonos-htastream:/i.test(String(uri || ''));
 }
-
-export function isLineInStreamUri(uri: string | undefined): boolean {
+function isLineInStreamUri(uri) {
     return /^x-rincon-stream:/i.test(String(uri || ''));
 }
-
-function isPlaceholderTitle(title: string): boolean {
+function isPlaceholderTitle(title) {
     const text = title.trim();
     if (!text) {
         return true;
@@ -249,8 +259,7 @@ function isPlaceholderTitle(title: string): boolean {
     }
     return /^(spdif|rincon_)/i.test(text);
 }
-
-const TV_FORMAT_NAMES: Record<string, string> = {
+const TV_FORMAT_NAMES = {
     PCM: 'PCM',
     STEREOPCM: 'Stereo PCM',
     STEREOPCM2: 'Stereo PCM',
@@ -270,17 +279,15 @@ const TV_FORMAT_NAMES: Record<string, string> = {
     DTSHDMA: 'DTS-HD MA',
     AAC: 'AAC',
 };
-
-function formatKey(text: string): string {
+function formatKey(text) {
     return text
         .toUpperCase()
         .replace(/[_./+-]+/g, ' ')
         .replace(/\b(\d+)\s+(\d+)\b/g, '$1$2')
         .replace(/[^A-Z0-9]+/g, '');
 }
-
 /** HDMI audio format from streamContent / title, e.g. Stereo PCM, Dolby Atmos. */
-export function tvAudioFormat(text: string | undefined): string {
+function tvAudioFormat(text) {
     const raw = String(text || '').trim();
     if (!raw || isPlaceholderTitle(raw)) {
         return '';
@@ -294,39 +301,33 @@ export function tvAudioFormat(text: string | undefined): string {
     }
     return '';
 }
-
 /** Album art URL from DIDL / AVTransport metadata (TuneIn often has no track.albumArtUri). */
-export function albumArtFromXml(xml: string | undefined): string {
+function albumArtFromXml(xml) {
     const source = String(xml || '');
     if (!source) {
         return '';
     }
     const decoded = decodeXml(source);
-    const match =
-        source.match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i) ||
+    const match = source.match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i) ||
         decoded.match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i);
     return match ? decodeXml(match[1]).trim() : '';
 }
-
-export function streamContentFromDidl(xml: string | undefined): string {
+function streamContentFromDidl(xml) {
     const source = String(xml || '');
     if (!source) {
         return '';
     }
     const decoded = decodeXml(source);
-    const match =
-        source.match(/<r:streamContent\b[^>]*>([\s\S]*?)<\/r:streamContent>/i) ||
+    const match = source.match(/<r:streamContent\b[^>]*>([\s\S]*?)<\/r:streamContent>/i) ||
         source.match(/<r:streamcontent\b[^>]*>([\s\S]*?)<\/r:streamcontent>/i) ||
         decoded.match(/<r:streamContent\b[^>]*>([\s\S]*?)<\/r:streamContent>/i) ||
         decoded.match(/<r:streamcontent\b[^>]*>([\s\S]*?)<\/r:streamcontent>/i);
     return match ? decodeXml(match[1]).trim() : '';
 }
-
 /** HTAudioIn values that mean no HDMI/SPDIF audio (SoCo / Sonos community). */
 const HT_AUDIO_SILENT = new Set([0, 21, 22, 33554454]);
-
 /** DeviceProperties HTAudioIn codes (SoCo / openHAB), named like the Sonos app. */
-const HT_AUDIO_IN: Record<number, string> = {
+const HT_AUDIO_IN = {
     2: 'Stereo PCM',
     7: 'Dolby Digital 2.0',
     18: 'Dolby Digital 5.1',
@@ -347,60 +348,51 @@ const HT_AUDIO_IN: Record<number, string> = {
     118489090: 'Multichannel PCM 7.1',
     118489146: 'Dolby Digital Plus 7.1',
 };
-
-export function isHtAudioSilent(code: number | null | undefined): boolean {
+function isHtAudioSilent(code) {
     return code != null && HT_AUDIO_SILENT.has(code);
 }
-
-export function htAudioInLabel(code: number): string {
+function htAudioInLabel(code) {
     if (isHtAudioSilent(code)) {
         return '';
     }
     return HT_AUDIO_IN[code] || '';
 }
-
-export function parseHtAudioIn(xml: string): number | null {
+function parseHtAudioIn(xml) {
     const match = String(xml || '').match(/<HTAudioIn>(\d+)<\/HTAudioIn>/i);
     return match ? parseInt(match[1], 10) : null;
 }
-
-export function soapGetZoneInfo(baseUrl: string): Promise<string> {
+function soapGetZoneInfo(baseUrl) {
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
   <s:Body>
     <u:GetZoneInfo xmlns:u="urn:schemas-upnp-org:service:DeviceProperties:1"></u:GetZoneInfo>
   </s:Body>
 </s:Envelope>`;
-
     const url = new URL(`${baseUrl.replace(/\/$/, '')}/DeviceProperties/Control`);
     const payload = Buffer.from(body, 'utf8');
-
     return new Promise((resolve, reject) => {
-        const req = http.request(
-            {
-                hostname: url.hostname,
-                port: url.port || 1400,
-                path: url.pathname,
-                method: 'POST',
-                headers: {
-                    'CONTENT-TYPE': 'text/xml; charset="utf-8"',
-                    SOAPACTION: '"urn:schemas-upnp-org:service:DeviceProperties:1#GetZoneInfo"',
-                    'CONTENT-LENGTH': payload.length,
-                },
+        const req = http.request({
+            hostname: url.hostname,
+            port: url.port || 1400,
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+                'CONTENT-TYPE': 'text/xml; charset="utf-8"',
+                SOAPACTION: '"urn:schemas-upnp-org:service:DeviceProperties:1#GetZoneInfo"',
+                'CONTENT-LENGTH': payload.length,
             },
-            res => {
-                const chunks: Buffer[] = [];
-                res.on('data', chunk => chunks.push(chunk as Buffer));
-                res.on('end', () => {
-                    const xml = Buffer.concat(chunks).toString('utf8');
-                    if ((res.statusCode || 500) >= 400) {
-                        reject(new Error(`GetZoneInfo failed: HTTP ${res.statusCode}`));
-                        return;
-                    }
-                    resolve(xml);
-                });
-            },
-        );
+        }, res => {
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => {
+                const xml = Buffer.concat(chunks).toString('utf8');
+                if ((res.statusCode || 500) >= 400) {
+                    reject(new Error(`GetZoneInfo failed: HTTP ${res.statusCode}`));
+                    return;
+                }
+                resolve(xml);
+            });
+        });
         req.on('error', reject);
         req.setTimeout(5000, () => {
             req.destroy();
@@ -410,8 +402,7 @@ export function soapGetZoneInfo(baseUrl: string): Promise<string> {
         req.end();
     });
 }
-
-export function soapGetPositionInfo(baseUrl: string): Promise<string> {
+function soapGetPositionInfo(baseUrl) {
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
   <s:Body>
@@ -420,36 +411,31 @@ export function soapGetPositionInfo(baseUrl: string): Promise<string> {
     </u:GetPositionInfo>
   </s:Body>
 </s:Envelope>`;
-
     const url = new URL(`${baseUrl.replace(/\/$/, '')}/MediaRenderer/AVTransport/Control`);
     const payload = Buffer.from(body, 'utf8');
-
     return new Promise((resolve, reject) => {
-        const req = http.request(
-            {
-                hostname: url.hostname,
-                port: url.port || 1400,
-                path: url.pathname,
-                method: 'POST',
-                headers: {
-                    'CONTENT-TYPE': 'text/xml; charset="utf-8"',
-                    SOAPACTION: '"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo"',
-                    'CONTENT-LENGTH': payload.length,
-                },
+        const req = http.request({
+            hostname: url.hostname,
+            port: url.port || 1400,
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+                'CONTENT-TYPE': 'text/xml; charset="utf-8"',
+                SOAPACTION: '"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo"',
+                'CONTENT-LENGTH': payload.length,
             },
-            res => {
-                const chunks: Buffer[] = [];
-                res.on('data', chunk => chunks.push(chunk as Buffer));
-                res.on('end', () => {
-                    const xml = Buffer.concat(chunks).toString('utf8');
-                    if ((res.statusCode || 500) >= 400) {
-                        reject(new Error(`GetPositionInfo failed: HTTP ${res.statusCode}`));
-                        return;
-                    }
-                    resolve(xml);
-                });
-            },
-        );
+        }, res => {
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => {
+                const xml = Buffer.concat(chunks).toString('utf8');
+                if ((res.statusCode || 500) >= 400) {
+                    reject(new Error(`GetPositionInfo failed: HTTP ${res.statusCode}`));
+                    return;
+                }
+                resolve(xml);
+            });
+        });
         req.on('error', reject);
         req.setTimeout(5000, () => {
             req.destroy();
@@ -459,29 +445,15 @@ export function soapGetPositionInfo(baseUrl: string): Promise<string> {
         req.end();
     });
 }
-
-export interface NowPlayingLabels {
-    title: string;
-    artist: string;
-    album: string;
-    station: string;
-}
-
 /** Friendly now-playing text when Sonos leaves TV HDMI / line-in metadata empty. */
-export function nowPlayingLabels(
-    track: { uri?: string; title?: string; artist?: string; album?: string; stationName?: string },
-    labels: { tv: string; tvHdmi: string; lineIn: string },
-    extra?: { metadata?: string },
-): NowPlayingLabels {
+function nowPlayingLabels(track, labels, extra) {
     const uri = String(track.uri || '');
     const rawTitle = String(track.title || '').trim();
     const artist = String(track.artist || '').trim();
     const album = String(track.album || '').trim();
     const placeholder = isPlaceholderTitle(rawTitle);
-
     if (isTvStreamUri(uri)) {
-        const format =
-            tvAudioFormat(rawTitle) || tvAudioFormat(streamContentFromDidl(extra?.metadata)) || tvAudioFormat(artist);
+        const format = tvAudioFormat(rawTitle) || tvAudioFormat(streamContentFromDidl(extra?.metadata)) || tvAudioFormat(artist);
         return {
             title: labels.tv,
             artist: format,
@@ -497,7 +469,6 @@ export function nowPlayingLabels(
             station: labels.lineIn,
         };
     }
-
     return {
         title: rawTitle,
         artist,
@@ -505,15 +476,10 @@ export function nowPlayingLabels(
         station: String(track.stationName || '').trim(),
     };
 }
-
-export function getMediaRoot(
-    services: Record<string, unknown> | undefined,
-    labels: { radio: string; library: string; shares: string; lineIn: string; tv: string; tvHdmi: string },
-    playerUuid?: string,
-): MediaBrowseResult {
+function getMediaRoot(services, labels, playerUuid) {
     const available = Object.keys(services || {});
-    const used = new Set<string>();
-    const items: MediaBrowseItem[] = [
+    const used = new Set();
+    const items = [
         mediaItem({
             id: 'tv',
             title: labels.tv,
@@ -523,8 +489,7 @@ export function getMediaRoot(
         }),
         mediaItem({ id: 'R:0', title: labels.radio, folder: true }),
     ];
-
-    const addService = (name: string): void => {
+    const addService = (name) => {
         const key = name.toLowerCase();
         if (used.has(key)) {
             return;
@@ -532,7 +497,6 @@ export function getMediaRoot(
         used.add(key);
         items.push(mediaItem({ id: `service:${name}`, title: name, folder: true, service: true }));
     };
-
     addService('Spotify');
     addService('YouTube Music');
     FEATURED_SERVICES.forEach(name => {
@@ -541,49 +505,28 @@ export function getMediaRoot(
             addService(match);
         }
     });
-
-    items.push(
-        mediaItem({ id: 'A:', title: labels.library, folder: true }),
-        mediaItem({ id: 'S:', title: labels.shares, folder: true }),
-        mediaItem({ id: 'AI:', title: labels.lineIn, folder: true }),
-    );
-
+    items.push(mediaItem({ id: 'A:', title: labels.library, folder: true }), mediaItem({ id: 'S:', title: labels.shares, folder: true }), mediaItem({ id: 'AI:', title: labels.lineIn, folder: true }));
     available.sort((a, b) => a.localeCompare(b)).forEach(name => addService(name));
-
     return { id: 'root', title: '', items };
 }
-
-export async function browseMedia(baseUrl: string, objectId: string): Promise<MediaBrowseItem[]> {
+async function browseMedia(baseUrl, objectId) {
     const xml = await soapBrowse(baseUrl, objectId);
     return parseDidl(extractDidl(xml), baseUrl);
 }
-
-export function isStreamUri(uri: string): boolean {
-    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(
-        uri,
-    );
+function isStreamUri(uri) {
+    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(uri);
 }
-
-export function isOnDemandUri(uri: string): boolean {
-    return /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-sonos-mms:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:|spotify:|file:)/i.test(
-        String(uri || ''),
-    );
+function isOnDemandUri(uri) {
+    return /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-sonos-mms:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:|spotify:|file:)/i.test(String(uri || ''));
 }
-
-export function isBroadcastDidl(xml: string | undefined): boolean {
+function isBroadcastDidl(xml) {
     return /audioBroadcast/i.test(String(xml || ''));
 }
-
-export function isTrackDidl(xml: string | undefined): boolean {
+function isTrackDidl(xml) {
     return /musicTrack/i.test(String(xml || ''));
 }
-
 /** Recent/queue songs must not follow the TuneIn SetAVTransport path. */
-export function shouldPlayAsTrack(
-    uri: string,
-    metadata?: string,
-    hint?: { title?: string; artist?: string; album?: string; duration?: number },
-): boolean {
+function shouldPlayAsTrack(uri, metadata, hint) {
     const playUri = String(uri || '');
     if (isTvStreamUri(playUri) || isLineInStreamUri(playUri)) {
         return false;
@@ -599,9 +542,8 @@ export function shouldPlayAsTrack(
     }
     return Boolean(hint?.title || playUri);
 }
-
 /** `H:MM:SS` / `MM:SS` from GetPositionInfo. */
-export function parseClock(text: string | undefined): number {
+function parseClock(text) {
     const value = String(text || '').trim();
     if (!value || /not[_ ]?implemented/i.test(value)) {
         return 0;
@@ -618,29 +560,16 @@ export function parseClock(text: string | undefined): number {
     }
     return parts[0];
 }
-
-function formatClock(seconds: number): string {
+function formatClock(seconds) {
     const total = Math.max(0, Math.floor(seconds));
     const hours = Math.floor(total / 3600);
     const min = Math.floor((total % 3600) / 60);
     const sec = total % 60;
-    const pad = (n: number): string => (n < 10 ? `0${n}` : String(n));
+    const pad = (n) => (n < 10 ? `0${n}` : String(n));
     return hours ? `${hours}:${pad(min)}:${pad(sec)}` : `${pad(min)}:${pad(sec)}`;
 }
-
-export interface PositionInfo {
-    uri: string;
-    duration: number;
-    elapsed: number;
-    metadata: string;
-    title: string;
-    artist: string;
-    album: string;
-    cover: string;
-}
-
 /** TrackURI / duration / DIDL from GetPositionInfo (escaped or raw). */
-export function parsePositionInfo(xml: string | undefined): PositionInfo {
+function parsePositionInfo(xml) {
     const source = String(xml || '');
     const uri = tagText(source, 'TrackURI');
     const duration = parseClock(tagText(source, 'TrackDuration'));
@@ -663,17 +592,8 @@ export function parsePositionInfo(xml: string | undefined): PositionInfo {
         cover: albumArtFromXml(metadata),
     };
 }
-
 /** DIDL for a music track so queue / SetAVTransport keep title, artist and art. */
-export function trackDidl(info: {
-    title?: string;
-    artist?: string;
-    album?: string;
-    uri?: string;
-    cover?: string;
-    durationSec?: number;
-    metadata?: string;
-}): string {
+function trackDidl(info) {
     const existing = String(info.metadata || '');
     if (existing.includes('DIDL-Lite') && !isBroadcastDidl(existing)) {
         return existing;
@@ -686,43 +606,38 @@ export function trackDidl(info: {
     const duration = info.durationSec && info.durationSec > 0 ? ` duration="${formatClock(info.durationSec)}"` : '';
     return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true">${uri ? `<res${duration}>${uri}</res>` : ''}<dc:title>${title}</dc:title>${artist ? `<dc:creator>${artist}</dc:creator>` : ''}${album ? `<upnp:album>${album}</upnp:album>` : ''}${cover ? `<upnp:albumArtURI>${cover}</upnp:albumArtURI>` : ''}<upnp:class>object.item.audioItem.musicTrack</upnp:class></item></DIDL-Lite>`;
 }
-
-export function isRadioLikeUri(uri: string): boolean {
+function isRadioLikeUri(uri) {
     const value = String(uri || '');
     if (isOnDemandUri(value)) {
         return false;
     }
-    return (
-        isStreamUri(value) || /(?:tunein|radiotime)/i.test(value) || /^x-sonosapi-(?:stream|radio|hls):/i.test(value)
-    );
+    return (isStreamUri(value) || /(?:tunein|radiotime)/i.test(value) || /^x-sonosapi-(?:stream|radio|hls):/i.test(value));
 }
-
 /** Public http(s) radio streams need the Sonos mp3radio wrapper; LAN files stay as-is. */
-export function isLanHttpUri(uri: string): boolean {
+function isLanHttpUri(uri) {
     try {
         const host = new URL(uri).hostname;
         return /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?(?:fe80|fc|fd))/i.test(host);
-    } catch {
+    }
+    catch {
         return false;
     }
 }
-
 /** TuneIn often stores the decoded http stream as currentTrack.uri. */
-export function wrapHttpRadioUri(uri: string): string {
+function wrapHttpRadioUri(uri) {
     const value = String(uri || '').trim();
     if (/^https?:\/\//i.test(value) && !isLanHttpUri(value)) {
         return `x-rincon-mp3radio:${value}`;
     }
     return value;
 }
-
 /** Minimal DIDL so TuneIn / radio SetAVTransport does not return HTTP 500. */
-export function radioBroadcastDidl(title: string): string {
+function radioBroadcastDidl(title) {
     const name = xmlEscape(title || 'Radio');
     return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true"><dc:title>${name}</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">SA_RINCON65031_</desc></item></DIDL-Lite>`;
 }
-
 /** URIs that the player resolves itself (radio, SMAPI containers) — use setAVTransport, not the queue. */
-export function isDirectPlayUri(uri: string): boolean {
+function isDirectPlayUri(uri) {
     return isStreamUri(uri) || /^x-rincon-cpcontainer:/i.test(uri);
 }
+//# sourceMappingURL=content-directory.js.map

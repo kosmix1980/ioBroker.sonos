@@ -20,7 +20,9 @@ The adapter includes a VIS widget **Sonos Control**. One widget can switch rooms
 3. Reload the VIS editor with Ctrl+F5.
 4. From the widget group **sonos**, drag **Sonos Control** onto a view.
 5. Set the object to the instance, for example `sonos.0` — not a single `play` state.
-6. Size the widget around **900 × 520**.
+6. Size the widget around **935 × 520**. In the widget settings choose a **theme**: `dark`, `light` (white) or `midnight`.
+
+Eight **quick-start** buttons sit at the bottom. Tap an empty button to store what is playing (radio, favorite, track, TV HDMI). Tap a filled button to start it on the selected room. Long-press (or right-click) to rename, replace or clear. The same eight slots can be edited under **Quick start** in the adapter settings: click **Load current shortcuts**, edit, then save. Saving an empty table does not wipe buttons assigned in the widget.
 
 After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the last local title of that room. Library buttons under the rooms (**Favorites**, **Playlists**, **Queue**, **Recent**, **Sources**) open a slightly transparent sheet below the buttons. **Recent** lists the last tracks of the selected room. **Sources** browses TuneIn, Spotify, YouTube Music, the music library, network shares, line-in and TV HDMI. Spotify search uses the Sonos catalog. YouTube Music search lists catalog titles and tells the speaker to play them via `sid=284` (the official YTM account on the player). If a title does not start, save it as a favorite in the Sonos app.
 
@@ -42,7 +44,7 @@ After that, every discovered speaker appears as a chip at the top. Group members
 
 To install this fork over the official adapter: in Admin open **Adapters** → GitHub button → `https://github.com/kosmix1980/ioBroker.sonos`, then restart vis and hard-reload the editor.
 
-This branch does not include the compiled `build/` folder (same as official, for an upstream PR). For a GitHub install that starts immediately, use the branch `cursor/vis-sonos-widget-93d4`. ioBroker needs `build/main.js` as start file. After a GitHub install of this branch, if the log shows `cannot find start file`, compile once on the host:
+This branch includes the compiled `build/` folder so a GitHub install starts without compiling. ioBroker needs `build/main.js` as start file. After a GitHub install, if the log shows `cannot find start file`, compile once on the host:
 
 ```
 cd /opt/iobroker/node_modules/iobroker.sonos
@@ -159,6 +161,17 @@ Please note: highlighting current playing favorite is not supported.
 * (kosmix1980) Library buttons open a slightly transparent popup below the buttons
 * (kosmix1980) Added `playlist_list` / `playlist_list_array` and per-room `recent_tracks`
 * (kosmix1980) Group members follow the coordinator's now-playing and transport
+* (kosmix1980) VIS widget: eight quick-start buttons with station/album logos; edit in the widget or under adapter settings
+* (kosmix1980) VIS widget: show playlist covers; restore album art for tracks after leaving radio
+* (kosmix1980) VIS widget: dark / light / midnight themes; default width 935 px
+* (kosmix1980) VIS widget: thicker seek, volume and group-volume sliders
+* (kosmix1980) Update the now-playing cover for TuneIn radio (metadata / station logo, no stale image)
+* (kosmix1980) VIS widget: hide the seek bar while radio is playing; show it again for playlists and tracks
+* (kosmix1980) Replay TuneIn from Recent with the station URI and metadata; keep recent covers unique
+* (kosmix1980) Repair older Recent rows that still pointed at the live now-playing cover
+* (kosmix1980) After grouping or ungrouping a home-theater room (Arc + surrounds), unmute the rear speakers again
+* (kosmix1980) Playing a song from Recent updates title, artist, cover and the seek bar; track covers stay in the list
+* (kosmix1980) VIS widget: stop the kiosk reload loop by not rebuilding the page on every Sonos poll
 
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0

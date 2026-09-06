@@ -17,5 +17,13 @@
   "tooltip_webserverEnabled": "Zeige SONOS-Webseite",
   "tooltip_webserverPort": "Port für die Webseite",
   "update adapter information": "Gerätesuche",
-  "used for TTS": "für TTS verwendet"
+  "used for TTS": "für TTS verwendet",
+  "Quick start": "Schnellstart",
+  "Load current shortcuts": "Aktuelle Tasten laden",
+  "Shortcuts": "Schnellstart-Tasten",
+  "Artist": "Interpret",
+  "URI": "URI",
+  "Favorite": "Favorit",
+  "TV HDMI": "TV HDMI",
+  "tooltip_quickstarts": "Acht Schnellstart-Tasten für das VIS-Widget. Freie Taste im Widget tippen, um das laufende Stück zu speichern. Lange drücken zum Umbenennen, Ersetzen oder Löschen. Hier zuerst „Aktuelle Tasten laden“, dann speichern. Eine leere Tabelle löscht die Widget-Tasten nicht."
 }
