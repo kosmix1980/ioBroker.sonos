@@ -50,6 +50,7 @@ exports.nowPlayingLabels = nowPlayingLabels;
 exports.getMediaRoot = getMediaRoot;
 exports.browseMedia = browseMedia;
 exports.isStreamUri = isStreamUri;
+exports.isOnDemandUri = isOnDemandUri;
 exports.isRadioLikeUri = isRadioLikeUri;
 exports.isLanHttpUri = isLanHttpUri;
 exports.wrapHttpRadioUri = wrapHttpRadioUri;
@@ -507,11 +508,17 @@ async function browseMedia(baseUrl, objectId) {
     return parseDidl(extractDidl(xml), baseUrl);
 }
 function isStreamUri(uri) {
-    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls(?:-static)?:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(uri);
+    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(uri);
+}
+function isOnDemandUri(uri) {
+    return /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:)/i.test(String(uri || ''));
 }
 function isRadioLikeUri(uri) {
     const value = String(uri || '');
-    return isStreamUri(value) || /(?:tunein|radiotime|x-sonosapi-)/i.test(value);
+    if (isOnDemandUri(value)) {
+        return false;
+    }
+    return (isStreamUri(value) || /(?:tunein|radiotime)/i.test(value) || /^x-sonosapi-(?:stream|radio|hls):/i.test(value));
 }
 /** Public http(s) radio streams need the Sonos mp3radio wrapper; LAN files stay as-is. */
 function isLanHttpUri(uri) {

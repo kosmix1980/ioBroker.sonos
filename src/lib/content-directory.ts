@@ -559,14 +559,25 @@ export async function browseMedia(baseUrl: string, objectId: string): Promise<Me
 }
 
 export function isStreamUri(uri: string): boolean {
-    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls(?:-static)?:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(
+    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(
         uri,
+    );
+}
+
+export function isOnDemandUri(uri: string): boolean {
+    return /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:)/i.test(
+        String(uri || ''),
     );
 }
 
 export function isRadioLikeUri(uri: string): boolean {
     const value = String(uri || '');
-    return isStreamUri(value) || /(?:tunein|radiotime|x-sonosapi-)/i.test(value);
+    if (isOnDemandUri(value)) {
+        return false;
+    }
+    return (
+        isStreamUri(value) || /(?:tunein|radiotime)/i.test(value) || /^x-sonosapi-(?:stream|radio|hls):/i.test(value)
+    );
 }
 
 /** Public http(s) radio streams need the Sonos mp3radio wrapper; LAN files stay as-is. */

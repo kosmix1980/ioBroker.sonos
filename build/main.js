@@ -1061,10 +1061,16 @@ class Sonos extends utils.Adapter {
         if (tv || lineIn) {
             return { type: 2, ...display };
         }
-        const radioUri = (0, content_directory_1.isStreamUri)(uri) || (0, content_directory_1.isRadioLikeUri)(uri) || (0, content_directory_1.isStreamUri)(transport) || (0, content_directory_1.isRadioLikeUri)(transport);
-        const onDemand = /^(x-file-cifs:|x-sonos-spotify:|x-rincon-queue:|x-sonosapi-hls-static:)/i.test(uri || transport);
-        const liveStream = (Number(track.duration) || 0) === 0 && Boolean(uri || transport) && !onDemand;
-        if (track.type === 'radio' || Boolean(track.stationName) || radioUri || liveStream) {
+        const radioUri = ((0, content_directory_1.isStreamUri)(uri) || (0, content_directory_1.isRadioLikeUri)(uri) || (0, content_directory_1.isStreamUri)(transport) || (0, content_directory_1.isRadioLikeUri)(transport)) &&
+            !(0, content_directory_1.isOnDemandUri)(uri) &&
+            !(0, content_directory_1.isOnDemandUri)(transport);
+        const duration = Number(track.duration) || 0;
+        if (duration > 0 && track.type !== 'radio' && !radioUri) {
+            return { type: 0, title: display.title, artist: display.artist, album: display.album, station: '' };
+        }
+        if (track.type === 'radio' ||
+            radioUri ||
+            (duration === 0 && Boolean(track.stationName) && !(0, content_directory_1.isOnDemandUri)(uri))) {
             return {
                 type: 1,
                 title: display.title,

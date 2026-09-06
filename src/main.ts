@@ -24,6 +24,7 @@ import {
     getMediaRoot,
     isDirectPlayUri,
     isLineInStreamUri,
+    isOnDemandUri,
     isRadioLikeUri,
     isStreamUri,
     isTvStreamUri,
@@ -1281,12 +1282,19 @@ class Sonos extends utils.Adapter {
         if (tv || lineIn) {
             return { type: 2, ...display };
         }
-        const radioUri = isStreamUri(uri) || isRadioLikeUri(uri) || isStreamUri(transport) || isRadioLikeUri(transport);
-        const onDemand = /^(x-file-cifs:|x-sonos-spotify:|x-rincon-queue:|x-sonosapi-hls-static:)/i.test(
-            uri || transport,
-        );
-        const liveStream = (Number(track.duration) || 0) === 0 && Boolean(uri || transport) && !onDemand;
-        if (track.type === 'radio' || Boolean(track.stationName) || radioUri || liveStream) {
+        const radioUri =
+            (isStreamUri(uri) || isRadioLikeUri(uri) || isStreamUri(transport) || isRadioLikeUri(transport)) &&
+            !isOnDemandUri(uri) &&
+            !isOnDemandUri(transport);
+        const duration = Number(track.duration) || 0;
+        if (duration > 0 && track.type !== 'radio' && !radioUri) {
+            return { type: 0, title: display.title, artist: display.artist, album: display.album, station: '' };
+        }
+        if (
+            track.type === 'radio' ||
+            radioUri ||
+            (duration === 0 && Boolean(track.stationName) && !isOnDemandUri(uri))
+        ) {
             return {
                 type: 1,
                 title: display.title,

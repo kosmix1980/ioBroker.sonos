@@ -1446,6 +1446,8 @@ vis.binds = vis.binds || {};
                 title === 'TV' ||
                 title === tvLabel
             );
+            var hasDuration = durationS > 0 || durationN > 0;
+            var radioUri = /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|pndrradio:|aac:)/i.test(uri);
             return {
                 title: title,
                 artist: artist,
@@ -1453,12 +1455,7 @@ vis.binds = vis.binds || {};
                 station: station,
                 type: type,
                 isTv: isTv,
-                isRadio: !isTv && (
-                    type === 1 ||
-                    Boolean(station) ||
-                    /^(x-sonosapi-stream|x-sonosapi-radio|x-sonosapi-hls|x-sonosprog-http|x-rincon-mp3radio|pndrradio|aac:)/i.test(uri) ||
-                    ((durationS <= 0 || durationN === 0) && Boolean(uri || station || title))
-                ),
+                isRadio: !isTv && !hasDuration && (type === 1 || radioUri || Boolean(station)),
             };
         },
 
@@ -2017,7 +2014,7 @@ vis.binds = vis.binds || {};
                     '<button type="button" class="sonos-ctrl-ht-btn' + (speechOn ? ' is-on' : '') + '" data-ht="speech_enhancement">' + vis.binds.sonos.esc(t('speechEnhance')) + '</button>' +
                 '</div>'
                 : '';
-            var seekHtml = now.isTv || now.isRadio || durationSec <= 0
+            var seekHtml = now.isTv || now.isRadio
                 ? ''
                 : '<div class="sonos-ctrl-seek">' +
                     '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(elapsed) + '</span>' +
