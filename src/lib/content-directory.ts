@@ -295,6 +295,19 @@ export function tvAudioFormat(text: string | undefined): string {
     return '';
 }
 
+/** Album art URL from DIDL / AVTransport metadata (TuneIn often has no track.albumArtUri). */
+export function albumArtFromXml(xml: string | undefined): string {
+    const source = String(xml || '');
+    if (!source) {
+        return '';
+    }
+    const decoded = decodeXml(source);
+    const match =
+        source.match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i) ||
+        decoded.match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i);
+    return match ? decodeXml(match[1]).trim() : '';
+}
+
 export function streamContentFromDidl(xml: string | undefined): string {
     const source = String(xml || '');
     if (!source) {

@@ -11,6 +11,32 @@
 }
 
 .sonos-ctrl {
+    --sonos-bg: #141414;
+    --sonos-fg: #f3f3f3;
+    --sonos-muted: #9a9a9a;
+    --sonos-sub: #b0b0b0;
+    --sonos-panel: #2a2a2a;
+    --sonos-panel-2: #242424;
+    --sonos-hover: #3a3a3a;
+    --sonos-chip: #2a2a2a;
+    --sonos-chip-master: #454545;
+    --sonos-btn: #2b2b2b;
+    --sonos-btn-fg: #fff;
+    --sonos-cover: #222;
+    --sonos-cover-fg: #666;
+    --sonos-cover-tv: #1a1a1a;
+    --sonos-thumb: #333;
+    --sonos-input: #2a2a2a;
+    --sonos-sheet: rgba(27, 27, 27, 0.82);
+    --sonos-sheet-dismiss: rgba(0, 0, 0, 0.35);
+    --sonos-menu: rgba(27, 27, 27, 0.96);
+    --sonos-item-hover: #262626;
+    --sonos-link: #7dd3fc;
+    --sonos-shadow: rgba(0, 0, 0, 0.35);
+    --sonos-accent: #f15b2a;
+    --sonos-grad: linear-gradient(90deg, #ff8a3d, #e31c23);
+    --sonos-live: #4ade80;
+    --sonos-border: transparent;
     box-sizing: border-box;
     width: 100%;
     height: 100%;
@@ -18,13 +44,66 @@
     flex-direction: column;
     gap: 10px;
     padding: 12px;
-    background: #141414;
-    color: #f3f3f3;
+    background: var(--sonos-bg);
+    color: var(--sonos-fg);
     font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
     border-radius: 12px;
     overflow: hidden;
     position: relative;
+    box-shadow: inset 0 0 0 1px var(--sonos-border);
+}
+
+.sonos-ctrl-theme-light {
+    --sonos-bg: #f6f6f6;
+    --sonos-fg: #1c1c1c;
+    --sonos-muted: #6a6a6a;
+    --sonos-sub: #555;
+    --sonos-panel: #ffffff;
+    --sonos-panel-2: #ececec;
+    --sonos-hover: #e4e4e4;
+    --sonos-chip: #ffffff;
+    --sonos-chip-master: #e8e8e8;
+    --sonos-btn: #ffffff;
+    --sonos-btn-fg: #1c1c1c;
+    --sonos-cover: #e8e8e8;
+    --sonos-cover-fg: #888;
+    --sonos-cover-tv: #dcdcdc;
+    --sonos-thumb: #ddd;
+    --sonos-input: #ffffff;
+    --sonos-sheet: rgba(255, 255, 255, 0.9);
+    --sonos-sheet-dismiss: rgba(0, 0, 0, 0.18);
+    --sonos-menu: rgba(255, 255, 255, 0.98);
+    --sonos-item-hover: #f0f0f0;
+    --sonos-link: #0369a1;
+    --sonos-shadow: rgba(0, 0, 0, 0.12);
+    --sonos-border: #e0e0e0;
+}
+
+.sonos-ctrl-theme-midnight {
+    --sonos-bg: #0c1220;
+    --sonos-fg: #e8eef8;
+    --sonos-muted: #8b97ad;
+    --sonos-sub: #a8b4c8;
+    --sonos-panel: #1b2436;
+    --sonos-panel-2: #151c2c;
+    --sonos-hover: #243049;
+    --sonos-chip: #1b2436;
+    --sonos-chip-master: #2a3650;
+    --sonos-btn: #1b2436;
+    --sonos-btn-fg: #e8eef8;
+    --sonos-cover: #151c2c;
+    --sonos-cover-fg: #7b879c;
+    --sonos-cover-tv: #101624;
+    --sonos-thumb: #243049;
+    --sonos-input: #1b2436;
+    --sonos-sheet: rgba(12, 18, 32, 0.88);
+    --sonos-sheet-dismiss: rgba(0, 0, 0, 0.4);
+    --sonos-menu: rgba(12, 18, 32, 0.96);
+    --sonos-item-hover: #1b2436;
+    --sonos-link: #7dd3fc;
+    --sonos-shadow: rgba(0, 0, 0, 0.45);
+    --sonos-border: #243049;
 }
 
 .sonos-ctrl *,
@@ -45,7 +124,7 @@
     font-weight: 800;
     letter-spacing: 0.18em;
     font-size: 14px;
-    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    background: var(--sonos-grad);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -55,7 +134,7 @@
     flex: 0 0 auto;
     font-size: 11px;
     font-weight: 600;
-    color: #9a9a9a;
+    color: var(--sonos-muted);
     letter-spacing: 0;
 }
 
@@ -69,9 +148,9 @@
 
 .sonos-ctrl-chip {
     border: 0;
-    background: #2a2a2a;
-    color: var(--sonos-name, #fff);
-    box-shadow: inset 0 0 0 1px var(--sonos-name, transparent);
+    background: var(--sonos-chip);
+    color: var(--sonos-name, var(--sonos-fg));
+    box-shadow: inset 0 0 0 1px var(--sonos-name, var(--sonos-border));
     border-radius: 999px;
     padding: 6px 12px;
     cursor: pointer;
@@ -82,14 +161,14 @@
 }
 
 .sonos-ctrl-chip.is-active {
-    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    background: var(--sonos-grad);
     color: var(--sonos-name, #fff);
     font-weight: 600;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
 }
 
 .sonos-ctrl-chip.is-master:not(.is-active) {
-    background: #454545;
+    background: var(--sonos-chip-master);
     font-weight: 700;
 }
 
@@ -100,7 +179,7 @@
     height: 7px;
     margin-right: 6px;
     border-radius: 50%;
-    background: #4ade80;
+    background: var(--sonos-live);
     vertical-align: middle;
 }
 
@@ -129,18 +208,18 @@
     width: 148px;
     height: 148px;
     border-radius: 10px;
-    background: #222 center / cover no-repeat;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    background: var(--sonos-cover) center / cover no-repeat;
+    box-shadow: 0 8px 24px var(--sonos-shadow);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #666;
+    color: var(--sonos-cover-fg);
     font-weight: 700;
     letter-spacing: 0.12em;
 }
 
 .sonos-ctrl-cover.is-tv {
-    background: #1a1a1a;
+    background: var(--sonos-cover-tv);
     color: transparent;
 }
 
@@ -161,7 +240,7 @@
 }
 
 .sonos-ctrl-sub {
-    color: #b0b0b0;
+    color: var(--sonos-sub);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -179,19 +258,20 @@
     height: 36px;
     border: 0;
     border-radius: 50%;
-    background: #2b2b2b;
-    color: #fff;
+    background: var(--sonos-btn);
+    color: var(--sonos-btn-fg);
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
 }
 
 .sonos-ctrl-btn:hover {
-    background: #3a3a3a;
+    background: var(--sonos-hover);
 }
 
 .sonos-ctrl-btn.is-on {
-    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    background: var(--sonos-grad);
+    color: #fff;
 }
 
 .sonos-ctrl-btn-play {
@@ -210,18 +290,19 @@
     border: 0;
     border-radius: 999px;
     padding: 6px 12px;
-    background: #2b2b2b;
-    color: #fff;
+    background: var(--sonos-btn);
+    color: var(--sonos-btn-fg);
     cursor: pointer;
     font-size: 12px;
 }
 
 .sonos-ctrl-ht-btn:hover {
-    background: #3a3a3a;
+    background: var(--sonos-hover);
 }
 
 .sonos-ctrl-ht-btn.is-on {
-    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    background: var(--sonos-grad);
+    color: #fff;
 }
 
 .sonos-ctrl-seek,
@@ -234,11 +315,11 @@
 .sonos-ctrl-seek input,
 .sonos-ctrl-volume input {
     flex: 1 1 auto;
-    accent-color: #f15b2a;
+    accent-color: var(--sonos-accent);
 }
 
 .sonos-ctrl-time {
-    color: #9a9a9a;
+    color: var(--sonos-muted);
     font-variant-numeric: tabular-nums;
     min-width: 42px;
 }
@@ -248,24 +329,24 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    color: #cfcfcf;
+    color: var(--sonos-sub);
 }
 
 .sonos-ctrl-groups label {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    background: #242424;
+    background: var(--sonos-panel-2);
     border-radius: 999px;
     padding: 4px 10px;
     cursor: pointer;
-    color: var(--sonos-name, #cfcfcf);
+    color: var(--sonos-name, var(--sonos-sub));
 }
 
 .sonos-ctrl-groups button {
     border: 0;
-    background: #2b2b2b;
-    color: #fff;
+    background: var(--sonos-btn);
+    color: var(--sonos-btn-fg);
     border-radius: 999px;
     padding: 5px 10px;
     cursor: pointer;
@@ -280,8 +361,8 @@
 
 .sonos-ctrl-tab {
     border: 0;
-    background: #2a2a2a;
-    color: #f3f3f3;
+    background: var(--sonos-chip);
+    color: var(--sonos-fg);
     padding: 7px 12px;
     cursor: pointer;
     border-radius: 999px;
@@ -290,11 +371,11 @@
 }
 
 .sonos-ctrl-tab:hover {
-    background: #3a3a3a;
+    background: var(--sonos-hover);
 }
 
 .sonos-ctrl-tab.is-active {
-    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    background: var(--sonos-grad);
     color: #fff;
     font-weight: 600;
 }
@@ -303,7 +384,7 @@
     position: absolute;
     inset: 0;
     z-index: 4;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--sonos-sheet-dismiss);
     border: 0;
     padding: 0;
     cursor: pointer;
@@ -316,9 +397,9 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    background: rgba(27, 27, 27, 0.82);
+    background: var(--sonos-sheet);
     border-radius: 10px;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 16px 40px var(--sonos-shadow);
     overflow: hidden;
 }
 
@@ -346,7 +427,7 @@
 
 .sonos-ctrl-item:hover,
 .sonos-ctrl-item.is-current {
-    background: #262626;
+    background: var(--sonos-item-hover);
 }
 
 .sonos-ctrl-item img,
@@ -355,7 +436,7 @@
     height: 42px;
     border-radius: 6px;
     object-fit: cover;
-    background: #333;
+    background: var(--sonos-thumb);
 }
 
 .sonos-ctrl-item-title {
@@ -366,7 +447,7 @@
 }
 
 .sonos-ctrl-item-sub {
-    color: #9a9a9a;
+    color: var(--sonos-muted);
     font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
@@ -384,17 +465,18 @@
     width: auto;
     border: 0;
     border-radius: 8px;
-    background: #2a2a2a;
-    color: #f3f3f3;
+    background: var(--sonos-input);
+    color: var(--sonos-fg);
     padding: 8px 10px;
     font: inherit;
+    box-shadow: inset 0 0 0 1px var(--sonos-border);
 }
 
 .sonos-ctrl-search-btn {
     flex: 0 0 auto;
     border: 0;
     border-radius: 8px;
-    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    background: var(--sonos-grad);
     color: #fff;
     padding: 8px 12px;
     cursor: pointer;
@@ -403,20 +485,20 @@
 
 .sonos-ctrl-login {
     padding: 10px 12px 6px;
-    color: #cfcfcf;
+    color: var(--sonos-sub);
 }
 
 .sonos-ctrl-login-url {
     margin: 6px 0;
     font-size: 11px;
-    color: #7dd3fc;
+    color: var(--sonos-link);
     word-break: break-all;
     user-select: text;
 }
 
 .sonos-ctrl-login-btn {
     border: 0;
-    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    background: var(--sonos-grad);
     color: #fff;
     border-radius: 999px;
     padding: 6px 12px;
@@ -427,7 +509,7 @@
 .sonos-ctrl-empty,
 .sonos-ctrl-hint {
     padding: 18px;
-    color: #9a9a9a;
+    color: var(--sonos-muted);
 }
 
 .sonos-ctrl-hint {
@@ -451,8 +533,8 @@
     max-height: 48px;
     border: 0;
     border-radius: 8px;
-    background: #242424;
-    color: #f3f3f3;
+    background: var(--sonos-panel-2);
+    color: var(--sonos-fg);
     cursor: pointer;
     padding: 5px 8px;
     text-align: left;
@@ -461,24 +543,24 @@
 }
 
 .sonos-ctrl-quick-btn:hover {
-    background: #303030;
+    background: var(--sonos-hover);
 }
 
 .sonos-ctrl-quick-btn.is-empty {
-    color: #8a8a8a;
+    color: var(--sonos-muted);
     text-align: center;
     font-weight: 600;
     letter-spacing: 0.04em;
 }
 
 .sonos-ctrl-quick-btn.is-edit {
-    box-shadow: inset 0 0 0 2px #f15b2a;
+    box-shadow: inset 0 0 0 2px var(--sonos-accent);
 }
 
 .sonos-ctrl-quick-no {
     display: block;
     font-size: 10px;
-    color: #8a8a8a;
+    color: var(--sonos-muted);
     line-height: 1.1;
 }
 
@@ -495,7 +577,7 @@
 .sonos-ctrl-quick-sub {
     display: block;
     font-size: 10px;
-    color: #9a9a9a;
+    color: var(--sonos-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -507,10 +589,10 @@
     left: 12px;
     right: 12px;
     bottom: 12px;
-    background: rgba(27, 27, 27, 0.96);
+    background: var(--sonos-menu);
     border-radius: 10px;
     padding: 10px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 10px 28px var(--sonos-shadow);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -518,17 +600,18 @@
 
 .sonos-ctrl-quick-menu-title {
     font-size: 12px;
-    color: #b0b0b0;
+    color: var(--sonos-sub);
 }
 
 .sonos-ctrl-quick-menu input {
     width: 100%;
     border: 0;
     border-radius: 8px;
-    background: #1a1a1a;
-    color: #fff;
+    background: var(--sonos-input);
+    color: var(--sonos-fg);
     padding: 8px 10px;
     font: inherit;
+    box-shadow: inset 0 0 0 1px var(--sonos-border);
 }
 
 .sonos-ctrl-quick-menu-actions {
@@ -541,14 +624,15 @@
     border: 0;
     border-radius: 999px;
     padding: 6px 12px;
-    background: #2b2b2b;
-    color: #fff;
+    background: var(--sonos-btn);
+    color: var(--sonos-btn-fg);
     cursor: pointer;
     font: inherit;
 }
 
 .sonos-ctrl-quick-menu-actions button.is-primary {
-    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    background: var(--sonos-grad);
+    color: #fff;
 }
 
 </style>
@@ -677,6 +761,13 @@ vis.binds = vis.binds || {};
             }
 
             var instance = vis.binds.sonos.resolveInstance(oid);
+            var theme = 'dark';
+            try {
+                theme = String((data && data.theme) || (data && data.attr && data.attr('theme')) || 'dark');
+            } catch (e) {
+                theme = 'dark';
+            }
+            $div.data('sonos-theme', vis.binds.sonos.normalizeTheme(theme));
             $div.data('sonos-tab', $div.data('sonos-tab') || 'favorites');
             $div.data('sonos-sheet', !!$div.data('sonos-sheet'));
             $div.data('sonos-player', $div.data('sonos-player') || vis.binds.sonos.loadRoom(widgetID, instance) || '');
@@ -684,7 +775,7 @@ vis.binds = vis.binds || {};
             vis.binds.sonos.unbind(widgetID);
 
             if (!instance) {
-                $div.html('<div class="sonos-ctrl"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(vis.binds.sonos.t('hint')) + '</div></div>');
+                $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(vis.binds.sonos.t('hint')) + '</div></div>');
                 return;
             }
 
@@ -693,12 +784,27 @@ vis.binds = vis.binds || {};
                     vis.binds.sonos.render(widgetID, instance);
                     vis.binds.sonos.bindStates(widgetID, instance);
                 } catch (err) {
-                    $div.html('<div class="sonos-ctrl"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(String(err)) + '</div></div>');
+                    $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(String(err)) + '</div></div>');
                 }
             };
 
             paint();
             vis.binds.sonos.loadStates(instance, paint);
+        },
+
+        normalizeTheme: function (value) {
+            var theme = String(value || '').toLowerCase();
+            if (theme === 'light' || theme === 'white' || theme === 'hell') {
+                return 'light';
+            }
+            if (theme === 'midnight' || theme === 'blue') {
+                return 'midnight';
+            }
+            return 'dark';
+        },
+
+        themeClass: function ($div) {
+            return 'sonos-ctrl sonos-ctrl-theme-' + vis.binds.sonos.normalizeTheme($div && $div.data ? $div.data('sonos-theme') : '');
         },
 
         resolveInstance: function (oid) {
@@ -1584,7 +1690,7 @@ vis.binds = vis.binds || {};
             var t = vis.binds.sonos.t;
             var players = vis.binds.sonos.findPlayers(instance);
             if (!players.length) {
-                $div.html('<div class="sonos-ctrl"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(t('noPlayers')) + '</div></div>');
+                $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(t('noPlayers')) + '</div></div>');
                 return;
             }
 
@@ -1838,7 +1944,7 @@ vis.binds = vis.binds || {};
                 : '';
 
             $div.html(
-                '<div class="sonos-ctrl">' +
+                '<div class="' + vis.binds.sonos.themeClass($div) + '">' +
                     '<div class="sonos-ctrl-header">' +
                         '<div class="sonos-ctrl-brand">SONOS</div>' +
                         '<span class="sonos-ctrl-ver">' + vis.binds.sonos.esc(vis.binds.sonos.version) + '</span>' +
@@ -2164,10 +2270,10 @@ vis.binds = vis.binds || {};
         data-vis-type="ctrl,val,player"
         data-vis-name="Sonos Control"
         data-vis-update-style="true"
-        data-vis-attrs="oid[sonos.0]/id;"
+        data-vis-attrs="oid[sonos.0]/id;theme[dark]/select,dark,light,midnight;"
         data-vis-prev='<div id="prev_tplSonosControl" style="position: relative; text-align: initial; padding: 4px"><div class="vis-widget_prev" style="width: 220px; height: 92px; background: #141414; color: #fff; border-radius: 10px; padding: 10px; font-family: Arial, sans-serif"><div style="font-weight: 800; letter-spacing: .12em; background: linear-gradient(90deg, #ff8a3d, #e31c23); -webkit-background-clip: text; background-clip: text; color: transparent">SONOS</div><div style="margin-top: 8px; font-size: 12px; color: #bbb">Rooms · Groups · Favorites</div></div></div>'>
-    <div class="vis-widget <%== this.data.attr('class') %>" style="overflow: hidden; width: 900px; height: 520px; background: #141414;" id="<%= this.data.attr('wid') %>">
-        <div class="vis-widget-body sonos-ctrl" style="padding: 12px; color: #f3f3f3;">Sonos</div><%
+    <div class="vis-widget <%== this.data.attr('class') %>" style="overflow: hidden; width: 935px; height: 520px; background: transparent;" id="<%= this.data.attr('wid') %>">
+        <div class="vis-widget-body sonos-ctrl sonos-ctrl-theme-dark" style="padding: 12px;">Sonos</div><%
         try {
             if (vis.binds && vis.binds.sonos && vis.binds.sonos.createWidget) {
                 vis.binds.sonos.createWidget(this.data.wid, this.view, this.data, this.style);

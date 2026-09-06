@@ -7,6 +7,7 @@
  */
 import * as fs from 'node:fs';
 import * as http from 'node:http';
+import * as https from 'node:https';
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 
@@ -18,10 +19,12 @@ import { TTS } from './lib/tts';
 import { getChannelStates } from './lib/states';
 import { anySlotFilled, parseQuickstarts, resumeFromPlayer } from './lib/quickstart';
 import {
+    albumArtFromXml,
     browseMedia,
     getMediaRoot,
     isDirectPlayUri,
     isLineInStreamUri,
+    isStreamUri,
     isTvStreamUri,
     matchesMusicService,
     mediaItem,
@@ -1141,12 +1144,13 @@ class Sonos extends utils.Adapter {
         }
 
         const tvCover = isTvStreamUri(sonosState.currentTrack.uri);
-        const coverKey = tvCover ? 'tv' : sonosState.currentTrack.albumArtUri || '';
+        const albumArt = tvCover ? '' : await this.resolveAlbumArt(player, sonosState, meta);
+        const coverKey = tvCover ? 'tv' : `${albumArt}|${playing.station}|${transportUri(player)}`;
         if (this.lastCover[ip] !== coverKey) {
             if (tvCover) {
                 await this.syncCoverFileToStorage(TV_IMAGE, ip);
             } else {
-                await this.updateCover(ip, sonosState.currentTrack.albumArtUri);
+                await this.updateCover(ip, albumArt);
             }
             this.lastCover[ip] = coverKey || null;
         }
@@ -2048,60 +2052,120 @@ class Sonos extends utils.Adapter {
         }
     }
 
+    /** TuneIn often leaves currentTrack.albumArtUri empty; logo is in DIDL / GetPositionInfo. */
+    private async resolveAlbumArt(
+        player: SonosPlayer,
+        sonosState: SonosPlayerState,
+        metadata: string,
+    ): Promise<string> {
+        const direct = String(sonosState.currentTrack.albumArtUri || '').trim();
+        if (direct) {
+            return direct;
+        }
+        const fromMeta = albumArtFromXml(metadata);
+        if (fromMeta) {
+            return fromMeta;
+        }
+        const uri = String(sonosState.currentTrack.uri || '');
+        if (sonosState.currentTrack.type === 'radio' || isStreamUri(uri)) {
+            try {
+                return albumArtFromXml(await soapGetPositionInfo(player.baseUrl));
+            } catch (err) {
+                this.log.debug(`Radio cover: ${err}`);
+            }
+        }
+        return '';
+    }
+
+    private coverFetchUrl(player: SonosPlayer, albumArtUri: string): string {
+        if (/^https?:\/\//i.test(albumArtUri)) {
+            return albumArtUri;
+        }
+        const base = String(player.baseUrl || '').replace(/\/$/, '');
+        return albumArtUri.startsWith('/') ? `${base}${albumArtUri}` : `${base}/${albumArtUri}`;
+    }
+
+    private fetchUrlBuffer(url: string, hops = 0): Promise<Buffer | null> {
+        return new Promise(resolve => {
+            if (hops > 4) {
+                resolve(null);
+                return;
+            }
+            let parsed: URL;
+            try {
+                parsed = new URL(url);
+            } catch {
+                resolve(null);
+                return;
+            }
+            const lib = parsed.protocol === 'https:' ? https : http;
+            const req = lib.get(parsed, { timeout: 8000 }, res => {
+                const location = res.headers.location;
+                if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && location) {
+                    res.resume();
+                    void this.fetchUrlBuffer(new URL(location, parsed).href, hops + 1).then(resolve);
+                    return;
+                }
+                if (res.statusCode !== 200) {
+                    this.log.debug(`Cover HTTP ${res.statusCode} for ${url}`);
+                    res.resume();
+                    resolve(null);
+                    return;
+                }
+                const chunks: Buffer[] = [];
+                res.on('data', chunk => chunks.push(chunk as Buffer));
+                res.on('end', () => resolve(Buffer.concat(chunks)));
+            });
+            req.on('error', err => {
+                this.log.debug(`Cover fetch: ${err.message}`);
+                resolve(null);
+            });
+            req.on('timeout', () => {
+                req.destroy();
+                resolve(null);
+            });
+        });
+    }
+
     /**
      * Read the cover of the current track and store it in the ioBroker storage
      *
      * @param ip IP address (with underscores) of the player
-     * @param albumArtUri URI of the cover on the sonos device
+     * @param albumArtUri URI of the cover on the sonos device or an https logo
      */
     private async updateCover(ip: string, albumArtUri?: string): Promise<void> {
-        let filePath = DEFAULT_IMAGE;
-
-        if (albumArtUri) {
-            const md5url = crypto.createHash('md5').update(albumArtUri).digest('hex');
-            filePath = this.cacheDir + md5url;
+        const source = String(albumArtUri || '').trim();
+        if (!source) {
+            await this.syncCoverFileToStorage(DEFAULT_IMAGE, ip);
+            return;
         }
 
+        const filePath = this.cacheDir + crypto.createHash('md5').update(source).digest('hex');
         if (fs.existsSync(filePath)) {
             this.log.debug('Cover exists. Try reading from fs');
             await this.syncCoverFileToStorage(filePath, ip);
             return;
         }
 
-        this.log.debug('Cover file does not exist. Fetching via HTTP');
-
         const player = this.discovery?.getPlayerByUUID(this.channels[ip].uuid);
-        const hostname = player ? getIp(player, true) : null;
-
-        if (!hostname || !albumArtUri) {
+        if (!player) {
+            await this.syncCoverFileToStorage(DEFAULT_IMAGE, ip);
             return;
         }
 
-        http.get(
-            {
-                hostname,
-                port: 1400,
-                path: albumArtUri,
-            },
-            res => {
-                this.log.debug(`HTTP status code ${res.statusCode}`);
+        this.log.debug(`Cover file does not exist. Fetching ${source}`);
+        const buffer = await this.fetchUrlBuffer(this.coverFetchUrl(player, source));
+        if (buffer?.length) {
+            try {
+                fs.writeFileSync(filePath, buffer);
+                await this.syncCoverFileToStorage(filePath, ip);
+                return;
+            } catch (e: any) {
+                this.log.warn(`Cannot write cover cache: ${e.message}`);
+            }
+        }
 
-                if (res.statusCode === 200) {
-                    const cacheStream = fs.createWriteStream(filePath);
-                    res.pipe(cacheStream).on('finish', () => {
-                        void this.syncCoverFileToStorage(filePath, ip);
-                    });
-                } else if (res.statusCode === 404) {
-                    // no image exists! link it to the default image.
-                    res.resume();
-                    void this.syncCoverFileToStorage(DEFAULT_IMAGE, ip);
-                } else {
-                    res.resume();
-                }
-
-                res.on('end', () => this.log.debug('Response "end" event'));
-            },
-        ).on('error', e => this.log.warn(`Got error: ${e.message}`));
+        await this.syncCoverFileToStorage(DEFAULT_IMAGE, ip);
     }
 
     /**
@@ -2130,10 +2194,11 @@ class Sonos extends utils.Adapter {
 
         if (fileData) {
             const storagePath = `coverImage/${ip}.png`;
+            const stamp = crypto.createHash('md5').update(fileData).digest('hex').slice(0, 12);
             await this.writeFileAsync(this.name, storagePath, fileData);
             await this.setState(
                 { device: 'root', channel: ip, state: 'current_cover' },
-                { val: `/${this.name}/${storagePath}`, ack: true },
+                { val: `/${this.name}/${storagePath}?${stamp}`, ack: true },
             );
         }
     }

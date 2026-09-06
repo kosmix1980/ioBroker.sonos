@@ -39,6 +39,7 @@ exports.tvStreamUri = tvStreamUri;
 exports.isTvStreamUri = isTvStreamUri;
 exports.isLineInStreamUri = isLineInStreamUri;
 exports.tvAudioFormat = tvAudioFormat;
+exports.albumArtFromXml = albumArtFromXml;
 exports.streamContentFromDidl = streamContentFromDidl;
 exports.isHtAudioSilent = isHtAudioSilent;
 exports.htAudioInLabel = htAudioInLabel;
@@ -288,6 +289,17 @@ function tvAudioFormat(text) {
         return raw.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
     }
     return '';
+}
+/** Album art URL from DIDL / AVTransport metadata (TuneIn often has no track.albumArtUri). */
+function albumArtFromXml(xml) {
+    const source = String(xml || '');
+    if (!source) {
+        return '';
+    }
+    const decoded = decodeXml(source);
+    const match = source.match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i) ||
+        decoded.match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i);
+    return match ? decodeXml(match[1]).trim() : '';
 }
 function streamContentFromDidl(xml) {
     const source = String(xml || '');

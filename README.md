@@ -20,7 +20,7 @@ The adapter includes a VIS widget **Sonos Control**. One widget can switch rooms
 3. Reload the VIS editor with Ctrl+F5.
 4. From the widget group **sonos**, drag **Sonos Control** onto a view.
 5. Set the object to the instance, for example `sonos.0` — not a single `play` state.
-6. Size the widget around **900 × 520**.
+6. Size the widget around **935 × 520**. In the widget settings choose a **theme**: `dark`, `light` (white) or `midnight`.
 
 Eight **quick-start** buttons sit at the bottom. Tap an empty button to store what is playing (radio, favorite, track, TV HDMI). Tap a filled button to start it on the selected room. Long-press (or right-click) to rename, replace or clear. The same eight slots can be edited under **Quick start** in the adapter settings: click **Load current shortcuts**, edit, then save. Saving an empty table does not wipe buttons assigned in the widget.
 
@@ -162,6 +162,8 @@ Please note: highlighting current playing favorite is not supported.
 * (kosmix1980) Added `playlist_list` / `playlist_list_array` and per-room `recent_tracks`
 * (kosmix1980) Group members follow the coordinator's now-playing and transport
 * (kosmix1980) VIS widget: eight quick-start buttons; edit in the widget or under adapter settings
+* (kosmix1980) VIS widget: dark / light / midnight themes; default width 935 px
+* (kosmix1980) Update the now-playing cover for TuneIn radio (metadata / station logo, no stale image)
 
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0

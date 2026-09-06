@@ -122,6 +122,13 @@ vis.binds = vis.binds || {};
             }
 
             var instance = vis.binds.sonos.resolveInstance(oid);
+            var theme = 'dark';
+            try {
+                theme = String((data && data.theme) || (data && data.attr && data.attr('theme')) || 'dark');
+            } catch (e) {
+                theme = 'dark';
+            }
+            $div.data('sonos-theme', vis.binds.sonos.normalizeTheme(theme));
             $div.data('sonos-tab', $div.data('sonos-tab') || 'favorites');
             $div.data('sonos-sheet', !!$div.data('sonos-sheet'));
             $div.data('sonos-player', $div.data('sonos-player') || vis.binds.sonos.loadRoom(widgetID, instance) || '');
@@ -129,7 +136,7 @@ vis.binds = vis.binds || {};
             vis.binds.sonos.unbind(widgetID);
 
             if (!instance) {
-                $div.html('<div class="sonos-ctrl"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(vis.binds.sonos.t('hint')) + '</div></div>');
+                $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(vis.binds.sonos.t('hint')) + '</div></div>');
                 return;
             }
 
@@ -138,12 +145,27 @@ vis.binds = vis.binds || {};
                     vis.binds.sonos.render(widgetID, instance);
                     vis.binds.sonos.bindStates(widgetID, instance);
                 } catch (err) {
-                    $div.html('<div class="sonos-ctrl"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(String(err)) + '</div></div>');
+                    $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(String(err)) + '</div></div>');
                 }
             };
 
             paint();
             vis.binds.sonos.loadStates(instance, paint);
+        },
+
+        normalizeTheme: function (value) {
+            var theme = String(value || '').toLowerCase();
+            if (theme === 'light' || theme === 'white' || theme === 'hell') {
+                return 'light';
+            }
+            if (theme === 'midnight' || theme === 'blue') {
+                return 'midnight';
+            }
+            return 'dark';
+        },
+
+        themeClass: function ($div) {
+            return 'sonos-ctrl sonos-ctrl-theme-' + vis.binds.sonos.normalizeTheme($div && $div.data ? $div.data('sonos-theme') : '');
         },
 
         resolveInstance: function (oid) {
@@ -1029,7 +1051,7 @@ vis.binds = vis.binds || {};
             var t = vis.binds.sonos.t;
             var players = vis.binds.sonos.findPlayers(instance);
             if (!players.length) {
-                $div.html('<div class="sonos-ctrl"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(t('noPlayers')) + '</div></div>');
+                $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(t('noPlayers')) + '</div></div>');
                 return;
             }
 
@@ -1283,7 +1305,7 @@ vis.binds = vis.binds || {};
                 : '';
 
             $div.html(
-                '<div class="sonos-ctrl">' +
+                '<div class="' + vis.binds.sonos.themeClass($div) + '">' +
                     '<div class="sonos-ctrl-header">' +
                         '<div class="sonos-ctrl-brand">SONOS</div>' +
                         '<span class="sonos-ctrl-ver">' + vis.binds.sonos.esc(vis.binds.sonos.version) + '</span>' +
