@@ -1555,6 +1555,7 @@ vis.binds = vis.binds || {};
                 title === tvLabel
             );
             var hasDuration = durationS > 0 || durationN > 0;
+            var onDemand = /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-sonos-mms:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:|spotify:|file:)/i.test(uri);
             var radioUri = /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|pndrradio:|aac:)/i.test(uri);
             return {
                 title: title,
@@ -1563,7 +1564,7 @@ vis.binds = vis.binds || {};
                 station: station,
                 type: type,
                 isTv: isTv,
-                isRadio: !isTv && !hasDuration && (type === 1 || radioUri || Boolean(station)),
+                isRadio: !isTv && !hasDuration && !onDemand && (type === 1 || radioUri),
             };
         },
 
@@ -1945,7 +1946,7 @@ vis.binds = vis.binds || {};
             var artist = now.artist;
             var album = now.album;
             var station = now.station;
-            var cover = vis.binds.sonos.state(mediaId, 'current_cover');
+            var cover = vis.binds.sonos.state(mediaId, 'current_art') || vis.binds.sonos.state(mediaId, 'current_cover');
             var volume = parseInt(vis.binds.sonos.state(selected.id, 'volume'), 10);
             if (isNaN(volume)) {
                 volume = 0;
@@ -2033,6 +2034,10 @@ vis.binds = vis.binds || {};
                         return '<button type="button" class="sonos-ctrl-item" data-recent-uri="' + vis.binds.sonos.esc(item.uri || '') +
                             '" data-recent-meta="' + vis.binds.sonos.esc(encodeURIComponent(item.metadata || '')) +
                             '" data-recent-station="' + vis.binds.sonos.esc(item.station || '') +
+                            '" data-recent-artist="' + vis.binds.sonos.esc(item.artist || '') +
+                            '" data-recent-album="' + vis.binds.sonos.esc(item.album || '') +
+                            '" data-recent-cover="' + vis.binds.sonos.esc(encodeURIComponent(item.cover || '')) +
+                            '" data-recent-duration="' + vis.binds.sonos.esc(String(item.duration || '')) +
                             '" data-recent-title="' + vis.binds.sonos.esc(item.title) + '">' +
                             (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
                             '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
@@ -2344,16 +2349,33 @@ vis.binds = vis.binds || {};
                 var uri = String($(this).attr('data-recent-uri') || '');
                 var recentTitle = String($(this).attr('data-recent-title') || '');
                 var station = String($(this).attr('data-recent-station') || '');
+                var artist = String($(this).attr('data-recent-artist') || '');
+                var album = String($(this).attr('data-recent-album') || '');
+                var duration = parseInt(String($(this).attr('data-recent-duration') || ''), 10) || 0;
                 var metadata = '';
+                var cover = '';
                 try {
                     metadata = decodeURIComponent(String($(this).attr('data-recent-meta') || ''));
                 } catch (e) {
                     metadata = '';
                 }
-                var sonosUri = /^(x-sonos|x-rincon-mp3radio|x-rincon-stream|x-rincon-cpcontainer|aac:|pndrradio:|https?:)/i.test(uri) &&
+                try {
+                    cover = decodeURIComponent(String($(this).attr('data-recent-cover') || ''));
+                } catch (e) {
+                    cover = '';
+                }
+                var sonosUri = /^(x-sonos|x-rincon-mp3radio|x-rincon-stream|x-rincon-cpcontainer|x-file-cifs|spotify:|file:|aac:|pndrradio:|https?:)/i.test(uri) &&
                     !/^x-rincon:RINCON_/i.test(uri);
                 if (sonosUri || metadata) {
-                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ uri: uri, metadata: metadata }));
+                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({
+                        uri: uri,
+                        metadata: metadata,
+                        title: recentTitle,
+                        artist: artist,
+                        album: album,
+                        cover: cover,
+                        duration: duration,
+                    }));
                 } else if (station || recentTitle) {
                     vis.binds.sonos.write(mediaId + '.favorites_set', station || recentTitle);
                 }

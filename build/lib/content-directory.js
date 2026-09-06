@@ -51,6 +51,10 @@ exports.getMediaRoot = getMediaRoot;
 exports.browseMedia = browseMedia;
 exports.isStreamUri = isStreamUri;
 exports.isOnDemandUri = isOnDemandUri;
+exports.isBroadcastDidl = isBroadcastDidl;
+exports.parseClock = parseClock;
+exports.parsePositionInfo = parsePositionInfo;
+exports.trackDidl = trackDidl;
 exports.isRadioLikeUri = isRadioLikeUri;
 exports.isLanHttpUri = isLanHttpUri;
 exports.wrapHttpRadioUri = wrapHttpRadioUri;
@@ -511,7 +515,74 @@ function isStreamUri(uri) {
     return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(uri);
 }
 function isOnDemandUri(uri) {
-    return /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:)/i.test(String(uri || ''));
+    return /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-sonos-mms:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:|spotify:|file:)/i.test(String(uri || ''));
+}
+function isBroadcastDidl(xml) {
+    return /audioBroadcast/i.test(String(xml || ''));
+}
+/** `H:MM:SS` / `MM:SS` from GetPositionInfo. */
+function parseClock(text) {
+    const value = String(text || '').trim();
+    if (!value || /not[_ ]?implemented/i.test(value)) {
+        return 0;
+    }
+    const parts = value.split(':').map(part => parseInt(part, 10));
+    if (!parts.length || parts.some(part => Number.isNaN(part))) {
+        return 0;
+    }
+    if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    if (parts.length === 2) {
+        return parts[0] * 60 + parts[1];
+    }
+    return parts[0];
+}
+function formatClock(seconds) {
+    const total = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(total / 3600);
+    const min = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    const pad = (n) => (n < 10 ? `0${n}` : String(n));
+    return hours ? `${hours}:${pad(min)}:${pad(sec)}` : `${pad(min)}:${pad(sec)}`;
+}
+/** TrackURI / duration / DIDL from GetPositionInfo (escaped or raw). */
+function parsePositionInfo(xml) {
+    const source = String(xml || '');
+    const uri = tagText(source, 'TrackURI');
+    const duration = parseClock(tagText(source, 'TrackDuration'));
+    const elapsed = parseClock(tagText(source, 'RelTime'));
+    let metadata = tagText(source, 'TrackMetaData');
+    if (metadata === 'NOT_IMPLEMENTED') {
+        metadata = '';
+    }
+    if (/&lt;(?:DIDL-Lite|item)\b/i.test(metadata)) {
+        metadata = decodeXml(metadata);
+    }
+    return {
+        uri,
+        duration,
+        elapsed,
+        metadata,
+        title: tagText(metadata, 'dc:title'),
+        artist: tagText(metadata, 'dc:creator') || tagText(metadata, 'r:albumArtist'),
+        album: tagText(metadata, 'upnp:album'),
+        cover: albumArtFromXml(metadata),
+    };
+}
+/** DIDL for a music track so queue / SetAVTransport keep title, artist and art. */
+function trackDidl(info) {
+    const existing = String(info.metadata || '');
+    if (existing.includes('DIDL-Lite') && !isBroadcastDidl(existing)) {
+        return existing;
+    }
+    const title = xmlEscape(info.title || 'Track');
+    const artist = xmlEscape(info.artist || '');
+    const album = xmlEscape(info.album || '');
+    const cover = xmlEscape(info.cover || '');
+    const uri = xmlEscape(info.uri || '');
+    const duration = info.durationSec && info.durationSec > 0 ? ` duration="${formatClock(info.durationSec)}"` : '';
+    return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true">${uri ? `<res${duration}>${uri}</res>` : ''}<dc:title>${title}</dc:title>${artist ? `<dc:creator>${artist}</dc:creator>` : ''}${album ? `<upnp:album>${album}</upnp:album>` : ''}${cover ? `<upnp:albumArtURI>${cover}</upnp:albumArtURI>` : ''}<upnp:class>object.item.audioItem.musicTrack</upnp:class></item></DIDL-Lite>`;
 }
 function isRadioLikeUri(uri) {
     const value = String(uri || '');

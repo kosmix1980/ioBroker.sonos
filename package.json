@@ -57,7 +57,7 @@
     "test": "npm run test:package && npm run test:unit && npm run test:ht",
     "test:package": "mocha test/package --exit",
     "test:unit": "mocha test/unit --exit",
-    "test:ht": "mocha test/home-theater.js --exit",
+    "test:ht": "mocha test/home-theater.js test/content-directory.js --exit",
     "pretest:integration": "npm run build",
     "test:integration": "mocha test/integration --exit",
     "release": "release-script",

@@ -565,9 +565,100 @@ export function isStreamUri(uri: string): boolean {
 }
 
 export function isOnDemandUri(uri: string): boolean {
-    return /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:)/i.test(
+    return /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-sonos-mms:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:|spotify:|file:)/i.test(
         String(uri || ''),
     );
+}
+
+export function isBroadcastDidl(xml: string | undefined): boolean {
+    return /audioBroadcast/i.test(String(xml || ''));
+}
+
+/** `H:MM:SS` / `MM:SS` from GetPositionInfo. */
+export function parseClock(text: string | undefined): number {
+    const value = String(text || '').trim();
+    if (!value || /not[_ ]?implemented/i.test(value)) {
+        return 0;
+    }
+    const parts = value.split(':').map(part => parseInt(part, 10));
+    if (!parts.length || parts.some(part => Number.isNaN(part))) {
+        return 0;
+    }
+    if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    if (parts.length === 2) {
+        return parts[0] * 60 + parts[1];
+    }
+    return parts[0];
+}
+
+function formatClock(seconds: number): string {
+    const total = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(total / 3600);
+    const min = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    const pad = (n: number): string => (n < 10 ? `0${n}` : String(n));
+    return hours ? `${hours}:${pad(min)}:${pad(sec)}` : `${pad(min)}:${pad(sec)}`;
+}
+
+export interface PositionInfo {
+    uri: string;
+    duration: number;
+    elapsed: number;
+    metadata: string;
+    title: string;
+    artist: string;
+    album: string;
+    cover: string;
+}
+
+/** TrackURI / duration / DIDL from GetPositionInfo (escaped or raw). */
+export function parsePositionInfo(xml: string | undefined): PositionInfo {
+    const source = String(xml || '');
+    const uri = tagText(source, 'TrackURI');
+    const duration = parseClock(tagText(source, 'TrackDuration'));
+    const elapsed = parseClock(tagText(source, 'RelTime'));
+    let metadata = tagText(source, 'TrackMetaData');
+    if (metadata === 'NOT_IMPLEMENTED') {
+        metadata = '';
+    }
+    if (/&lt;(?:DIDL-Lite|item)\b/i.test(metadata)) {
+        metadata = decodeXml(metadata);
+    }
+    return {
+        uri,
+        duration,
+        elapsed,
+        metadata,
+        title: tagText(metadata, 'dc:title'),
+        artist: tagText(metadata, 'dc:creator') || tagText(metadata, 'r:albumArtist'),
+        album: tagText(metadata, 'upnp:album'),
+        cover: albumArtFromXml(metadata),
+    };
+}
+
+/** DIDL for a music track so queue / SetAVTransport keep title, artist and art. */
+export function trackDidl(info: {
+    title?: string;
+    artist?: string;
+    album?: string;
+    uri?: string;
+    cover?: string;
+    durationSec?: number;
+    metadata?: string;
+}): string {
+    const existing = String(info.metadata || '');
+    if (existing.includes('DIDL-Lite') && !isBroadcastDidl(existing)) {
+        return existing;
+    }
+    const title = xmlEscape(info.title || 'Track');
+    const artist = xmlEscape(info.artist || '');
+    const album = xmlEscape(info.album || '');
+    const cover = xmlEscape(info.cover || '');
+    const uri = xmlEscape(info.uri || '');
+    const duration = info.durationSec && info.durationSec > 0 ? ` duration="${formatClock(info.durationSec)}"` : '';
+    return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true">${uri ? `<res${duration}>${uri}</res>` : ''}<dc:title>${title}</dc:title>${artist ? `<dc:creator>${artist}</dc:creator>` : ''}${album ? `<upnp:album>${album}</upnp:album>` : ''}${cover ? `<upnp:albumArtURI>${cover}</upnp:albumArtURI>` : ''}<upnp:class>object.item.audioItem.musicTrack</upnp:class></item></DIDL-Lite>`;
 }
 
 export function isRadioLikeUri(uri: string): boolean {
