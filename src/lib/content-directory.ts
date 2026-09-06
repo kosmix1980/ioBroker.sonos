@@ -564,6 +564,36 @@ export function isStreamUri(uri: string): boolean {
     );
 }
 
+export function isRadioLikeUri(uri: string): boolean {
+    const value = String(uri || '');
+    return isStreamUri(value) || /(?:tunein|radiotime|x-sonosapi-)/i.test(value);
+}
+
+/** Public http(s) radio streams need the Sonos mp3radio wrapper; LAN files stay as-is. */
+export function isLanHttpUri(uri: string): boolean {
+    try {
+        const host = new URL(uri).hostname;
+        return /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?(?:fe80|fc|fd))/i.test(host);
+    } catch {
+        return false;
+    }
+}
+
+/** TuneIn often stores the decoded http stream as currentTrack.uri. */
+export function wrapHttpRadioUri(uri: string): string {
+    const value = String(uri || '').trim();
+    if (/^https?:\/\//i.test(value) && !isLanHttpUri(value)) {
+        return `x-rincon-mp3radio:${value}`;
+    }
+    return value;
+}
+
+/** Minimal DIDL so TuneIn / radio SetAVTransport does not return HTTP 500. */
+export function radioBroadcastDidl(title: string): string {
+    const name = xmlEscape(title || 'Radio');
+    return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true"><dc:title>${name}</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">SA_RINCON65031_</desc></item></DIDL-Lite>`;
+}
+
 /** URIs that the player resolves itself (radio, SMAPI containers) — use setAVTransport, not the queue. */
 export function isDirectPlayUri(uri: string): boolean {
     return isStreamUri(uri) || /^x-rincon-cpcontainer:/i.test(uri);

@@ -747,6 +747,9 @@ vis.binds = vis.binds || {};
             var artist = String(vis.binds.sonos.state(playerId, 'current_artist') || '').trim();
             var album = String(vis.binds.sonos.state(playerId, 'current_album') || '').trim();
             var type = parseInt(vis.binds.sonos.state(playerId, 'current_type'), 10);
+            var uri = String(vis.binds.sonos.state(playerId, 'current_uri') || '').trim();
+            var durationS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_duration_s'));
+            var durationN = parseFloat(vis.binds.sonos.state(playerId, 'current_duration'));
             var tvLabel = vis.binds.sonos.t('tv');
             if (!title) {
                 title = station;
@@ -770,7 +773,12 @@ vis.binds = vis.binds || {};
                 station: station,
                 type: type,
                 isTv: isTv,
-                isRadio: type === 1 && !isTv,
+                isRadio: !isTv && (
+                    type === 1 ||
+                    Boolean(station) ||
+                    /^(x-sonosapi-stream|x-sonosapi-radio|x-sonosapi-hls|x-sonosprog-http|x-rincon-mp3radio|pndrradio|aac:)/i.test(uri) ||
+                    ((durationS <= 0 || durationN === 0) && Boolean(uri || station || title))
+                ),
             };
         },
 
@@ -1095,6 +1103,7 @@ vis.binds = vis.binds || {};
             var repeat = parseInt(vis.binds.sonos.state(mediaId, 'repeat'), 10) || 0;
             var elapsed = vis.binds.sonos.state(mediaId, 'current_elapsed_s') || '00:00';
             var duration = vis.binds.sonos.state(mediaId, 'current_duration_s') || '00:00';
+            var durationSec = vis.binds.sonos.parseTime(duration);
             var coordinator = String(vis.binds.sonos.state(selected.id, 'coordinator') || selected.ip);
             var groupVolume = parseInt(vis.binds.sonos.state(mediaId, 'group_volume'), 10);
             var grouped = players.filter(function (player) {
@@ -1163,7 +1172,10 @@ vis.binds = vis.binds || {};
                 });
                 listHtml = recent.length
                     ? recent.map(function (item) {
-                        return '<button type="button" class="sonos-ctrl-item" data-recent-uri="' + vis.binds.sonos.esc(item.uri || '') + '" data-recent-title="' + vis.binds.sonos.esc(item.title) + '">' +
+                        return '<button type="button" class="sonos-ctrl-item" data-recent-uri="' + vis.binds.sonos.esc(item.uri || '') +
+                            '" data-recent-meta="' + vis.binds.sonos.esc(encodeURIComponent(item.metadata || '')) +
+                            '" data-recent-station="' + vis.binds.sonos.esc(item.station || '') +
+                            '" data-recent-title="' + vis.binds.sonos.esc(item.title) + '">' +
                             (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
                             '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || item.station || '') + '</div></div></button>';
@@ -1256,7 +1268,7 @@ vis.binds = vis.binds || {};
                     '<button type="button" class="sonos-ctrl-ht-btn' + (speechOn ? ' is-on' : '') + '" data-ht="speech_enhancement">' + vis.binds.sonos.esc(t('speechEnhance')) + '</button>' +
                 '</div>'
                 : '';
-            var seekHtml = now.isTv || now.isRadio
+            var seekHtml = now.isTv || now.isRadio || durationSec <= 0
                 ? ''
                 : '<div class="sonos-ctrl-seek">' +
                     '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(elapsed) + '</span>' +
@@ -1471,10 +1483,19 @@ vis.binds = vis.binds || {};
             $div.find('[data-recent-title]').on('click', function () {
                 var uri = String($(this).attr('data-recent-uri') || '');
                 var recentTitle = String($(this).attr('data-recent-title') || '');
-                if (uri && !/^x-rincon:RINCON_/i.test(uri)) {
-                    vis.binds.sonos.write(mediaId + '.play_uri', uri);
-                } else if (recentTitle) {
-                    vis.binds.sonos.write(mediaId + '.favorites_set', recentTitle);
+                var station = String($(this).attr('data-recent-station') || '');
+                var metadata = '';
+                try {
+                    metadata = decodeURIComponent(String($(this).attr('data-recent-meta') || ''));
+                } catch (e) {
+                    metadata = '';
+                }
+                var sonosUri = /^(x-sonos|x-rincon-mp3radio|x-rincon-stream|x-rincon-cpcontainer|aac:|pndrradio:|https?:)/i.test(uri) &&
+                    !/^x-rincon:RINCON_/i.test(uri);
+                if (sonosUri || metadata) {
+                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ uri: uri, metadata: metadata }));
+                } else if (station || recentTitle) {
+                    vis.binds.sonos.write(mediaId + '.favorites_set', station || recentTitle);
                 }
                 vis.binds.sonos.closeLibrary($div, instance);
             });
