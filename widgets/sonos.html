@@ -1260,7 +1260,8 @@ vis.binds = vis.binds || {};
                 ip: selectedIp,
             });
             var playing = vis.binds.sonos.state(playerId, 'state') === 'play';
-            if (vis.binds.sonos.nowPlaying(playerId).isTv) {
+            var now = vis.binds.sonos.nowPlaying(playerId);
+            if (now.isTv || now.isRadio) {
                 return;
             }
             var durationS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_duration_s'));
@@ -1401,7 +1402,15 @@ vis.binds = vis.binds || {};
                 title === 'TV' ||
                 title === tvLabel
             );
-            return { title: title, artist: artist, album: album, station: station, type: type, isTv: isTv };
+            return {
+                title: title,
+                artist: artist,
+                album: album,
+                station: station,
+                type: type,
+                isTv: isTv,
+                isRadio: type === 1 && !isTv,
+            };
         },
 
         emptyQuickstart: function () {
@@ -1886,7 +1895,7 @@ vis.binds = vis.binds || {};
                     '<button type="button" class="sonos-ctrl-ht-btn' + (speechOn ? ' is-on' : '') + '" data-ht="speech_enhancement">' + vis.binds.sonos.esc(t('speechEnhance')) + '</button>' +
                 '</div>'
                 : '';
-            var seekHtml = now.isTv
+            var seekHtml = now.isTv || now.isRadio
                 ? ''
                 : '<div class="sonos-ctrl-seek">' +
                     '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(elapsed) + '</span>' +
