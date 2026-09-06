@@ -366,7 +366,37 @@ vis.binds = vis.binds || {};
             players.sort(function (a, b) {
                 return String(a.name).localeCompare(String(b.name), vis.language || undefined);
             });
-            return players;
+            var hidden = vis.binds.sonos.htSatelliteIps(instance);
+            return players.filter(function (player) {
+                return !hidden[player.ip];
+            });
+        },
+
+        htBonds: function (instance) {
+            var raw = vis.binds.sonos.val(instance + '.home_theater');
+            if (!raw) {
+                return [];
+            }
+            try {
+                var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                return data && data.bonds ? data.bonds : [];
+            } catch (e) {
+                return [];
+            }
+        },
+
+        htSatelliteIps: function (instance) {
+            var map = {};
+            vis.binds.sonos.htBonds(instance).forEach(function (bond) {
+                var primary = String(bond && bond.primaryIp || '').replace(/[.\s]+/g, '_');
+                (bond && bond.satellites ? bond.satellites : []).forEach(function (sat) {
+                    var ip = String(sat && sat.ip || '').replace(/[.\s]+/g, '_');
+                    if (ip && ip !== primary) {
+                        map[ip] = primary;
+                    }
+                });
+            });
+            return map;
         },
 
         applyStates: function (data) {
@@ -460,6 +490,7 @@ vis.binds = vis.binds || {};
                     });
                 });
                 ids.push(instance + '.quickstarts');
+                ids.push(instance + '.home_theater');
 
                 if (!vis.conn || typeof vis.conn.getStates !== 'function') {
                     finish();
@@ -620,6 +651,7 @@ vis.binds = vis.binds || {};
                 });
             });
             ids.push(instance + '.quickstarts');
+            ids.push(instance + '.home_theater');
 
             vis.binds.sonos.unbind(widgetID);
             ids.forEach(function (id) {
@@ -1183,6 +1215,10 @@ vis.binds = vis.binds || {};
             }
 
             var selectedIp = $div.data('sonos-player') || vis.binds.sonos.loadRoom(widgetID, instance);
+            var satMap = vis.binds.sonos.htSatelliteIps(instance);
+            if (satMap[selectedIp]) {
+                selectedIp = satMap[selectedIp];
+            }
             var selected = players.filter(function (player) { return player.ip === selectedIp; })[0] || players[0];
             $div.data('sonos-player', selected.ip);
             vis.binds.sonos.saveRoom(widgetID, instance, selected.ip);

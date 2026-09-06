@@ -169,6 +169,7 @@ Please note: highlighting current playing favorite is not supported.
 * (kosmix1980) VIS widget: hide the seek bar while radio is playing; show it again for playlists and tracks
 * (kosmix1980) Replay TuneIn from Recent with the station URI and metadata; keep recent covers unique
 * (kosmix1980) Repair older Recent rows that still pointed at the live now-playing cover
+* (kosmix1980) After grouping or ungrouping a home-theater room (Arc + surrounds), unmute the rear speakers again
 
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0

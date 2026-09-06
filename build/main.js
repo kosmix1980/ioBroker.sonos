@@ -56,6 +56,7 @@ const quickstart_1 = require("./lib/quickstart");
 const content_directory_1 = require("./lib/content-directory");
 const smapi_1 = require("./lib/smapi");
 const ytmusic_1 = require("./lib/ytmusic");
+const home_theater_1 = require("./lib/home-theater");
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
 const TV_IMAGE = `${__dirname}/../img/tv-cover.png`;
 const RECENT_TRACKS_MAX = 25;
@@ -180,6 +181,12 @@ class Sonos extends utils.Adapter {
     cacheDir = '';
     currentFileNum = 0;
     queues = {};
+    /** Last HTSatChanMapSet bonds (Arc + surrounds). Kept briefly if topology drops the map. */
+    htBonds = [];
+    htBondsSeenAt = 0;
+    htHealTimer = null;
+    htHealRetryTimer = null;
+    htRefreshTimer = null;
     constructor(options = {}) {
         super({
             ...options,
@@ -230,6 +237,18 @@ class Sonos extends utils.Adapter {
                     this.channels[ip].timerVolume = null;
                 }
             });
+            if (this.htHealTimer) {
+                clearTimeout(this.htHealTimer);
+                this.htHealTimer = null;
+            }
+            if (this.htHealRetryTimer) {
+                clearTimeout(this.htHealRetryTimer);
+                this.htHealRetryTimer = null;
+            }
+            if (this.htRefreshTimer) {
+                clearTimeout(this.htRefreshTimer);
+                this.htRefreshTimer = null;
+            }
             this.log.info('terminating');
             if (this.discovery) {
                 this.discovery.players?.forEach(player => {
@@ -481,12 +500,12 @@ class Sonos extends utils.Adapter {
         }
         else if (id.state === 'coordinator') {
             if (value === id.channel) {
-                promise = player.becomeCoordinatorOfStandaloneGroup();
+                promise = player.becomeCoordinatorOfStandaloneGroup().then(() => this.scheduleHomeTheaterHeal());
             }
             else {
-                const coordinator = this.getPlayerByName(value);
+                const coordinator = this.resolveGroupPlayer(value);
                 promise = coordinator
-                    ? player.setAVTransport(`x-rincon:${coordinator.uuid}`)
+                    ? player.setAVTransport(`x-rincon:${coordinator.uuid}`).then(() => this.scheduleHomeTheaterHeal())
                     : Promise.reject(new Error(`Player "${value}" not found`));
             }
         }
@@ -908,27 +927,129 @@ class Sonos extends utils.Adapter {
     getPlayerByName(name) {
         return this.discovery?.players.find(player => player.roomName === name || getIp(player) === name || player._address === name || player.uuid === name);
     }
-    addToGroup(playerNameToAdd, coordinator) {
-        const coordinatorPlayer = typeof coordinator === 'string' ? this.getPlayerByName(coordinator) : coordinator;
-        const playerToAdd = this.getPlayerByName(playerNameToAdd);
+    /** HT satellites are bonded to the soundbar; group the primary instead. */
+    resolveGroupPlayer(name) {
+        const player = typeof name === 'string' ? this.getPlayerByName(name) : name;
+        if (!player) {
+            return undefined;
+        }
+        const bond = (0, home_theater_1.findHomeTheaterBond)(this.htBonds, player.uuid) || (0, home_theater_1.findHomeTheaterBond)(this.htBonds, getIp(player) || '');
+        if (bond && (0, home_theater_1.isHomeTheaterSatellite)(this.htBonds, player.uuid)) {
+            return this.discovery?.getPlayerByUUID(bond.primaryUuid) || player;
+        }
+        return player;
+    }
+    async ensureHomeTheaterState() {
+        await this.setObjectNotExistsAsync('home_theater', {
+            type: 'state',
+            common: {
+                name: 'Home theater bonds',
+                type: 'string',
+                role: 'json',
+                read: true,
+                write: false,
+                desc: 'Soundbar and bonded surround IPs (HTSatChanMapSet)',
+            },
+            native: {},
+        });
+        await this.setStateAsync('home_theater', (0, home_theater_1.homeTheaterStateJson)(this.htBonds), true);
+    }
+    scheduleHomeTheaterRefresh() {
+        if (this.htRefreshTimer) {
+            clearTimeout(this.htRefreshTimer);
+        }
+        this.htRefreshTimer = setTimeout(() => {
+            this.htRefreshTimer = null;
+            void this.refreshHomeTheaterBonds();
+        }, 400);
+    }
+    /** After grouping, topology settles late and satellites often stay muted. */
+    scheduleHomeTheaterHeal() {
+        this.scheduleHomeTheaterRefresh();
+        if (this.htHealTimer) {
+            clearTimeout(this.htHealTimer);
+        }
+        if (this.htHealRetryTimer) {
+            clearTimeout(this.htHealRetryTimer);
+        }
+        this.htHealTimer = setTimeout(() => {
+            this.htHealTimer = null;
+            void this.healHomeTheaterBonds();
+        }, 900);
+        this.htHealRetryTimer = setTimeout(() => {
+            this.htHealRetryTimer = null;
+            void this.healHomeTheaterBonds();
+        }, 2800);
+    }
+    async refreshHomeTheaterBonds() {
+        const player = this.discovery?.players?.find(item => item?.baseUrl);
+        if (!player) {
+            return;
+        }
+        try {
+            const xml = await (0, home_theater_1.soapGetZoneGroupState)(player.baseUrl);
+            const fresh = (0, home_theater_1.parseHomeTheaterBonds)(xml);
+            const next = (0, home_theater_1.rememberHomeTheaterBonds)(this.htBonds, fresh, this.htBondsSeenAt);
+            this.htBonds = next.bonds;
+            this.htBondsSeenAt = next.seenAt;
+            await this.setStateAsync('home_theater', (0, home_theater_1.homeTheaterStateJson)(this.htBonds), true);
+        }
+        catch (err) {
+            this.log.debug(`Cannot read home theater topology: ${err}`);
+        }
+    }
+    async healHomeTheaterBonds() {
+        await this.refreshHomeTheaterBonds();
+        for (const bond of this.htBonds) {
+            try {
+                await (0, home_theater_1.unmuteHomeTheaterBond)(bond);
+                for (const sat of bond.satellites) {
+                    const satellite = this.discovery?.getPlayerByUUID(sat.uuid);
+                    if (satellite) {
+                        await satellite.unMute().catch(() => undefined);
+                    }
+                }
+                this.log.debug(`Restored home theater speakers for ${bond.primaryUuid}`);
+            }
+            catch (err) {
+                this.log.debug(`Cannot restore home theater speakers: ${err}`);
+            }
+        }
+    }
+    async addToGroup(playerNameToAdd, coordinator) {
+        const coordinatorPlayer = this.resolveGroupPlayer(coordinator);
+        const playerToAdd = this.resolveGroupPlayer(playerNameToAdd);
         if (!coordinatorPlayer || !playerToAdd) {
             return Promise.reject(new Error(`Cannot add "${playerNameToAdd}" to group: player not found`));
         }
-        return playerToAdd.setAVTransport(`x-rincon:${coordinatorPlayer.uuid}`);
+        if (coordinatorPlayer.uuid === playerToAdd.uuid) {
+            this.scheduleHomeTheaterHeal();
+            return;
+        }
+        await playerToAdd.setAVTransport(`x-rincon:${coordinatorPlayer.uuid}`);
+        this.scheduleHomeTheaterHeal();
     }
-    removeFromGroup(leavingName, coordinator) {
-        const coordinatorPlayer = typeof coordinator === 'string' ? this.getPlayerByName(coordinator) : coordinator;
-        const leavingPlayer = this.getPlayerByName(leavingName);
+    async removeFromGroup(leavingName, coordinator) {
+        const coordinatorPlayer = this.resolveGroupPlayer(coordinator);
+        const leavingPlayer = this.resolveGroupPlayer(leavingName);
         if (!coordinatorPlayer || !leavingPlayer) {
             return Promise.reject(new Error(`Cannot remove "${leavingName}" from group: player not found`));
         }
+        if (leavingPlayer.uuid === coordinatorPlayer.uuid) {
+            this.scheduleHomeTheaterHeal();
+            return;
+        }
         if (leavingPlayer.coordinator === coordinatorPlayer) {
-            return leavingPlayer.becomeCoordinatorOfStandaloneGroup();
+            await leavingPlayer.becomeCoordinatorOfStandaloneGroup();
+            this.scheduleHomeTheaterHeal();
+            return;
         }
         if (coordinatorPlayer.coordinator === leavingPlayer) {
-            return coordinatorPlayer.becomeCoordinatorOfStandaloneGroup();
+            await coordinatorPlayer.becomeCoordinatorOfStandaloneGroup();
+            this.scheduleHomeTheaterHeal();
+            return;
         }
-        return Promise.resolve();
+        this.scheduleHomeTheaterHeal();
     }
     // State of sonos device was changed
     async takeSonosState(ip, sonosState) {
@@ -1732,6 +1853,7 @@ class Sonos extends utils.Adapter {
             await ht.becomeCoordinatorOfStandaloneGroup();
         }
         await ht.setAVTransport(uri);
+        this.scheduleHomeTheaterHeal();
     }
     async handleMediaPlay(player, raw, sourcePlayer) {
         let uri = '';
@@ -2209,6 +2331,7 @@ class Sonos extends utils.Adapter {
         if (!this.playlistsLoaded && this.discovery?.players?.length) {
             await this.updateMediaLists();
         }
+        this.scheduleHomeTheaterRefresh();
     }
     async takeSonosQueue(ip, player, queue) {
         const _text = [];
@@ -2300,6 +2423,7 @@ class Sonos extends utils.Adapter {
         this.config.fadeIn = parseInt(String(this.config.fadeIn), 10) || 0;
         this.config.fadeOut = parseInt(String(this.config.fadeOut), 10) || 0;
         await this.ensureQuickstarts();
+        await this.ensureHomeTheaterState();
         await this.syncConfig();
         await this.repairAllRecentCovers();
         this.cacheDir = path.join(utils.getAbsoluteDefaultDataDir(), 'sonosCache') + path.sep;

@@ -45,6 +45,16 @@ import {
 import type { MediaBrowseItem, MediaBrowseResult } from './lib/content-directory';
 import { SmapiHub, encodeSmapiId, parseSmapiId } from './lib/smapi';
 import { isYoutubeMusicName, searchYoutubeMusic } from './lib/ytmusic';
+import {
+    findHomeTheaterBond,
+    homeTheaterStateJson,
+    isHomeTheaterSatellite,
+    parseHomeTheaterBonds,
+    rememberHomeTheaterBonds,
+    soapGetZoneGroupState,
+    unmuteHomeTheaterBond,
+    type HomeTheaterBond,
+} from './lib/home-theater';
 
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
 const TV_IMAGE = `${__dirname}/../img/tv-cover.png`;
@@ -228,6 +238,12 @@ class Sonos extends utils.Adapter {
     private cacheDir = '';
     private currentFileNum = 0;
     private readonly queues: Record<string, SonosQueueItem[]> = {};
+    /** Last HTSatChanMapSet bonds (Arc + surrounds). Kept briefly if topology drops the map. */
+    private htBonds: HomeTheaterBond[] = [];
+    private htBondsSeenAt = 0;
+    private htHealTimer: NodeJS.Timeout | null = null;
+    private htHealRetryTimer: NodeJS.Timeout | null = null;
+    private htRefreshTimer: NodeJS.Timeout | null = null;
 
     public constructor(options: Partial<utils.AdapterOptions> = {}) {
         super({
@@ -286,6 +302,19 @@ class Sonos extends utils.Adapter {
                     this.channels[ip].timerVolume = null;
                 }
             });
+
+            if (this.htHealTimer) {
+                clearTimeout(this.htHealTimer);
+                this.htHealTimer = null;
+            }
+            if (this.htHealRetryTimer) {
+                clearTimeout(this.htHealRetryTimer);
+                this.htHealRetryTimer = null;
+            }
+            if (this.htRefreshTimer) {
+                clearTimeout(this.htRefreshTimer);
+                this.htRefreshTimer = null;
+            }
 
             this.log.info('terminating');
 
@@ -534,11 +563,11 @@ class Sonos extends utils.Adapter {
             promise = this.removeFromGroup(value, media);
         } else if (id.state === 'coordinator') {
             if (value === id.channel) {
-                promise = player.becomeCoordinatorOfStandaloneGroup();
+                promise = player.becomeCoordinatorOfStandaloneGroup().then(() => this.scheduleHomeTheaterHeal());
             } else {
-                const coordinator = this.getPlayerByName(value);
+                const coordinator = this.resolveGroupPlayer(value);
                 promise = coordinator
-                    ? player.setAVTransport(`x-rincon:${coordinator.uuid}`)
+                    ? player.setAVTransport(`x-rincon:${coordinator.uuid}`).then(() => this.scheduleHomeTheaterHeal())
                     : Promise.reject(new Error(`Player "${value}" not found`));
             }
         } else if (id.state === 'group_volume') {
@@ -1039,34 +1068,143 @@ class Sonos extends utils.Adapter {
         );
     }
 
-    private addToGroup(playerNameToAdd: string, coordinator: SonosPlayer | string): Promise<unknown> {
-        const coordinatorPlayer = typeof coordinator === 'string' ? this.getPlayerByName(coordinator) : coordinator;
-        const playerToAdd = this.getPlayerByName(playerNameToAdd);
+    /** HT satellites are bonded to the soundbar; group the primary instead. */
+    private resolveGroupPlayer(name: string | SonosPlayer): SonosPlayer | undefined {
+        const player = typeof name === 'string' ? this.getPlayerByName(name) : name;
+        if (!player) {
+            return undefined;
+        }
+        const bond =
+            findHomeTheaterBond(this.htBonds, player.uuid) || findHomeTheaterBond(this.htBonds, getIp(player) || '');
+        if (bond && isHomeTheaterSatellite(this.htBonds, player.uuid)) {
+            return this.discovery?.getPlayerByUUID(bond.primaryUuid) || player;
+        }
+        return player;
+    }
+
+    private async ensureHomeTheaterState(): Promise<void> {
+        await this.setObjectNotExistsAsync('home_theater', {
+            type: 'state',
+            common: {
+                name: 'Home theater bonds',
+                type: 'string',
+                role: 'json',
+                read: true,
+                write: false,
+                desc: 'Soundbar and bonded surround IPs (HTSatChanMapSet)',
+            },
+            native: {},
+        });
+        await this.setStateAsync('home_theater', homeTheaterStateJson(this.htBonds), true);
+    }
+
+    private scheduleHomeTheaterRefresh(): void {
+        if (this.htRefreshTimer) {
+            clearTimeout(this.htRefreshTimer);
+        }
+        this.htRefreshTimer = setTimeout(() => {
+            this.htRefreshTimer = null;
+            void this.refreshHomeTheaterBonds();
+        }, 400);
+    }
+
+    /** After grouping, topology settles late and satellites often stay muted. */
+    private scheduleHomeTheaterHeal(): void {
+        this.scheduleHomeTheaterRefresh();
+        if (this.htHealTimer) {
+            clearTimeout(this.htHealTimer);
+        }
+        if (this.htHealRetryTimer) {
+            clearTimeout(this.htHealRetryTimer);
+        }
+        this.htHealTimer = setTimeout(() => {
+            this.htHealTimer = null;
+            void this.healHomeTheaterBonds();
+        }, 900);
+        this.htHealRetryTimer = setTimeout(() => {
+            this.htHealRetryTimer = null;
+            void this.healHomeTheaterBonds();
+        }, 2800);
+    }
+
+    private async refreshHomeTheaterBonds(): Promise<void> {
+        const player = this.discovery?.players?.find(item => item?.baseUrl);
+        if (!player) {
+            return;
+        }
+        try {
+            const xml = await soapGetZoneGroupState(player.baseUrl);
+            const fresh = parseHomeTheaterBonds(xml);
+            const next = rememberHomeTheaterBonds(this.htBonds, fresh, this.htBondsSeenAt);
+            this.htBonds = next.bonds;
+            this.htBondsSeenAt = next.seenAt;
+            await this.setStateAsync('home_theater', homeTheaterStateJson(this.htBonds), true);
+        } catch (err) {
+            this.log.debug(`Cannot read home theater topology: ${err}`);
+        }
+    }
+
+    private async healHomeTheaterBonds(): Promise<void> {
+        await this.refreshHomeTheaterBonds();
+        for (const bond of this.htBonds) {
+            try {
+                await unmuteHomeTheaterBond(bond);
+                for (const sat of bond.satellites) {
+                    const satellite = this.discovery?.getPlayerByUUID(sat.uuid);
+                    if (satellite) {
+                        await satellite.unMute().catch(() => undefined);
+                    }
+                }
+                this.log.debug(`Restored home theater speakers for ${bond.primaryUuid}`);
+            } catch (err) {
+                this.log.debug(`Cannot restore home theater speakers: ${err}`);
+            }
+        }
+    }
+
+    private async addToGroup(playerNameToAdd: string, coordinator: SonosPlayer | string): Promise<unknown> {
+        const coordinatorPlayer = this.resolveGroupPlayer(coordinator);
+        const playerToAdd = this.resolveGroupPlayer(playerNameToAdd);
 
         if (!coordinatorPlayer || !playerToAdd) {
             return Promise.reject(new Error(`Cannot add "${playerNameToAdd}" to group: player not found`));
         }
 
-        return playerToAdd.setAVTransport(`x-rincon:${coordinatorPlayer.uuid}`);
+        if (coordinatorPlayer.uuid === playerToAdd.uuid) {
+            this.scheduleHomeTheaterHeal();
+            return;
+        }
+
+        await playerToAdd.setAVTransport(`x-rincon:${coordinatorPlayer.uuid}`);
+        this.scheduleHomeTheaterHeal();
     }
 
-    private removeFromGroup(leavingName: string, coordinator: SonosPlayer | string): Promise<unknown> {
-        const coordinatorPlayer = typeof coordinator === 'string' ? this.getPlayerByName(coordinator) : coordinator;
-        const leavingPlayer = this.getPlayerByName(leavingName);
+    private async removeFromGroup(leavingName: string, coordinator: SonosPlayer | string): Promise<unknown> {
+        const coordinatorPlayer = this.resolveGroupPlayer(coordinator);
+        const leavingPlayer = this.resolveGroupPlayer(leavingName);
 
         if (!coordinatorPlayer || !leavingPlayer) {
             return Promise.reject(new Error(`Cannot remove "${leavingName}" from group: player not found`));
         }
 
+        if (leavingPlayer.uuid === coordinatorPlayer.uuid) {
+            this.scheduleHomeTheaterHeal();
+            return;
+        }
+
         if (leavingPlayer.coordinator === coordinatorPlayer) {
-            return leavingPlayer.becomeCoordinatorOfStandaloneGroup();
+            await leavingPlayer.becomeCoordinatorOfStandaloneGroup();
+            this.scheduleHomeTheaterHeal();
+            return;
         }
 
         if (coordinatorPlayer.coordinator === leavingPlayer) {
-            return coordinatorPlayer.becomeCoordinatorOfStandaloneGroup();
+            await coordinatorPlayer.becomeCoordinatorOfStandaloneGroup();
+            this.scheduleHomeTheaterHeal();
+            return;
         }
 
-        return Promise.resolve();
+        this.scheduleHomeTheaterHeal();
     }
 
     // State of sonos device was changed
@@ -2101,6 +2239,7 @@ class Sonos extends utils.Adapter {
             await ht.becomeCoordinatorOfStandaloneGroup();
         }
         await ht.setAVTransport(uri);
+        this.scheduleHomeTheaterHeal();
     }
 
     private async handleMediaPlay(player: SonosPlayer, raw: string, sourcePlayer?: SonosPlayer): Promise<void> {
@@ -2697,6 +2836,8 @@ class Sonos extends utils.Adapter {
         if (!this.playlistsLoaded && this.discovery?.players?.length) {
             await this.updateMediaLists();
         }
+
+        this.scheduleHomeTheaterRefresh();
     }
 
     private async takeSonosQueue(ip: string, player: SonosPlayer, queue: SonosQueueItem[]): Promise<void> {
@@ -2821,6 +2962,7 @@ class Sonos extends utils.Adapter {
         this.config.fadeOut = parseInt(String(this.config.fadeOut), 10) || 0;
 
         await this.ensureQuickstarts();
+        await this.ensureHomeTheaterState();
         await this.syncConfig();
         await this.repairAllRecentCovers();
 
