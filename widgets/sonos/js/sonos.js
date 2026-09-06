@@ -403,6 +403,7 @@ vis.binds = vis.binds || {};
                         'current_station',
                         'current_type',
                         'current_cover',
+                        'current_art',
                         'current_elapsed_s',
                         'current_duration_s',
                         'current_track_number',
@@ -562,6 +563,7 @@ vis.binds = vis.binds || {};
                     'current_station',
                     'current_type',
                     'current_cover',
+                    'current_art',
                     'current_elapsed_s',
                     'current_duration_s',
                     'current_track_number',
@@ -828,6 +830,56 @@ vis.binds = vis.binds || {};
             return !!(slot && (slot.tv || slot.uri || slot.favorite));
         },
 
+        isLiveCover: function (cover) {
+            return /\/coverImage\/\d{1,3}(?:_\d{1,3}){3}\.png(?:\?|$)/i.test(String(cover || ''));
+        },
+
+        favoriteCover: function (mediaId, title) {
+            var cover = '';
+            if (!title) {
+                return '';
+            }
+            vis.binds.sonos.parseFavorites(mediaId).forEach(function (item) {
+                if (item.title && item.cover && item.title === title) {
+                    cover = item.cover;
+                }
+            });
+            return cover;
+        },
+
+        quickstartCover: function (slot, mediaId) {
+            var cover = slot && slot.cover ? String(slot.cover) : '';
+            if (cover && vis.binds.sonos.isLiveCover(cover)) {
+                cover = '';
+            }
+            if (!cover && slot) {
+                cover = vis.binds.sonos.favoriteCover(mediaId, slot.favorite || slot.station || slot.title);
+            }
+            return cover;
+        },
+
+        tvArtSvg: function (size) {
+            size = size || 36;
+            return '<svg viewBox="0 0 80 80" width="' + size + '" height="' + size + '">' +
+                '<rect x="12" y="16" width="56" height="38" rx="4" fill="#2a2a2a" stroke="#8a8a8a" stroke-width="2.4"/>' +
+                '<rect x="17" y="21" width="46" height="28" rx="2" fill="#111"/>' +
+                '<path d="M34 58 L40 52 L46 58" fill="none" stroke="#8a8a8a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<line x1="28" y1="64" x2="52" y2="64" stroke="#8a8a8a" stroke-width="2.4" stroke-linecap="round"/>' +
+                '<circle cx="19.5" cy="50.5" r="1.6" fill="#e31c23"/>' +
+                '</svg>';
+        },
+
+        quickstartArtHtml: function (slot, mediaId) {
+            if (slot.tv) {
+                return '<span class="sonos-ctrl-quick-art is-tv" aria-hidden="true">' + vis.binds.sonos.tvArtSvg(36) + '</span>';
+            }
+            var cover = vis.binds.sonos.quickstartCover(slot, mediaId);
+            if (cover) {
+                return '<span class="sonos-ctrl-quick-art" style="background-image:url(\'' + vis.binds.sonos.esc(cover) + '\')"></span>';
+            }
+            return '<span class="sonos-ctrl-quick-art is-blank"></span>';
+        },
+
         snapshotQuickstart: function (selected, mediaId) {
             var now = vis.binds.sonos.nowPlaying(mediaId);
             var nothing = vis.binds.sonos.t('nothing');
@@ -836,11 +888,20 @@ vis.binds = vis.binds || {};
                 uri = String(vis.binds.sonos.state(selected.id, 'current_uri') || '').trim();
             }
             var metadata = String(vis.binds.sonos.state(mediaId, 'current_metadata') || vis.binds.sonos.state(selected.id, 'current_metadata') || '');
-            var cover = String(vis.binds.sonos.state(mediaId, 'current_cover') || vis.binds.sonos.state(selected.id, 'current_cover') || '');
+            var cover = String(vis.binds.sonos.state(mediaId, 'current_art') || vis.binds.sonos.state(selected.id, 'current_art') || '');
+            if (!cover || vis.binds.sonos.isLiveCover(cover)) {
+                cover = String(vis.binds.sonos.state(mediaId, 'current_cover') || vis.binds.sonos.state(selected.id, 'current_cover') || '');
+            }
+            if (vis.binds.sonos.isLiveCover(cover)) {
+                cover = '';
+            }
             var favorite = '';
             vis.binds.sonos.parseFavorites(mediaId).forEach(function (item) {
                 if (item.title && (item.title === now.title || item.title === now.station)) {
                     favorite = item.title;
+                    if (!cover && item.cover) {
+                        cover = item.cover;
+                    }
                 }
             });
             if (now.isTv) {
@@ -1307,10 +1368,12 @@ vis.binds = vis.binds || {};
                     (filled ? '' : ' is-empty') +
                     (editIndex === index ? ' is-edit' : '') +
                     '" data-quick="' + index + '" title="' + vis.binds.sonos.esc(filled ? t('quickPlay') + ' / ' + t('quickEdit') : t('quickSave')) + '">' +
+                    (filled ? vis.binds.sonos.quickstartArtHtml(slot, mediaId) : '') +
+                    '<span class="sonos-ctrl-quick-text">' +
                     '<span class="sonos-ctrl-quick-no">' + (index + 1) + '</span>' +
                     '<span class="sonos-ctrl-quick-title">' + vis.binds.sonos.esc(label) + '</span>' +
                     '<span class="sonos-ctrl-quick-sub">' + vis.binds.sonos.esc(sub) + '</span>' +
-                    '</button>';
+                    '</span></button>';
             }).join('') + '</div>';
             var editSlot = editIndex >= 0 && editIndex < 8 ? slots[editIndex] : null;
             var menuHtml = editSlot

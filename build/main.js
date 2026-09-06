@@ -252,6 +252,10 @@ class Sonos extends utils.Adapter {
         if (!state || state.ack) {
             return;
         }
+        if (_id === `${this.namespace}.quickstarts`) {
+            void this.stabilizeQuickstartCovers(String(state.val || ''));
+            return;
+        }
         this.log.info(`try to control id ${_id} with ${JSON.stringify(state)}`);
         // Try to find the object
         const id = this.idToDCS(_id);
@@ -622,6 +626,23 @@ class Sonos extends utils.Adapter {
             })
             : fromState;
         await this.setStateAsync('quickstarts', JSON.stringify(slots), true);
+        await this.stabilizeQuickstartCovers();
+    }
+    /** Live now-playing covers would make every shortcut show the same image. */
+    async stabilizeQuickstartCovers(raw) {
+        const current = raw !== undefined ? raw : String((await this.getStateAsync('quickstarts'))?.val || '');
+        const slots = (0, quickstart_1.parseQuickstarts)(current);
+        let changed = false;
+        const next = slots.map(slot => {
+            if (!this.isSharedLiveCover(slot.cover)) {
+                return slot;
+            }
+            changed = true;
+            return { ...slot, cover: '' };
+        });
+        if (changed) {
+            await this.setStateAsync('quickstarts', JSON.stringify(next), true);
+        }
     }
     /** Get all devices, that are currently known by the discovery */
     browse() {
@@ -1259,6 +1280,7 @@ class Sonos extends utils.Adapter {
             if (groupCover) {
                 this.lastStableCover[memberIp] = groupCover;
             }
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_art' }, { val: this.lastStableCover[memberIp] || groupCover || '', ack: true });
             this.channels[memberIp].elapsed = sonosState.elapsedTime;
             this.channels[memberIp].duration = sonosState.currentTrack.duration;
             if (sonosState.currentTrack.duration > 0) {
@@ -1891,6 +1913,7 @@ class Sonos extends utils.Adapter {
             await this.writeFileAsync(this.name, uniquePath, fileData);
             this.lastStableCover[ip] = `/${this.name}/${uniquePath}`;
             await this.setState({ device: 'root', channel: ip, state: 'current_cover' }, { val: `/${this.name}/${storagePath}?${stamp}`, ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'current_art' }, { val: this.lastStableCover[ip], ack: true });
         }
     }
     /** Normalize browse results from sonos-discovery (array or dictionary) */

@@ -522,17 +522,20 @@
 
 .sonos-ctrl-quick-btn {
     position: relative;
-    min-height: 40px;
-    max-height: 48px;
+    min-height: 46px;
+    max-height: 54px;
     border: 0;
     border-radius: 8px;
     background: var(--sonos-panel-2);
     color: var(--sonos-fg);
     cursor: pointer;
-    padding: 5px 8px;
+    padding: 4px 6px;
     text-align: left;
     overflow: hidden;
     font: inherit;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .sonos-ctrl-quick-btn:hover {
@@ -544,6 +547,31 @@
     text-align: center;
     font-weight: 600;
     letter-spacing: 0.04em;
+    justify-content: center;
+}
+
+.sonos-ctrl-quick-art {
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    background: var(--sonos-cover) center / cover no-repeat;
+}
+
+.sonos-ctrl-quick-art.is-tv {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--sonos-cover-tv);
+}
+
+.sonos-ctrl-quick-art.is-blank {
+    box-shadow: inset 0 0 0 1px var(--sonos-border);
+}
+
+.sonos-ctrl-quick-text {
+    min-width: 0;
+    flex: 1;
 }
 
 .sonos-ctrl-quick-btn.is-edit {
