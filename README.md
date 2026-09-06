@@ -22,6 +22,8 @@ The adapter includes a VIS widget **Sonos Control**. One widget can switch rooms
 5. Set the object to the instance, for example `sonos.0` — not a single `play` state.
 6. Size the widget around **900 × 520**.
 
+Eight **quick-start** buttons sit at the bottom. Tap an empty button to store what is playing (radio, favorite, track, TV HDMI). Tap a filled button to start it on the selected room. Long-press (or right-click) to rename, replace or clear. The same eight slots can be edited under **Quick start** in the adapter settings: click **Load current shortcuts**, edit, then save. Saving an empty table does not wipe buttons assigned in the widget.
+
 After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the last local title of that room. Library buttons under the rooms (**Favorites**, **Playlists**, **Queue**, **Recent**, **Sources**) open a slightly transparent sheet below the buttons. **Recent** lists the last tracks of the selected room. **Sources** browses TuneIn, Spotify, YouTube Music, the music library, network shares, line-in and TV HDMI. Spotify search uses the Sonos catalog. YouTube Music search lists catalog titles and tells the speaker to play them via `sid=284` (the official YTM account on the player). If a title does not start, save it as a favorite in the Sonos app.
 
 ![Sonos Control – player](img/widget-player.png)
@@ -159,6 +161,7 @@ Please note: highlighting current playing favorite is not supported.
 * (kosmix1980) Library buttons open a slightly transparent popup below the buttons
 * (kosmix1980) Added `playlist_list` / `playlist_list_array` and per-room `recent_tracks`
 * (kosmix1980) Group members follow the coordinator's now-playing and transport
+* (kosmix1980) VIS widget: eight quick-start buttons; edit in the widget or under adapter settings
 
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0

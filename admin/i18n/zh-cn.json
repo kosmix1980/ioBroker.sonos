@@ -17,5 +17,13 @@
   "tooltip_webserverEnabled": "显示 SONOS 网页界面",
   "tooltip_webserverPort": "网络接口端口",
   "update adapter information": "浏览设备",
-  "used for TTS": "用于语音合成"
+  "used for TTS": "用于语音合成",
+  "Quick start": "Quick start",
+  "Load current shortcuts": "Load current shortcuts",
+  "Shortcuts": "Shortcuts",
+  "Artist": "Artist",
+  "URI": "URI",
+  "Favorite": "Favorite",
+  "TV HDMI": "TV HDMI",
+  "tooltip_quickstarts": "Eight shortcuts for the VIS widget. Click a free button in the widget to save what is playing. Long-press a button to rename, replace or clear it. Click “Load current shortcuts” here before editing, then save. An empty table does not delete widget shortcuts."
 }

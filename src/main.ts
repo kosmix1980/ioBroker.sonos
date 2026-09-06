@@ -16,6 +16,7 @@ import type { SonosFavorite, SonosPlayer, SonosPlayerState, SonosQueueItem } fro
 
 import { TTS } from './lib/tts';
 import { getChannelStates } from './lib/states';
+import { anySlotFilled, parseQuickstarts, resumeFromPlayer } from './lib/quickstart';
 import {
     browseMedia,
     getMediaRoot,
@@ -573,6 +574,13 @@ class Sonos extends utils.Adapter {
                 }
                 break;
 
+            case 'quickstartGet':
+                if (obj.callback) {
+                    wait = true;
+                    this.sendQuickstarts(obj).catch(e => this.log.error(`Cannot load quick starts: ${e}`));
+                }
+                break;
+
             default:
                 this.log.warn(`Unknown command: ${obj.command}`);
                 break;
@@ -623,6 +631,47 @@ class Sonos extends utils.Adapter {
         });
 
         this.sendTo(obj.from, obj.command, { native: { devices } }, obj.callback);
+    }
+
+    private async sendQuickstarts(obj: ioBroker.Message): Promise<void> {
+        const current = await this.getStateAsync('quickstarts');
+        this.sendTo(obj.from, obj.command, { native: { quickstarts: parseQuickstarts(current?.val) } }, obj.callback);
+    }
+
+    /** Instance state `quickstarts` is the runtime source. Non-empty Admin config overwrites it after save. */
+    private async ensureQuickstarts(): Promise<void> {
+        await this.setObjectNotExistsAsync('quickstarts', {
+            type: 'state',
+            common: {
+                name: 'Quick start buttons',
+                type: 'string',
+                role: 'json',
+                read: true,
+                write: true,
+                desc: 'JSON array of 8 VIS quick-start slots',
+            },
+            native: {},
+        });
+
+        const fromNative = parseQuickstarts(this.config.quickstarts);
+        const current = await this.getStateAsync('quickstarts');
+        const fromState = parseQuickstarts(current?.val);
+        const slots = anySlotFilled(fromNative)
+            ? fromNative.map((slot, index) => {
+                  const prev = fromState[index];
+                  if (prev && slot.uri && slot.uri === prev.uri) {
+                      return {
+                          ...slot,
+                          metadata: slot.metadata || prev.metadata,
+                          cover: slot.cover || prev.cover,
+                          album: slot.album || prev.album,
+                          station: slot.station || prev.station,
+                      };
+                  }
+                  return slot;
+              })
+            : fromState;
+        await this.setStateAsync('quickstarts', JSON.stringify(slots), true);
     }
 
     /** Get all devices, that are currently known by the discovery */
@@ -1063,6 +1112,12 @@ class Sonos extends utils.Adapter {
             { device: 'root', channel: ip, state: 'current_artist' },
             { val: playing.artist, ack: true },
         );
+        const resume = resumeFromPlayer(player);
+        await this.setState({ device: 'root', channel: ip, state: 'current_uri' }, { val: resume.uri, ack: true });
+        await this.setState(
+            { device: 'root', channel: ip, state: 'current_metadata' },
+            { val: resume.metadata, ack: true },
+        );
 
         // elapsed time
         await this.setState(
@@ -1375,6 +1430,7 @@ class Sonos extends utils.Adapter {
         const queueHtml = await this.getStateAsync(`root.${coordinatorIp}.queue_html`);
         const playMode = sonosState.playMode;
         const playing = display || this.playbackDisplay(sonosState);
+        const coordinator = this.channels[coordinatorIp]?.player;
 
         for (const memberIp of members) {
             if (!memberIp || memberIp === coordinatorIp || !this.channels[memberIp]) {
@@ -1411,6 +1467,17 @@ class Sonos extends utils.Adapter {
             await this.setState(
                 { device: 'root', channel: memberIp, state: 'current_artist' },
                 { val: playing.artist, ack: true },
+            );
+            const memberResume = coordinator
+                ? resumeFromPlayer(coordinator)
+                : { uri: String(sonosState.currentTrack.uri || ''), metadata: '', tv: false };
+            await this.setState(
+                { device: 'root', channel: memberIp, state: 'current_uri' },
+                { val: memberResume.uri, ack: true },
+            );
+            await this.setState(
+                { device: 'root', channel: memberIp, state: 'current_metadata' },
+                { val: memberResume.metadata, ack: true },
             );
             await this.setState(
                 { device: 'root', channel: memberIp, state: 'current_duration' },
@@ -2483,6 +2550,7 @@ class Sonos extends utils.Adapter {
         this.config.fadeIn = parseInt(String(this.config.fadeIn), 10) || 0;
         this.config.fadeOut = parseInt(String(this.config.fadeOut), 10) || 0;
 
+        await this.ensureQuickstarts();
         await this.syncConfig();
 
         this.cacheDir = path.join(utils.getAbsoluteDefaultDataDir(), 'sonosCache') + path.sep;

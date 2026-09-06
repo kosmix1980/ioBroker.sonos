@@ -320,6 +320,24 @@ export function getChannelStates(): Record<string, StateDefinition> {
             desc: 'Radio station currently played',
             name: 'Current radio station',
         },
+        current_uri: {
+            def: '',
+            type: 'string',
+            read: true,
+            write: false,
+            role: 'media.uri',
+            desc: 'URI that restores the current source (station, track or line-in)',
+            name: 'Current URI',
+        },
+        current_metadata: {
+            def: '',
+            type: 'string',
+            read: true,
+            write: false,
+            role: 'media',
+            desc: 'DIDL metadata for the current URI (SMAPI / radio)',
+            name: 'Current metadata',
+        },
         current_track_number: {
             // media.trackNo -   current track number
             def: 1,

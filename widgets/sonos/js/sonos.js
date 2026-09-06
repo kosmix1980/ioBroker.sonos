@@ -48,6 +48,14 @@ vis.binds = vis.binds || {};
                 nothing: 'Nothing playing',
                 nightSound: 'Night sound',
                 speechEnhance: 'Speech enhancement',
+                quickEmpty: 'Free',
+                quickSave: 'Save what is playing',
+                quickPlay: 'Play',
+                quickEdit: 'Edit shortcut',
+                quickReplace: 'Replace with current',
+                quickRename: 'Save name',
+                quickClear: 'Clear',
+                quickNothing: 'Nothing is playing that can be saved.',
             },
             de: {
                 hint: 'Als Objekt die Sonos-Instanz setzen, z. B. sonos.0',
@@ -81,6 +89,14 @@ vis.binds = vis.binds || {};
                 nothing: 'Nichts spielt',
                 nightSound: 'Nachtsound',
                 speechEnhance: 'Sprachverbesserung',
+                quickEmpty: 'Frei',
+                quickSave: 'Laufendes Stück speichern',
+                quickPlay: 'Abspielen',
+                quickEdit: 'Taste bearbeiten',
+                quickReplace: 'Durch Aktuelles ersetzen',
+                quickRename: 'Name speichern',
+                quickClear: 'Löschen',
+                quickNothing: 'Gerade läuft nichts, das sich speichern lässt.',
             },
         },
 
@@ -383,10 +399,13 @@ vis.binds = vis.binds || {};
                         'queue_html',
                         'recent_tracks',
                         'media_browse_result',
+                        'current_uri',
+                        'current_metadata',
                     ].forEach(function (name) {
                         ids.push(player.id + '.' + name);
                     });
                 });
+                ids.push(instance + '.quickstarts');
 
                 if (!vis.conn || typeof vis.conn.getStates !== 'function') {
                     finish();
@@ -501,6 +520,7 @@ vis.binds = vis.binds || {};
             });
             vis.binds.sonos._bound[widgetID] = [];
             $(document).off('mousedown.sonosSheet' + widgetID);
+            $(document).off('mousedown.sonosQuick' + widgetID);
         },
 
         bindStates: function (widgetID, instance) {
@@ -538,10 +558,13 @@ vis.binds = vis.binds || {};
                     'queue_html',
                     'recent_tracks',
                     'media_browse_result',
+                    'current_uri',
+                    'current_metadata',
                 ].forEach(function (name) {
                     ids.push(player.id + '.' + name);
                 });
             });
+            ids.push(instance + '.quickstarts');
 
             vis.binds.sonos.unbind(widgetID);
             ids.forEach(function (id) {
@@ -718,6 +741,111 @@ vis.binds = vis.binds || {};
                 title === tvLabel
             );
             return { title: title, artist: artist, album: album, station: station, type: type, isTv: isTv };
+        },
+
+        emptyQuickstart: function () {
+            return { title: '', artist: '', album: '', station: '', cover: '', uri: '', metadata: '', favorite: '', tv: false };
+        },
+
+        parseQuickstarts: function (instance) {
+            var raw = vis.binds.sonos.val(instance + '.quickstarts');
+            var list = [];
+            if (Array.isArray(raw)) {
+                list = raw;
+            } else if (typeof raw === 'string' && raw.trim()) {
+                try {
+                    var parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        list = parsed;
+                    }
+                } catch (e) {
+                    list = [];
+                }
+            }
+            var slots = [];
+            var i;
+            for (i = 0; i < 8; i++) {
+                var item = list[i] && typeof list[i] === 'object' ? list[i] : {};
+                slots.push({
+                    title: String(item.title || '').trim(),
+                    artist: String(item.artist || '').trim(),
+                    album: String(item.album || '').trim(),
+                    station: String(item.station || '').trim(),
+                    cover: String(item.cover || '').trim(),
+                    uri: String(item.uri || '').trim(),
+                    metadata: String(item.metadata || ''),
+                    favorite: String(item.favorite || '').trim(),
+                    tv: item.tv === true || item.tv === 'true',
+                });
+            }
+            return slots;
+        },
+
+        writeQuickstarts: function (instance, slots) {
+            vis.binds.sonos.write(instance + '.quickstarts', JSON.stringify(slots));
+        },
+
+        quickstartFilled: function (slot) {
+            return !!(slot && (slot.tv || slot.uri || slot.favorite));
+        },
+
+        snapshotQuickstart: function (selected, mediaId) {
+            var now = vis.binds.sonos.nowPlaying(mediaId);
+            var nothing = vis.binds.sonos.t('nothing');
+            var uri = String(vis.binds.sonos.state(mediaId, 'current_uri') || '').trim();
+            if (!uri) {
+                uri = String(vis.binds.sonos.state(selected.id, 'current_uri') || '').trim();
+            }
+            var metadata = String(vis.binds.sonos.state(mediaId, 'current_metadata') || vis.binds.sonos.state(selected.id, 'current_metadata') || '');
+            var cover = String(vis.binds.sonos.state(mediaId, 'current_cover') || vis.binds.sonos.state(selected.id, 'current_cover') || '');
+            var favorite = '';
+            vis.binds.sonos.parseFavorites(mediaId).forEach(function (item) {
+                if (item.title && (item.title === now.title || item.title === now.station)) {
+                    favorite = item.title;
+                }
+            });
+            if (now.isTv) {
+                return {
+                    title: vis.binds.sonos.t('tv'),
+                    artist: now.artist,
+                    album: '',
+                    station: now.station,
+                    cover: cover,
+                    uri: '',
+                    metadata: '',
+                    favorite: '',
+                    tv: true,
+                };
+            }
+            if ((!uri && !favorite) || now.title === nothing) {
+                return null;
+            }
+            return {
+                title: now.station || now.title,
+                artist: now.artist,
+                album: now.album,
+                station: now.station,
+                cover: cover,
+                uri: uri,
+                metadata: metadata,
+                favorite: favorite,
+                tv: false,
+            };
+        },
+
+        playQuickstart: function (slot, selected, mediaId) {
+            if (!vis.binds.sonos.quickstartFilled(slot)) {
+                return;
+            }
+            if (slot.tv) {
+                vis.binds.sonos.write(selected.id + '.media_play', JSON.stringify({ tv: true }));
+                return;
+            }
+            if (slot.favorite) {
+                vis.binds.sonos.write(mediaId + '.favorites_set', slot.favorite);
+                return;
+            }
+            vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ uri: slot.uri, metadata: slot.metadata || '' }));
         },
 
         parseBrowse: function (playerId) {
@@ -1126,6 +1254,33 @@ vis.binds = vis.binds || {};
                         '</div>' +
                     '</div>'
                 : '';
+            var slots = vis.binds.sonos.parseQuickstarts(instance);
+            var editIndex = parseInt($div.data('sonos-quick-edit'), 10);
+            var quickHtml = '<div class="sonos-ctrl-quick">' + slots.map(function (slot, index) {
+                var filled = vis.binds.sonos.quickstartFilled(slot);
+                var label = filled ? (slot.title || slot.station || slot.favorite || t('tv')) : (index + 1) + ' · +';
+                var sub = filled ? (slot.artist || slot.station || slot.favorite || '') : t('quickEmpty');
+                return '<button type="button" class="sonos-ctrl-quick-btn' +
+                    (filled ? '' : ' is-empty') +
+                    (editIndex === index ? ' is-edit' : '') +
+                    '" data-quick="' + index + '" title="' + vis.binds.sonos.esc(filled ? t('quickPlay') + ' / ' + t('quickEdit') : t('quickSave')) + '">' +
+                    '<span class="sonos-ctrl-quick-no">' + (index + 1) + '</span>' +
+                    '<span class="sonos-ctrl-quick-title">' + vis.binds.sonos.esc(label) + '</span>' +
+                    '<span class="sonos-ctrl-quick-sub">' + vis.binds.sonos.esc(sub) + '</span>' +
+                    '</button>';
+            }).join('') + '</div>';
+            var editSlot = editIndex >= 0 && editIndex < 8 ? slots[editIndex] : null;
+            var menuHtml = editSlot
+                ? '<div class="sonos-ctrl-quick-menu" data-quick-menu="' + editIndex + '">' +
+                    '<div class="sonos-ctrl-quick-menu-title">' + vis.binds.sonos.esc(t('quickEdit')) + ' ' + (editIndex + 1) + '</div>' +
+                    '<input type="text" class="sonos-ctrl-quick-name" value="' + vis.binds.sonos.esc(editSlot.title || '') + '" placeholder="' + vis.binds.sonos.esc(t('quickRename')) + '">' +
+                    '<div class="sonos-ctrl-quick-menu-actions">' +
+                        '<button type="button" class="is-primary" data-quick-act="replace">' + vis.binds.sonos.esc(t('quickReplace')) + '</button>' +
+                        '<button type="button" data-quick-act="rename">' + vis.binds.sonos.esc(t('quickRename')) + '</button>' +
+                        (vis.binds.sonos.quickstartFilled(editSlot) ? '<button type="button" data-quick-act="clear">' + vis.binds.sonos.esc(t('quickClear')) + '</button>' : '') +
+                    '</div>' +
+                    '</div>'
+                : '';
 
             $div.html(
                 '<div class="sonos-ctrl">' +
@@ -1154,6 +1309,8 @@ vis.binds = vis.binds || {};
                         '</div>' +
                         sheetHtml +
                     '</div>' +
+                    quickHtml +
+                    menuHtml +
                 '</div>'
             );
 
@@ -1255,7 +1412,9 @@ vis.binds = vis.binds || {};
                 if (
                     $t.closest('.sonos-ctrl-sheet').length ||
                     $t.closest('[data-tab]').length ||
-                    $t.closest('.sonos-ctrl-chip').length
+                    $t.closest('.sonos-ctrl-chip').length ||
+                    $t.closest('.sonos-ctrl-quick').length ||
+                    $t.closest('.sonos-ctrl-quick-menu').length
                 ) {
                     return;
                 }
@@ -1353,6 +1512,89 @@ vis.binds = vis.binds || {};
                     vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ uri: item.uri, metadata: item.metadata || '' }));
                     vis.binds.sonos.closeLibrary($div, instance);
                 }
+            });
+
+            var longTimer = null;
+            var longFired = false;
+            var saveCurrentTo = function (index) {
+                var snap = vis.binds.sonos.snapshotQuickstart(selected, mediaId);
+                if (!snap) {
+                    return false;
+                }
+                var next = vis.binds.sonos.parseQuickstarts(instance);
+                next[index] = snap;
+                vis.binds.sonos.writeQuickstarts(instance, next);
+                return true;
+            };
+            $div.find('[data-quick]').on('mousedown touchstart', function (ev) {
+                if (ev.type === 'mousedown' && ev.which !== 1) {
+                    return;
+                }
+                var index = parseInt($(this).attr('data-quick'), 10);
+                longFired = false;
+                clearTimeout(longTimer);
+                longTimer = setTimeout(function () {
+                    longFired = true;
+                    $div.data('sonos-quick-edit', index);
+                    vis.binds.sonos.render(widgetID, instance);
+                }, 550);
+            });
+            $div.find('[data-quick]').on('mouseup mouseleave touchend touchcancel', function () {
+                clearTimeout(longTimer);
+            });
+            $div.find('[data-quick]').on('contextmenu', function (ev) {
+                ev.preventDefault();
+                clearTimeout(longTimer);
+                $div.data('sonos-quick-edit', parseInt($(this).attr('data-quick'), 10));
+                vis.binds.sonos.render(widgetID, instance);
+            });
+            $div.find('[data-quick]').on('click', function (ev) {
+                ev.preventDefault();
+                if (longFired) {
+                    return;
+                }
+                var index = parseInt($(this).attr('data-quick'), 10);
+                var slot = vis.binds.sonos.parseQuickstarts(instance)[index];
+                if (vis.binds.sonos.quickstartFilled(slot)) {
+                    vis.binds.sonos.playQuickstart(slot, selected, mediaId);
+                    return;
+                }
+                saveCurrentTo(index);
+            });
+            $div.find('[data-quick-act]').on('click', function () {
+                var act = String($(this).attr('data-quick-act') || '');
+                var index = parseInt($div.find('[data-quick-menu]').attr('data-quick-menu'), 10);
+                var next = vis.binds.sonos.parseQuickstarts(instance);
+                if (act === 'replace') {
+                    if (!saveCurrentTo(index)) {
+                        return;
+                    }
+                } else if (act === 'rename') {
+                    next[index].title = String($div.find('.sonos-ctrl-quick-name').val() || '').trim() || next[index].title;
+                    vis.binds.sonos.writeQuickstarts(instance, next);
+                } else if (act === 'clear') {
+                    next[index] = vis.binds.sonos.emptyQuickstart();
+                    vis.binds.sonos.writeQuickstarts(instance, next);
+                }
+                $div.data('sonos-quick-edit', '');
+                vis.binds.sonos.render(widgetID, instance);
+            });
+            $div.find('.sonos-ctrl-quick-name').on('keydown', function (ev) {
+                if (ev.key === 'Enter' || ev.which === 13) {
+                    ev.preventDefault();
+                    $div.find('[data-quick-act="rename"]').trigger('click');
+                }
+            });
+            $(document).off('mousedown.sonosQuick' + widgetID).on('mousedown.sonosQuick' + widgetID, function (ev) {
+                if ($div.data('sonos-quick-edit') === '' || $div.data('sonos-quick-edit') == null) {
+                    return;
+                }
+                var $t = $(ev.target);
+                if ($t.closest('.sonos-ctrl-quick-menu').length || $t.closest('[data-quick]').length) {
+                    return;
+                }
+                $div.data('sonos-quick-edit', '');
+                vis.binds.sonos.render(widgetID, instance);
             });
         },
     };
