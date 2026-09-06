@@ -44,7 +44,7 @@ After that, every discovered speaker appears as a chip at the top. Group members
 
 To install this fork over the official adapter: in Admin open **Adapters** → GitHub button → `https://github.com/kosmix1980/ioBroker.sonos`, then restart vis and hard-reload the editor.
 
-This branch does not include the compiled `build/` folder (same as official, for an upstream PR). For a GitHub install that starts immediately, use the branch `cursor/vis-sonos-widget-93d4`. ioBroker needs `build/main.js` as start file. After a GitHub install of this branch, if the log shows `cannot find start file`, compile once on the host:
+This branch includes the compiled `build/` folder so a GitHub install starts without compiling. ioBroker needs `build/main.js` as start file. After a GitHub install, if the log shows `cannot find start file`, compile once on the host:
 
 ```
 cd /opt/iobroker/node_modules/iobroker.sonos
