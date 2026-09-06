@@ -189,6 +189,27 @@ class Sonos extends utils.Adapter {
     htRefreshTimer = null;
     lastPositionInfo = {};
     lastPlaybackHint = {};
+    /** Skip identical VIS-bound writes so the widget does not rebuild on every poll. */
+    lastWrittenVal = {};
+    writeCacheKey(id) {
+        if (typeof id === 'string') {
+            return id.startsWith(`${this.namespace}.`) ? id.slice(this.namespace.length + 1) : id;
+        }
+        return [id.device, id.channel, id.state].filter(Boolean).join('.');
+    }
+    async writeIfChanged(id, val, ack = true) {
+        const key = this.writeCacheKey(id);
+        const serialized = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        if (this.lastWrittenVal[key] === serialized) {
+            return;
+        }
+        this.lastWrittenVal[key] = serialized;
+        if (typeof id === 'string') {
+            await this.setState(id, { val, ack });
+            return;
+        }
+        await this.setState(id, { val, ack });
+    }
     constructor(options = {}) {
         super({
             ...options,
@@ -955,7 +976,7 @@ class Sonos extends utils.Adapter {
             },
             native: {},
         });
-        await this.setStateAsync('home_theater', (0, home_theater_1.homeTheaterStateJson)(this.htBonds), true);
+        await this.writeIfChanged('home_theater', (0, home_theater_1.homeTheaterStateJson)(this.htBonds), true);
     }
     scheduleHomeTheaterRefresh() {
         if (this.htRefreshTimer) {
@@ -995,7 +1016,7 @@ class Sonos extends utils.Adapter {
             const next = (0, home_theater_1.rememberHomeTheaterBonds)(this.htBonds, fresh, this.htBondsSeenAt);
             this.htBonds = next.bonds;
             this.htBondsSeenAt = next.seenAt;
-            await this.setStateAsync('home_theater', (0, home_theater_1.homeTheaterStateJson)(this.htBonds), true);
+            await this.writeIfChanged('home_theater', (0, home_theater_1.homeTheaterStateJson)(this.htBonds), true);
         }
         catch (err) {
             this.log.debug(`Cannot read home theater topology: ${err}`);
@@ -1068,8 +1089,8 @@ class Sonos extends utils.Adapter {
         const stableState = !ps.transitioning;
         // If some stable state
         if (stableState) {
-            await this.setState({ device: 'root', channel: ip, state: 'state_simple' }, { val: ps.playing, ack: true });
-            await this.setState({ device: 'root', channel: ip, state: 'state' }, { val: ps.paused ? 'pause' : ps.playing ? 'play' : 'stop', ack: true });
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'state_simple' }, ps.playing);
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'state' }, ps.paused ? 'pause' : ps.playing ? 'play' : 'stop');
             // if duration is 0 (type is radio):
             // - no changes expected and a state update is not necessary!
             // - division by 0
@@ -1132,23 +1153,23 @@ class Sonos extends utils.Adapter {
             delete this.lastTvFormat[player.uuid];
             delete this.lastTvFormatFetch[player.uuid];
         }
-        await this.setState({ device: 'root', channel: ip, state: 'current_type' }, { val: playing.type, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_station' }, { val: playing.station, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_title' }, { val: playing.title, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_album' }, { val: playing.album, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_artist' }, { val: playing.artist, ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_type' }, playing.type);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_station' }, playing.station);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_title' }, playing.title);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_album' }, playing.album);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_artist' }, playing.artist);
         const resume = (0, quickstart_1.resumeFromPlayer)(player);
-        await this.setState({ device: 'root', channel: ip, state: 'current_uri' }, { val: resume.uri, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_metadata' }, { val: resume.metadata, ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_uri' }, resume.uri);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_metadata' }, resume.metadata);
         // elapsed time
         let duration = Number(sonosState.currentTrack.duration) || 0;
         if (!duration && hintFresh && hint?.duration) {
             duration = hint.duration;
         }
-        await this.setState({ device: 'root', channel: ip, state: 'current_duration' }, { val: duration, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_duration_s' }, { val: toFormattedTime(duration), ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_duration' }, duration);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_duration_s' }, toFormattedTime(duration));
         // Track number
-        await this.setState({ device: 'root', channel: ip, state: 'current_track_number' }, { val: sonosState.trackNo, ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_track_number' }, sonosState.trackNo);
         // Update html-queue: highlight current track
         if (player._address) {
             await this.updateHtmlQueue(player._address, sonosState.trackNo);
@@ -1185,16 +1206,16 @@ class Sonos extends utils.Adapter {
             });
             await this.setState({ device: 'root', channel: ip, state: 'current_elapsed_s' }, { val: sonosState.elapsedTimeFormatted, ack: true });
         }
-        await this.setState({ device: 'root', channel: ip, state: 'volume' }, { val: sonosState.volume, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'night_mode' }, { val: Boolean(sonosState.equalizer?.nightMode), ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'speech_enhancement' }, { val: Boolean(sonosState.equalizer?.speechEnhancement), ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'volume' }, sonosState.volume);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'night_mode' }, Boolean(sonosState.equalizer?.nightMode));
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'speech_enhancement' }, Boolean(sonosState.equalizer?.speechEnhancement));
         if (sonosState.groupState) {
-            await this.setState({ device: 'root', channel: ip, state: 'muted' }, { val: sonosState.groupState.mute, ack: true });
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'muted' }, sonosState.groupState.mute);
         }
         if (playMode) {
-            await this.setState({ device: 'root', channel: ip, state: 'shuffle' }, { val: playMode.shuffle, ack: true });
-            await this.setState({ device: 'root', channel: ip, state: 'repeat' }, { val: playMode.repeat === 'all' ? 1 : playMode.repeat === 'one' ? 2 : 0, ack: true });
-            await this.setState({ device: 'root', channel: ip, state: 'crossfade' }, { val: playMode.crossfade, ack: true });
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'shuffle' }, playMode.shuffle);
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'repeat' }, playMode.repeat === 'all' ? 1 : playMode.repeat === 'one' ? 2 : 0);
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'crossfade' }, playMode.crossfade);
         }
         if (player.tts) {
             if (stableState && (ps.paused || ps.stopped)) {
@@ -1384,7 +1405,7 @@ class Sonos extends utils.Adapter {
         return [];
     }
     async writeRecentTracks(ip, list) {
-        await this.setState({ device: 'root', channel: ip, state: 'recent_tracks' }, { val: JSON.stringify(list), ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'recent_tracks' }, JSON.stringify(list), true);
     }
     /**
      * Old recent rows still point at the live now-playing file.
@@ -1495,27 +1516,27 @@ class Sonos extends utils.Adapter {
                 continue;
             }
             if (!ps.transitioning) {
-                await this.setState({ device: 'root', channel: memberIp, state: 'state_simple' }, { val: ps.playing, ack: true });
-                await this.setState({ device: 'root', channel: memberIp, state: 'state' }, { val: ps.paused ? 'pause' : ps.playing ? 'play' : 'stop', ack: true });
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'state_simple' }, ps.playing);
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'state' }, ps.paused ? 'pause' : ps.playing ? 'play' : 'stop');
             }
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_type' }, { val: playing.type, ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_station' }, { val: playing.station, ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_title' }, { val: playing.title, ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_album' }, { val: playing.album, ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_artist' }, { val: playing.artist, ack: true });
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_type' }, playing.type);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_station' }, playing.station);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_title' }, playing.title);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_album' }, playing.album);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_artist' }, playing.artist);
             const memberResume = coordinator
                 ? (0, quickstart_1.resumeFromPlayer)(coordinator)
                 : { uri: String(sonosState.currentTrack.uri || ''), metadata: '', tv: false };
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_uri' }, { val: memberResume.uri, ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_metadata' }, { val: memberResume.metadata, ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_duration' }, { val: sonosState.currentTrack.duration, ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_duration_s' }, { val: toFormattedTime(sonosState.currentTrack.duration), ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_track_number' }, { val: sonosState.trackNo, ack: true });
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_cover' }, { val: coverUrl, ack: true });
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_uri' }, memberResume.uri);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_metadata' }, memberResume.metadata);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_duration' }, sonosState.currentTrack.duration);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_duration_s' }, toFormattedTime(sonosState.currentTrack.duration));
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_track_number' }, sonosState.trackNo);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_cover' }, coverUrl);
             if (groupCover) {
                 this.lastStableCover[memberIp] = groupCover;
             }
-            await this.setState({ device: 'root', channel: memberIp, state: 'current_art' }, { val: this.lastStableCover[memberIp] || groupCover || '', ack: true });
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_art' }, this.lastStableCover[memberIp] || groupCover || '');
             this.channels[memberIp].elapsed = sonosState.elapsedTime;
             this.channels[memberIp].duration = sonosState.currentTrack.duration;
             if (sonosState.currentTrack.duration > 0) {
@@ -1527,15 +1548,15 @@ class Sonos extends utils.Adapter {
                 await this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed_s' }, { val: sonosState.elapsedTimeFormatted, ack: true });
             }
             if (playMode) {
-                await this.setState({ device: 'root', channel: memberIp, state: 'shuffle' }, { val: playMode.shuffle, ack: true });
-                await this.setState({ device: 'root', channel: memberIp, state: 'repeat' }, { val: playMode.repeat === 'all' ? 1 : playMode.repeat === 'one' ? 2 : 0, ack: true });
-                await this.setState({ device: 'root', channel: memberIp, state: 'crossfade' }, { val: playMode.crossfade, ack: true });
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'shuffle' }, playMode.shuffle);
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'repeat' }, playMode.repeat === 'all' ? 1 : playMode.repeat === 'one' ? 2 : 0);
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'crossfade' }, playMode.crossfade);
             }
             if (queue?.val !== undefined && queue.val !== null) {
-                await this.setState({ device: 'root', channel: memberIp, state: 'queue' }, { val: queue.val, ack: true });
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'queue' }, queue.val);
             }
             if (queueHtml?.val !== undefined && queueHtml.val !== null) {
-                await this.setState({ device: 'root', channel: memberIp, state: 'queue_html' }, { val: queueHtml.val, ack: true });
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'queue_html' }, queueHtml.val);
             }
             await this.appendRecentTrack(memberIp, sonosState, coverUrl);
         }
@@ -2067,15 +2088,15 @@ class Sonos extends utils.Adapter {
             return;
         }
         this.lastPlaybackHint[ip] = { ...hint, at: Date.now() };
-        await this.setState({ device: 'root', channel: ip, state: 'current_type' }, { val: 0, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_station' }, { val: '', ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_type' }, 0);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_station' }, '');
         if (hint.title) {
-            await this.setState({ device: 'root', channel: ip, state: 'current_title' }, { val: hint.title, ack: true });
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_title' }, hint.title);
         }
-        await this.setState({ device: 'root', channel: ip, state: 'current_artist' }, { val: hint.artist || '', ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_album' }, { val: hint.album || '', ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_uri' }, { val: hint.uri, ack: true });
-        await this.setState({ device: 'root', channel: ip, state: 'current_metadata' }, { val: hint.metadata, ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_artist' }, hint.artist || '');
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_album' }, hint.album || '');
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_uri' }, hint.uri);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_metadata' }, hint.metadata);
         if (hint.duration > 0) {
             this.channels[ip].duration = hint.duration;
             this.channels[ip].elapsed = 0;
@@ -2594,18 +2615,11 @@ class Sonos extends utils.Adapter {
                         `);
         }
         _html.push('</table>');
-        // Add script for auto-scroll playlist
-        _html.push(`
-                    <script>
-                    let element = document.getElementById("currentTrack");
-                    if (element != undefined) element.scrollIntoView({behavior: "auto", block: "start", inline: "nearest"});
-                    </script>
-                    `);
         const qtext = _text.join(', ');
         const qhtml = _html.join('');
-        await this.setState({ device: 'root', channel: ip, state: 'queue' }, { val: qtext, ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'queue' }, qtext);
         this.log.debug(`queue for ${player.baseUrl}: ${qtext}`);
-        await this.setState({ device: 'root', channel: ip, state: 'queue_html' }, { val: qhtml, ack: true });
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'queue_html' }, qhtml);
         this.log.debug(`queue for ${player.baseUrl}: ${qhtml}`);
     }
     /**
@@ -2638,8 +2652,10 @@ class Sonos extends utils.Adapter {
             return;
         }
         this.log.debug(`Update html-queue for ${playerIp}: current html-queue is ${state.val}`);
-        // Remove old highlighting
-        let queue = state.val.replace('class="sonosQueueRow currentTrack" id="currentTrack"', 'class="sonosQueueRow"');
+        // Remove old highlighting and leftover scroll scripts from older versions
+        let queue = state.val
+            .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+            .replace('class="sonosQueueRow currentTrack" id="currentTrack"', 'class="sonosQueueRow"');
         // Get current track number
         this.log.debug(`Update html-queue for ${playerIp}: current track number is ${trackNumber}`);
         // Create RegEx pattern
@@ -2661,7 +2677,7 @@ class Sonos extends utils.Adapter {
         queue = queue.replace(currentTrack.toString(), currentTrackHighlight);
         this.log.debug(`Update html-queue ${playerIp}: new queue is ${queue}`);
         // set queue to dp
-        await this.setState(`${playerDp}.queue_html`, { val: queue, ack: true });
+        await this.writeIfChanged(`${playerDp}.queue_html`, queue);
     }
     async main() {
         this.config.fadeIn = parseInt(String(this.config.fadeIn), 10) || 0;

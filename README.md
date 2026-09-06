@@ -171,6 +171,7 @@ Please note: highlighting current playing favorite is not supported.
 * (kosmix1980) Repair older Recent rows that still pointed at the live now-playing cover
 * (kosmix1980) After grouping or ungrouping a home-theater room (Arc + surrounds), unmute the rear speakers again
 * (kosmix1980) Playing a song from Recent updates title, artist, cover and the seek bar; track covers stay in the list
+* (kosmix1980) VIS widget: stop the kiosk reload loop by not rebuilding the page on every Sonos poll
 
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0
