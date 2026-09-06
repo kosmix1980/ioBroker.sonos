@@ -2652,10 +2652,8 @@ class Sonos extends utils.Adapter {
             return;
         }
         this.log.debug(`Update html-queue for ${playerIp}: current html-queue is ${state.val}`);
-        // Remove old highlighting and leftover scroll scripts from older versions
-        let queue = state.val
-            .replace(/<script\b[\s\S]*?<\/script>/gi, '')
-            .replace('class="sonosQueueRow currentTrack" id="currentTrack"', 'class="sonosQueueRow"');
+        // Remove old highlighting
+        let queue = state.val.replace('class="sonosQueueRow currentTrack" id="currentTrack"', 'class="sonosQueueRow"');
         // Get current track number
         this.log.debug(`Update html-queue for ${playerIp}: current track number is ${trackNumber}`);
         // Create RegEx pattern

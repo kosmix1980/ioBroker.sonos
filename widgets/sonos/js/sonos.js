@@ -751,8 +751,15 @@ vis.binds = vis.binds || {};
             }
         },
 
-        stripScripts: function (html) {
-            return String(html || '').replace(/<script\b[\s\S]*?<\/script>/gi, '');
+        parseHtmlRoot: function (html) {
+            if (!html || typeof DOMParser !== 'function') {
+                return null;
+            }
+            try {
+                return new DOMParser().parseFromString(String(html), 'text/html');
+            } catch (e) {
+                return null;
+            }
         },
 
         coversFromQueueHtml: function (html) {
@@ -770,24 +777,27 @@ vis.binds = vis.binds || {};
         },
 
         parseQueue: function (playerId) {
-            var html = vis.binds.sonos.stripScripts(vis.binds.sonos.state(playerId, 'queue_html') || '');
+            var html = String(vis.binds.sonos.state(playerId, 'queue_html') || '');
             var items = [];
-            if (html) {
-                var $rows = $('<div></div>').html(html).find('.sonosQueueRow');
-                $rows.each(function (index) {
-                    var $row = $(this);
-                    items.push({
-                        no: index + 1,
-                        title: $.trim($row.find('.sonosQueueTrackTitle').text()),
-                        artist: $.trim($row.find('.sonosQueueTrackArtist').text()),
-                        album: $.trim($row.find('.sonosQueueTrackAlbum').text()),
-                        cover: $row.find('img').attr('src') || '',
-                        current: $row.hasClass('currentTrack') || $row.attr('id') === 'currentTrack',
-                    });
+            var doc = vis.binds.sonos.parseHtmlRoot(html);
+            var rows = doc ? doc.querySelectorAll('.sonosQueueRow') : [];
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                var titleEl = row.querySelector('.sonosQueueTrackTitle');
+                var artistEl = row.querySelector('.sonosQueueTrackArtist');
+                var albumEl = row.querySelector('.sonosQueueTrackAlbum');
+                var img = row.querySelector('img');
+                items.push({
+                    no: i + 1,
+                    title: titleEl ? String(titleEl.textContent || '').trim() : '',
+                    artist: artistEl ? String(artistEl.textContent || '').trim() : '',
+                    album: albumEl ? String(albumEl.textContent || '').trim() : '',
+                    cover: img ? img.getAttribute('src') || '' : '',
+                    current: row.classList.contains('currentTrack') || row.id === 'currentTrack',
                 });
-                if (items.length) {
-                    return items;
-                }
+            }
+            if (items.length) {
+                return items;
             }
             vis.binds.sonos.parseList(vis.binds.sonos.state(playerId, 'queue')).forEach(function (entry, index) {
                 var parts = String(entry).split(' - ');
@@ -804,19 +814,21 @@ vis.binds = vis.binds || {};
         },
 
         parseFavorites: function (playerId) {
-            var html = vis.binds.sonos.stripScripts(vis.binds.sonos.state(playerId, 'favorites_list_html') || '');
+            var html = String(vis.binds.sonos.state(playerId, 'favorites_list_html') || '');
             var items = [];
-            if (html) {
-                $('<div></div>').html(html).find('.sonosFavoriteRow').each(function () {
-                    var $row = $(this);
-                    items.push({
-                        title: $.trim($row.find('.sonosFavoriteTitle').text()),
-                        cover: $row.find('img').attr('src') || '',
-                    });
+            var doc = vis.binds.sonos.parseHtmlRoot(html);
+            var rows = doc ? doc.querySelectorAll('.sonosFavoriteRow') : [];
+            for (var f = 0; f < rows.length; f++) {
+                var fav = rows[f];
+                var titleNode = fav.querySelector('.sonosFavoriteTitle');
+                var favImg = fav.querySelector('img');
+                items.push({
+                    title: titleNode ? String(titleNode.textContent || '').trim() : '',
+                    cover: favImg ? favImg.getAttribute('src') || '' : '',
                 });
-                if (items.length) {
-                    return items;
-                }
+            }
+            if (items.length) {
+                return items;
             }
             return vis.binds.sonos.parseList(vis.binds.sonos.state(playerId, 'favorites_list_array') || vis.binds.sonos.state(playerId, 'favorites_list')).map(function (title) {
                 return { title: title, cover: '' };
