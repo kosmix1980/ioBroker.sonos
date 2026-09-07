@@ -321,7 +321,7 @@ export class DiscoveryBackend implements SonosBackend {
         const anyBaseUrl = (): string => this.devices[0]?.baseUrl || '';
         this.music = {
             hasCatalog: name => this.smapi.hasSoapCatalog(anyBaseUrl(), name),
-            browse: (name, objectId, german) => this.smapi.browse(anyBaseUrl(), name, objectId, german),
+            browse: (name, objectId, german, index) => this.smapi.browse(anyBaseUrl(), name, objectId, german, index),
             search: (name, term, german) => this.smapi.search(anyBaseUrl(), name, term, german),
             completeLogin: name => this.smapi.completeLogin(anyBaseUrl(), name),
         };

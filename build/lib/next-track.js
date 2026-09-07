@@ -8,6 +8,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.nextTrackFields = nextTrackFields;
 exports.normalizeTrackText = normalizeTrackText;
+exports.nowPlayingQueueEntries = nowPlayingQueueEntries;
 exports.queueSkipTarget = queueSkipTarget;
 exports.isSameQueueTrack = isSameQueueTrack;
 /** Fields written to `next_*` states. Empty title clears the rest. */
@@ -29,9 +30,31 @@ function normalizeTrackText(value) {
         .trim()
         .toLowerCase();
 }
-/** True when a queue row is the Sonos next track (title, and artist when both exist). */
+/** Current + next metadata when the saved Sonos queue is not the play list. */
+function nowPlayingQueueEntries(current, next) {
+    const entries = [];
+    const currentTitle = String(current?.title || '').trim();
+    if (currentTitle) {
+        entries.push({
+            title: currentTitle,
+            artist: String(current?.artist || '').trim(),
+            album: String(current?.album || '').trim(),
+            albumArtUri: String(current?.albumArtUri || '').trim(),
+        });
+    }
+    const nextTitle = String(next?.title || '').trim();
+    if (nextTitle && normalizeTrackText(nextTitle) !== normalizeTrackText(currentTitle)) {
+        entries.push({
+            title: nextTitle,
+            artist: String(next?.artist || '').trim(),
+            album: String(next?.album || '').trim(),
+            albumArtUri: String(next?.albumArtUri || '').trim(),
+        });
+    }
+    return entries;
+}
 /**
- * Track number Next/Prev should seek when playback is the Sonos queue.
+ * Track number Next/Prev should seek when playback is a linear list.
  * `null` means fall back to AVTransport Next/Previous (end of list, unknown position).
  */
 function queueSkipTarget(trackNo, queueLen, delta, repeatAll) {

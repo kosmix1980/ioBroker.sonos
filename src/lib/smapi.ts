@@ -836,7 +836,13 @@ export class SmapiHub {
             .filter((item): item is MediaBrowseItem => Boolean(item));
     }
 
-    async browse(baseUrl: string, serviceName: string, objectId: string, german: boolean): Promise<SmapiBrowseResult> {
+    async browse(
+        baseUrl: string,
+        serviceName: string,
+        objectId: string,
+        german: boolean,
+        index = 0,
+    ): Promise<SmapiBrowseResult> {
         const service = await this.findService(baseUrl, serviceName);
         if (!service) {
             throw new Error(`Unknown music service: ${serviceName}`);
@@ -857,7 +863,7 @@ export class SmapiHub {
                 baseUrl,
                 service,
                 'getMetadata',
-                `<s:id>${xmlEscape(objectId || 'root')}</s:id><s:index>0</s:index><s:count>${BROWSE_COUNT}</s:count><s:recursive>0</s:recursive>`,
+                `<s:id>${xmlEscape(objectId || 'root')}</s:id><s:index>${Math.max(0, Math.floor(index) || 0)}</s:index><s:count>${BROWSE_COUNT}</s:count><s:recursive>0</s:recursive>`,
             );
             const items = this.entriesToItems(service, xml);
             if (!items.length && needsLoginToken(service.auth) && (objectId || 'root') === 'root') {

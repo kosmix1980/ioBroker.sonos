@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.2.1g6',
+        version: '4.2.1g7',
         _bound: {},
         _tickers: {},
         _renderTimers: {},
@@ -830,8 +830,10 @@ vis.binds = vis.binds || {};
                 var artistEl = row.querySelector('.sonosQueueTrackArtist');
                 var albumEl = row.querySelector('.sonosQueueTrackAlbum');
                 var img = row.querySelector('img');
+                var numEl = row.querySelector('.sonosQueueTrackNumber');
+                var no = parseInt(numEl && numEl.textContent, 10);
                 items.push({
-                    no: i + 1,
+                    no: no > 0 ? no : i + 1,
                     title: titleEl ? String(titleEl.textContent || '').trim() : '',
                     artist: artistEl ? String(artistEl.textContent || '').trim() : '',
                     album: albumEl ? String(albumEl.textContent || '').trim() : '',
@@ -1654,10 +1656,8 @@ vis.binds = vis.binds || {};
             var queueItems = vis.binds.sonos.parseQueue(mediaId);
             var currentTrackNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
             var upcomingQueue = vis.binds.sonos.upcomingQueue(queueItems, currentTrackNo);
-            var playingQueue = vis.binds.sonos.state(mediaId, 'playing_queue') === true ||
-                vis.binds.sonos.state(mediaId, 'playing_queue') === 'true';
-            var nextTrack = playingQueue
-                ? (upcomingQueue.length > 1 ? upcomingQueue[1] : null)
+            var nextTrack = upcomingQueue.length > 1
+                ? upcomingQueue[1]
                 : vis.binds.sonos.playerNext(mediaId);
             if (sheetOpen && tab === 'favorites') {
                 var favorites = vis.binds.sonos.filterQuery(vis.binds.sonos.parseFavorites(mediaId), query, function (item) {
@@ -1735,19 +1735,16 @@ vis.binds = vis.binds || {};
                     ? items.map(vis.binds.sonos.browseItemButton).join('')
                     : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(path.length || query ? t('noSearchHits') : t('emptySources')) + '</div>');
             } else if (sheetOpen) {
-                var queueSource = playingQueue && !query ? upcomingQueue : queueItems;
+                var queueSource = !query ? upcomingQueue : queueItems;
                 var queue = vis.binds.sonos.filterQuery(queueSource, query, function (item) {
                     return [item.title, item.artist, item.album].join(' ');
                 });
-                var fromCurrent = playingQueue && !query && upcomingQueue.length && upcomingQueue[0] &&
+                var fromCurrent = !query && upcomingQueue.length && upcomingQueue[0] &&
                     (upcomingQueue[0].current || upcomingQueue[0].no === currentTrackNo);
-                var hintHtml = !playingQueue && queueItems.length
-                    ? '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('queueOtherSource')) + '</div>'
-                    : '';
-                listHtml = hintHtml + (queue.length
+                listHtml = queue.length
                     ? queue.map(function (item, index) {
-                        var current = playingQueue && (item.current || item.no === currentTrackNo);
-                        var isNext = playingQueue && !current && fromCurrent && index === 1;
+                        var current = item.current || item.no === currentTrackNo;
+                        var isNext = !current && fromCurrent && index === 1;
                         var badge = current ? t('nowTrack') : (isNext ? t('upNext') : String(item.no));
                         return '<button type="button" class="sonos-ctrl-item' + (current ? ' is-current' : '') + '" data-track="' + item.no + '">' +
                             (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
@@ -1755,7 +1752,7 @@ vis.binds = vis.binds || {};
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || '') + '</div></div>' +
                             '<div class="sonos-ctrl-item-badge">' + vis.binds.sonos.esc(badge) + '</div></button>';
                     }).join('')
-                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : (queueItems.length ? 'emptyQueueNext' : 'emptyQueue'))) + '</div>');
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : (queueItems.length ? 'emptyQueueNext' : 'emptyQueue'))) + '</div>';
             }
 
             var sub = [artist, album].filter(Boolean).join(' — ');

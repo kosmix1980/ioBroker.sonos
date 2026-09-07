@@ -731,7 +731,7 @@ class SmapiHub {
             .map(entry => toBrowseItem(service, entry, this.sn(service)))
             .filter((item) => Boolean(item));
     }
-    async browse(baseUrl, serviceName, objectId, german) {
+    async browse(baseUrl, serviceName, objectId, german, index = 0) {
         const service = await this.findService(baseUrl, serviceName);
         if (!service) {
             throw new Error(`Unknown music service: ${serviceName}`);
@@ -748,7 +748,7 @@ class SmapiHub {
             ? `${service.name}: Katalog braucht eine einmalige App-Link-Anmeldung. Link öffnen, anmelden, dann „Anmeldung abgeschlossen“.`
             : `${service.name}: the catalog needs a one-time App-Link sign-in. Open the URL, sign in, then tap “Signed in”.`;
         try {
-            const xml = await this.smapiCall(baseUrl, service, 'getMetadata', `<s:id>${xmlEscape(objectId || 'root')}</s:id><s:index>0</s:index><s:count>${BROWSE_COUNT}</s:count><s:recursive>0</s:recursive>`);
+            const xml = await this.smapiCall(baseUrl, service, 'getMetadata', `<s:id>${xmlEscape(objectId || 'root')}</s:id><s:index>${Math.max(0, Math.floor(index) || 0)}</s:index><s:count>${BROWSE_COUNT}</s:count><s:recursive>0</s:recursive>`);
             const items = this.entriesToItems(service, xml);
             if (!items.length && needsLoginToken(service.auth) && (objectId || 'root') === 'root') {
                 throw new SmapiAuthError('empty catalog');

@@ -328,7 +328,7 @@ export function getChannelStates(): Record<string, StateDefinition> {
             read: true,
             write: false,
             role: 'media',
-            desc: 'True when the player is playing its own Sonos queue (Next follows the queue list)',
+            desc: 'True when Next can seek in the current list (Sonos queue or cloud playlist)',
             name: 'Playing queue',
         },
         current_uri: {

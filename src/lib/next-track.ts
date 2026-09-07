@@ -41,9 +41,35 @@ export function normalizeTrackText(value: string): string {
         .toLowerCase();
 }
 
-/** True when a queue row is the Sonos next track (title, and artist when both exist). */
+/** Current + next metadata when the saved Sonos queue is not the play list. */
+export function nowPlayingQueueEntries(
+    current?: TrackRef | null,
+    next?: TrackRef | null,
+): Array<{ title: string; artist: string; album: string; albumArtUri: string }> {
+    const entries: Array<{ title: string; artist: string; album: string; albumArtUri: string }> = [];
+    const currentTitle = String(current?.title || '').trim();
+    if (currentTitle) {
+        entries.push({
+            title: currentTitle,
+            artist: String(current?.artist || '').trim(),
+            album: String(current?.album || '').trim(),
+            albumArtUri: String(current?.albumArtUri || '').trim(),
+        });
+    }
+    const nextTitle = String(next?.title || '').trim();
+    if (nextTitle && normalizeTrackText(nextTitle) !== normalizeTrackText(currentTitle)) {
+        entries.push({
+            title: nextTitle,
+            artist: String(next?.artist || '').trim(),
+            album: String(next?.album || '').trim(),
+            albumArtUri: String(next?.albumArtUri || '').trim(),
+        });
+    }
+    return entries;
+}
+
 /**
- * Track number Next/Prev should seek when playback is the Sonos queue.
+ * Track number Next/Prev should seek when playback is a linear list.
  * `null` means fall back to AVTransport Next/Previous (end of list, unknown position).
  */
 export function queueSkipTarget(trackNo: number, queueLen: number, delta: 1 | -1, repeatAll: boolean): number | null {

@@ -39,6 +39,10 @@ exports.tvStreamUri = tvStreamUri;
 exports.isTvStreamUri = isTvStreamUri;
 exports.isLineInStreamUri = isLineInStreamUri;
 exports.isQueueUri = isQueueUri;
+exports.isCpContainerUri = isCpContainerUri;
+exports.isSeekableListUri = isSeekableListUri;
+exports.parseCpContainerUri = parseCpContainerUri;
+exports.queueCoverUrl = queueCoverUrl;
 exports.tvAudioFormat = tvAudioFormat;
 exports.streamContentFromDidl = streamContentFromDidl;
 exports.isHtAudioSilent = isHtAudioSilent;
@@ -254,6 +258,50 @@ function isLineInStreamUri(uri) {
 /** True when AVTransport is the speaker's own Sonos queue (not a cloud playlist or stream). */
 function isQueueUri(uri) {
     return /^x-rincon-queue:/i.test(String(uri || ''));
+}
+/** Spotify / SMAPI playlist, album or other cloud container. */
+function isCpContainerUri(uri) {
+    return /^x-rincon-cpcontainer:/i.test(String(uri || ''));
+}
+/** Queue and cloud playlists can seek by track number; radio cannot. */
+function isSeekableListUri(uri) {
+    return isQueueUri(uri) || isCpContainerUri(uri);
+}
+/**
+ * `x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a…?sid=9&flags=…`
+ * → SMAPI service id and the playlist/album object id.
+ */
+function parseCpContainerUri(uri) {
+    const value = String(uri || '');
+    const match = value.match(/^x-rincon-cpcontainer:([0-9a-f]{8})([^?]*)/i);
+    if (!match) {
+        return null;
+    }
+    const sid = Number((value.match(/[?&]sid=(\d+)/i) || [])[1]);
+    if (!sid) {
+        return null;
+    }
+    let objectId = match[2] || '';
+    try {
+        objectId = decodeURIComponent(objectId);
+    }
+    catch {
+        objectId = objectId.replace(/%3a/gi, ':');
+    }
+    objectId = objectId.replace(/%3a/gi, ':').trim();
+    return objectId ? { sid, objectId } : null;
+}
+/** Cover for queue_html: SMAPI often sends an absolute https URL. */
+function queueCoverUrl(baseUrl, cover) {
+    const art = String(cover || '').trim();
+    if (!art) {
+        return '';
+    }
+    if (/^https?:\/\//i.test(art)) {
+        return art;
+    }
+    const root = String(baseUrl || '').replace(/\/$/, '');
+    return art.startsWith('/') ? `${root}${art}` : `${root}/${art}`;
 }
 function isPlaceholderTitle(title) {
     const text = title.trim();

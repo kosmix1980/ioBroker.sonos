@@ -11,9 +11,13 @@ const {
     htAudioInLabel,
     isDirectPlayUri,
     isHtAudioSilent,
+    isCpContainerUri,
     isLineInStreamUri,
     isQueueUri,
+    isSeekableListUri,
     isStreamUri,
+    parseCpContainerUri,
+    queueCoverUrl,
     isTvStreamUri,
     matchesMusicService,
     mediaItem,
@@ -25,7 +29,13 @@ const {
 } = require('../build/lib/content-directory');
 
 const { encodeSmapiId, parseSmapiId } = require('../build/lib/smapi');
-const { isSameQueueTrack, nextTrackFields, normalizeTrackText, queueSkipTarget } = require('../build/lib/next-track');
+const {
+    isSameQueueTrack,
+    nextTrackFields,
+    normalizeTrackText,
+    nowPlayingQueueEntries,
+    queueSkipTarget,
+} = require('../build/lib/next-track');
 
 const LABELS = {
     radio: 'TuneIn Radio',
@@ -448,5 +458,35 @@ describe('next-track: Sonos next is not queue[n+1]', () => {
         expect(isQueueUri('x-rincon-queue:RINCON_347E5C9E3A4801400#0')).to.be.true;
         expect(isQueueUri('x-rincon-cpcontainer:1006206ccatalog')).to.be.false;
         expect(isQueueUri('x-sonosapi-stream:s25111?sid=254')).to.be.false;
+    });
+
+    it('parses a Spotify playlist container URI', () => {
+        const parsed = parseCpContainerUri(
+            'x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI?sid=9&flags=8300&sn=1',
+        );
+        expect(parsed).to.deep.equal({ sid: 9, objectId: 'spotify:playlist:37i9dQZF1DX0XUsMxB6UJI' });
+        expect(isCpContainerUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9')).to.be.true;
+        expect(isSeekableListUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9')).to.be.true;
+        expect(isSeekableListUri('x-sonosapi-stream:s25111?sid=254')).to.be.false;
+    });
+
+    it('keeps https covers and prefixes speaker-relative ones', () => {
+        expect(queueCoverUrl('http://192.168.1.10:1400', 'https://i.scdn.co/art.jpg')).to.equal(
+            'https://i.scdn.co/art.jpg',
+        );
+        expect(queueCoverUrl('http://192.168.1.10:1400', '/getaa?u=x')).to.equal('http://192.168.1.10:1400/getaa?u=x');
+    });
+
+    it('builds a fallback list from current and next metadata', () => {
+        expect(
+            nowPlayingQueueEntries(
+                { title: 'Now', artist: 'A', albumArtUri: '/a' },
+                { title: 'Later', artist: 'B', albumArtUri: '/b' },
+            ),
+        ).to.deep.equal([
+            { title: 'Now', artist: 'A', album: '', albumArtUri: '/a' },
+            { title: 'Later', artist: 'B', album: '', albumArtUri: '/b' },
+        ]);
+        expect(nowPlayingQueueEntries({ title: 'Only' }, { title: 'Only' })).to.have.length(1);
     });
 });

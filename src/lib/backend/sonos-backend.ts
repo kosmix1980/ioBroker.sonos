@@ -19,7 +19,7 @@ import type {
 export interface MusicServiceAccess {
     /** True if the service offers a catalog that can be browsed and searched at all */
     hasCatalog(serviceName: string): Promise<boolean>;
-    browse(serviceName: string, objectId: string, german: boolean): Promise<SmapiResult>;
+    browse(serviceName: string, objectId: string, german: boolean, index?: number): Promise<SmapiResult>;
     search(serviceName: string, term: string, german: boolean): Promise<SmapiResult>;
     /** Finish an account link the user started in the browser; true when a token was stored */
     completeLogin(serviceName: string): Promise<boolean>;

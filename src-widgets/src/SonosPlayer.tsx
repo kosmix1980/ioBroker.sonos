@@ -838,21 +838,10 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
                     this.renderItem(`pl-${name}`, { id: name, title: name }, () => this.set(ip, 'playlist_set', name)),
                 );
         } else if (tab === 'queue') {
-            const playingQueue = this.val(coordinator, 'playing_queue') === true;
             const currentNo = this.num(coordinator, 'current_track_number');
             const all = this.parseQueueLines(coordinator);
-            const start = playingQueue && currentNo > 0 ? Math.max(0, currentNo - 1) : 0;
-            const fromCurrent = playingQueue && currentNo > 0 && start === currentNo - 1;
-            if (!playingQueue && all.length) {
-                header = (
-                    <Typography
-                        variant="caption"
-                        color="text.secondary"
-                    >
-                        {Generic.t('queue_other_source')}
-                    </Typography>
-                );
-            }
+            const start = currentNo > 0 ? Math.max(0, currentNo - 1) : 0;
+            const fromCurrent = currentNo > 0 && start === currentNo - 1;
             list = all
                 .slice(start)
                 .filter(item => matches(`${item.title} ${item.artist}`))
@@ -864,9 +853,9 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
                             title: item.title,
                             artist: item.artist,
                             album:
-                                playingQueue && item.no === currentNo
+                                item.no === currentNo
                                     ? Generic.t('now_playing')
-                                    : playingQueue && fromCurrent && index === 1
+                                    : fromCurrent && index === 1
                                       ? Generic.t('up_next')
                                       : `#${item.no}`,
                         },
@@ -999,13 +988,9 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
         const sub = [this.str(ip, 'current_artist'), this.str(ip, 'current_album') || station]
             .filter(Boolean)
             .join(' · ');
-        const playingQueue = this.val(coordinator, 'playing_queue') === true;
         const currentNo = this.num(coordinator, 'current_track_number');
-        const next = playingQueue
-            ? currentNo > 0
-                ? this.parseQueueLines(coordinator)[currentNo]
-                : undefined
-            : this.playerNext(coordinator);
+        const queuedNext = currentNo > 0 ? this.parseQueueLines(coordinator)[currentNo] : undefined;
+        const next = queuedNext || this.playerNext(coordinator);
 
         const content = (
             <div style={styles.root}>

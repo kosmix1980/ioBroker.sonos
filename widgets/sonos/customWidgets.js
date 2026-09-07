@@ -1,7 +1,7 @@
-import{n as e,t}from"./assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__vis2SonosWidgets__customWidgets_js-BfG-M0SO.js";export{t as get,e as init};
+import{n as e,t}from"./assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__vis2SonosWidgets__customWidgets_js-Bdxs1Pj8.js";export{t as get,e as init};
 if (typeof document !== 'undefined' && document.head) {
   try {
-    for (const __mfWarmupPath of ["assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__vis2SonosWidgets__customWidgets_js-BfG-M0SO.js","assets/virtualExposes-DB-w6I94.js","assets/virtual_mf-exposes___mfe_internal__vis2SonosWidgets__customWidgets_js-FWDk-ZDC.js","assets/_virtual_mf-localSharedImportMap___mfe_internal__vis2SonosWidgets__mf_owner__1-db0quAUk.js","assets/vite-preload-helper-DOT499e3.js","assets/dist-2Ef0WBVR.js","assets/rolldown-runtime-B0Z9INg1.js"]) {
+    for (const __mfWarmupPath of ["assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__vis2SonosWidgets__customWidgets_js-Bdxs1Pj8.js","assets/virtualExposes-Cq6Ey5mi.js","assets/virtual_mf-exposes___mfe_internal__vis2SonosWidgets__customWidgets_js-DlpTTRxa.js","assets/_virtual_mf-localSharedImportMap___mfe_internal__vis2SonosWidgets__mf_owner__1-db0quAUk.js","assets/vite-preload-helper-DOT499e3.js","assets/dist-2Ef0WBVR.js","assets/rolldown-runtime-B0Z9INg1.js"]) {
       const __mfWarmupLink = document.createElement('link');
       __mfWarmupLink.rel = 'modulepreload';
       __mfWarmupLink.crossOrigin = '';
