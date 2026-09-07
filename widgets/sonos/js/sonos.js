@@ -46,6 +46,8 @@ vis.binds = vis.binds || {};
                 signedIn: 'Signed in',
                 loginOpen: 'Open this link in a browser to connect the music service.',
                 unknown: 'Unknown room',
+                groupMaster: 'Master',
+                groupMasterHint: 'Group coordinator',
                 nothing: 'Nothing playing',
                 nightSound: 'Night sound',
                 speechEnhance: 'Speech enhancement',
@@ -87,6 +89,8 @@ vis.binds = vis.binds || {};
                 signedIn: 'Anmeldung abgeschlossen',
                 loginOpen: 'Diesen Link im Browser öffnen, um den Dienst zu verbinden.',
                 unknown: 'Unbekannter Raum',
+                groupMaster: 'Master',
+                groupMasterHint: 'Gruppenmaster',
                 nothing: 'Nichts spielt',
                 nightSound: 'Nachtsound',
                 speechEnhance: 'Sprachverbesserung',
@@ -1260,51 +1264,106 @@ vis.binds = vis.binds || {};
         },
 
         isGroupedWith: function (player, other) {
-            var coordA = String(vis.binds.sonos.state(player.id, 'coordinator') || player.ip);
-            var coordB = String(vis.binds.sonos.state(other.id, 'coordinator') || other.ip);
+            var coordA = vis.binds.sonos.coordinatorOf(player);
+            var coordB = vis.binds.sonos.coordinatorOf(other);
             return coordA && coordA === coordB;
         },
 
-        groupNameColor: function (player, players) {
-            var count = 0;
-            players.forEach(function (other) {
-                if (vis.binds.sonos.isGroupedWith(player, other)) {
-                    count += 1;
-                }
+        coordinatorOf: function (player) {
+            return String(vis.binds.sonos.state(player.id, 'coordinator') || player.ip);
+        },
+
+        groupMembers: function (player, players) {
+            return players.filter(function (other) {
+                return vis.binds.sonos.isGroupedWith(player, other);
             });
-            if (count < 2) {
+        },
+
+        groupAccent: function (player, players) {
+            if (vis.binds.sonos.groupMembers(player, players).length < 2) {
                 return '';
             }
             var palette = ['#7dd3fc', '#86efac', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fb7185', '#a3e635', '#818cf8'];
-            var key = String(vis.binds.sonos.state(player.id, 'coordinator') || player.ip);
+            var key = vis.binds.sonos.coordinatorOf(player);
             var hash = 0;
-            for (var i = 0; i < key.length; i++) {
+            var i;
+            for (i = 0; i < key.length; i++) {
                 hash = ((hash << 5) - hash) + key.charCodeAt(i);
                 hash |= 0;
             }
-            var color = palette[Math.abs(hash) % palette.length];
-            var isMaster = key === player.ip;
-            return isMaster ? color : vis.binds.sonos.shadeColor(color, 0.58);
+            return palette[Math.abs(hash) % palette.length];
         },
 
-        shadeColor: function (hex, factor) {
+        hexRgba: function (hex, alpha) {
             hex = String(hex || '').replace('#', '');
             if (hex.length !== 6) {
-                return '#' + hex;
+                return 'transparent';
             }
-            var out = '#';
-            for (var i = 0; i < 6; i += 2) {
-                var n = Math.round(parseInt(hex.substring(i, i + 2), 16) * factor);
-                if (n < 0) {
-                    n = 0;
-                }
-                if (n > 255) {
-                    n = 255;
-                }
-                var part = n.toString(16);
-                out += part.length < 2 ? '0' + part : part;
+            var r = parseInt(hex.substring(0, 2), 16);
+            var g = parseInt(hex.substring(2, 4), 16);
+            var b = parseInt(hex.substring(4, 6), 16);
+            return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+        },
+
+        groupStyle: function (color) {
+            if (!color) {
+                return '';
             }
-            return out;
+            return '--sonos-group:' + color + ';--sonos-group-bg:' + vis.binds.sonos.hexRgba(color, 0.32);
+        },
+
+        roomChipHtml: function (player, selectedIp, groupColor) {
+            var isActive = player.ip === selectedIp;
+            var isPlaying = vis.binds.sonos.state(vis.binds.sonos.mediaPlayerId(player), 'state') === 'play';
+            var alive = vis.binds.sonos.state(player.id, 'alive') !== false;
+            var isMaster = Boolean(groupColor && vis.binds.sonos.coordinatorOf(player) === player.ip);
+            var title = isMaster
+                ? vis.binds.sonos.esc(player.name + ' · ' + vis.binds.sonos.t('groupMasterHint'))
+                : vis.binds.sonos.esc(player.name);
+            return '<button type="button" class="sonos-ctrl-chip' +
+                (isActive ? ' is-active' : '') +
+                (isPlaying ? ' is-playing' : '') +
+                (isMaster ? ' is-master' : '') +
+                (groupColor ? ' is-grouped' : '') +
+                (alive ? '' : ' is-offline') +
+                '" data-ip="' + vis.binds.sonos.esc(player.ip) + '"' +
+                (groupColor ? ' style="' + vis.binds.sonos.groupStyle(groupColor) + '"' : '') +
+                ' title="' + title + '"' +
+                (isMaster ? ' aria-label="' + title + '"' : '') + '>' +
+                '<span class="sonos-ctrl-chip-name">' + vis.binds.sonos.esc(player.name) + '</span>' +
+                (isMaster ? '<span class="sonos-ctrl-chip-crown" aria-hidden="true"></span>' : '') +
+                '</button>';
+        },
+
+        roomsHtml: function (players, selectedIp) {
+            var seen = {};
+            return players.map(function (player) {
+                var accent = vis.binds.sonos.groupAccent(player, players);
+                if (!accent) {
+                    return vis.binds.sonos.roomChipHtml(player, selectedIp, '');
+                }
+                var coord = vis.binds.sonos.coordinatorOf(player);
+                if (seen[coord]) {
+                    return '';
+                }
+                seen[coord] = true;
+                var members = vis.binds.sonos.groupMembers(player, players).slice().sort(function (a, b) {
+                    var aMaster = vis.binds.sonos.coordinatorOf(a) === a.ip ? 0 : 1;
+                    var bMaster = vis.binds.sonos.coordinatorOf(b) === b.ip ? 0 : 1;
+                    if (aMaster !== bMaster) {
+                        return aMaster - bMaster;
+                    }
+                    return String(a.name).localeCompare(String(b.name), vis.language || undefined);
+                });
+                var isCurrent = members.some(function (member) { return member.ip === selectedIp; });
+                return '<div class="sonos-ctrl-cluster' + (isCurrent ? ' is-current' : '') +
+                    '" role="group" aria-label="' + vis.binds.sonos.esc(vis.binds.sonos.t('group')) + '"' +
+                    ' style="' + vis.binds.sonos.groupStyle(accent) + '">' +
+                    members.map(function (member) {
+                        return vis.binds.sonos.roomChipHtml(member, selectedIp, accent);
+                    }).join('') +
+                    '</div>';
+            }).join('');
         },
 
         render: function (widgetID, instance) {
@@ -1400,33 +1459,35 @@ vis.binds = vis.binds || {};
                 return vis.binds.sonos.isGroupedWith(selected, player);
             });
 
-            var roomsHtml = players.map(function (player) {
-                var isActive = player.ip === selected.ip;
-                var isPlaying = vis.binds.sonos.state(vis.binds.sonos.mediaPlayerId(player), 'state') === 'play';
-                var alive = vis.binds.sonos.state(player.id, 'alive') !== false;
-                var nameColor = vis.binds.sonos.groupNameColor(player, players);
-                var coord = String(vis.binds.sonos.state(player.id, 'coordinator') || player.ip);
-                var isMaster = Boolean(nameColor && coord === player.ip);
-                return '<button type="button" class="sonos-ctrl-chip' +
-                    (isActive ? ' is-active' : '') +
-                    (isPlaying ? ' is-playing' : '') +
-                    (isMaster ? ' is-master' : '') +
-                    (alive ? '' : ' is-offline') +
-                    '" data-ip="' + vis.binds.sonos.esc(player.ip) + '"' +
-                    (nameColor ? ' style="--sonos-name:' + nameColor + '"' : '') + '>' +
-                    vis.binds.sonos.esc(player.name) +
-                    '</button>';
-            }).join('');
+            var roomsHtml = vis.binds.sonos.roomsHtml(players, selected.ip);
+            var selectedGroupColor = vis.binds.sonos.groupAccent(selected, players);
+            var masterPlayer = players.filter(function (player) { return player.ip === coordinator; })[0];
 
             var groupHtml = players.filter(function (player) { return player.ip !== selected.ip; }).map(function (player) {
-                var checked = vis.binds.sonos.isGroupedWith(selected, player) ? ' checked' : '';
-                var nameColor = vis.binds.sonos.groupNameColor(player, players);
-                return '<label' + (nameColor ? ' style="--sonos-name:' + nameColor + '"' : '') + '><input type="checkbox" data-group-ip="' + vis.binds.sonos.esc(player.ip) + '"' + checked + '> ' +
+                var checked = vis.binds.sonos.isGroupedWith(selected, player);
+                var accent = vis.binds.sonos.groupAccent(player, players);
+                var isMaster = Boolean(accent && vis.binds.sonos.coordinatorOf(player) === player.ip);
+                return '<label class="' +
+                    (checked ? 'is-grouped' : (accent ? 'is-other-group' : '')) +
+                    (isMaster ? ' is-master' : '') + '"' +
+                    (accent ? ' style="' + vis.binds.sonos.groupStyle(accent) + '"' : '') +
+                    (isMaster ? ' title="' + vis.binds.sonos.esc(vis.binds.sonos.t('groupMasterHint')) + '"' : '') +
+                    '><input type="checkbox" data-group-ip="' + vis.binds.sonos.esc(player.ip) + '"' + (checked ? ' checked' : '') + '>' +
+                    (isMaster ? '<span class="sonos-ctrl-chip-crown" aria-hidden="true"></span>' : '') +
                     vis.binds.sonos.esc(player.name) + '</label>';
             }).join('');
 
             if (groupHtml) {
-                groupHtml = '<span>' + vis.binds.sonos.esc(t('group')) + '</span>' + groupHtml +
+                groupHtml = '<span>' + vis.binds.sonos.esc(t('group')) + '</span>' +
+                    (grouped.length > 1 && masterPlayer
+                        ? '<span class="sonos-ctrl-group-lead"' +
+                            (selectedGroupColor ? ' style="' + vis.binds.sonos.groupStyle(selectedGroupColor) + '"' : '') +
+                            ' title="' + vis.binds.sonos.esc(t('groupMasterHint')) + '">' +
+                            '<span class="sonos-ctrl-chip-crown" aria-hidden="true"></span>' +
+                            vis.binds.sonos.esc(t('groupMaster')) + ': ' + vis.binds.sonos.esc(masterPlayer.name) +
+                            '</span>'
+                        : '') +
+                    groupHtml +
                     '<button type="button" class="sonos-ctrl-ungroup">' + vis.binds.sonos.esc(t('dissolve')) + '</button>';
                 if (grouped.length > 1 && !isNaN(groupVolume)) {
                     groupHtml += '<div class="sonos-ctrl-group-vol"><span>Grp</span><input type="range" min="0" max="100" class="sonos-ctrl-slider sonos-ctrl-group-volume" value="' + groupVolume + '"></div>';
@@ -1746,6 +1807,7 @@ vis.binds = vis.binds || {};
                     $t.closest('.sonos-ctrl-sheet').length ||
                     $t.closest('[data-tab]').length ||
                     $t.closest('.sonos-ctrl-chip').length ||
+                    $t.closest('.sonos-ctrl-cluster').length ||
                     $t.closest('.sonos-ctrl-quick').length ||
                     $t.closest('.sonos-ctrl-quick-menu').length
                 ) {

@@ -24,11 +24,12 @@ The adapter ships one widget for both visualisation adapters. Both are installed
 queue tracks, recent tracks and sources. Bind it to an *instance*, for example `sonos.0` - not to a
 single state such as `play`. The widget discovers every speaker of that instance on its own.
 
-Every discovered speaker appears as a chip at the top. Group membership is toggled with the
-checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the
-last local title of that room. The library buttons (**Favorites**, **Playlists**, **Queue**,
-**Recent**, **Sources**) open a sheet below them. **Recent** lists the last tracks of the selected
-room.
+Every discovered speaker appears as a chip at the top. Rooms that play together sit in a
+colored cluster; the group coordinator (Master) is filled in that color and marked with a crown.
+Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area
+shows the track of the group, not the last local title of that room. The library buttons
+(**Favorites**, **Playlists**, **Queue**, **Recent**, **Sources**) open a sheet below them.
+**Recent** lists the last tracks of the selected room.
 
 ![Sonos Control - player](img/widget-player.png)
 
@@ -262,6 +263,7 @@ adapter to get a working state back.
 ## Changelog
 ### **WORK IN PROGRESS**
 * (kosmix1980) GitHub-installable 4.2.1 with vis-1 kiosk widget (themes, quick-starts, home-theater unmute) on the official backend switch
+* (kosmix1980) vis-1: grouped rooms sit in a colored cluster; the coordinator is marked as Master
 
 ### 4.2.1 (2026-09-07)
 * (@GermanBluefox) Added two widgets for the ioBroker.devices dashboard: SONOS player and SONOS rooms

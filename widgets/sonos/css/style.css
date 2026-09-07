@@ -12,7 +12,7 @@
     --sonos-panel-2: #242424;
     --sonos-hover: #3a3a3a;
     --sonos-chip: #2a2a2a;
-    --sonos-chip-master: #454545;
+    --sonos-chip-ink: #102018;
     --sonos-btn: #2b2b2b;
     --sonos-btn-fg: #fff;
     --sonos-cover: #222;
@@ -56,7 +56,7 @@
     --sonos-panel-2: #ececec;
     --sonos-hover: #e4e4e4;
     --sonos-chip: #ffffff;
-    --sonos-chip-master: #e8e8e8;
+    --sonos-chip-ink: #102018;
     --sonos-btn: #ffffff;
     --sonos-btn-fg: #1c1c1c;
     --sonos-cover: #e8e8e8;
@@ -82,7 +82,7 @@
     --sonos-panel-2: #151c2c;
     --sonos-hover: #243049;
     --sonos-chip: #1b2436;
-    --sonos-chip-master: #2a3650;
+    --sonos-chip-ink: #102018;
     --sonos-btn: #1b2436;
     --sonos-btn-fg: #e8eef8;
     --sonos-cover: #151c2c;
@@ -135,45 +135,93 @@
     flex: 1 1 auto;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
 }
 
+.sonos-ctrl-cluster {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 4px;
+    border-radius: 16px;
+    background: var(--sonos-group-bg, transparent);
+    box-shadow: inset 0 0 0 2px var(--sonos-group);
+    max-width: 100%;
+}
+
+.sonos-ctrl-cluster.is-current {
+    box-shadow: inset 0 0 0 2px var(--sonos-group), 0 0 10px var(--sonos-group-bg, transparent);
+}
+
 .sonos-ctrl-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     border: 0;
     background: var(--sonos-chip);
-    color: var(--sonos-name, var(--sonos-fg));
-    box-shadow: inset 0 0 0 1px var(--sonos-name, var(--sonos-border));
+    color: var(--sonos-fg);
+    box-shadow: inset 0 0 0 1px var(--sonos-border);
     border-radius: 999px;
     padding: 6px 12px;
     cursor: pointer;
-    max-width: 180px;
+    max-width: 200px;
+    font: inherit;
+    line-height: 1.2;
+}
+
+.sonos-ctrl-chip-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+}
+
+.sonos-ctrl-chip.is-grouped:not(.is-master):not(.is-active) {
+    background: var(--sonos-group-bg, var(--sonos-chip));
+    box-shadow: inset 0 0 0 2px var(--sonos-group);
 }
 
 .sonos-ctrl-chip.is-active {
     background: var(--sonos-grad);
-    color: var(--sonos-name, #fff);
+    color: #fff;
     font-weight: 600;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
 }
 
+.sonos-ctrl-chip.is-active.is-grouped {
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 0 2px var(--sonos-group);
+}
+
 .sonos-ctrl-chip.is-master:not(.is-active) {
-    background: var(--sonos-chip-master);
-    font-weight: 700;
+    background: var(--sonos-group, var(--sonos-chip));
+    color: var(--sonos-chip-ink);
+    font-weight: 800;
+    box-shadow: inset 0 0 0 2px var(--sonos-group), 0 1px 4px rgba(0, 0, 0, 0.28);
+}
+
+.sonos-ctrl-chip-crown {
+    flex: 0 0 auto;
+    width: 0.9em;
+    height: 0.72em;
+    background: currentColor;
+    clip-path: polygon(6% 100%, 6% 42%, 22% 58%, 50% 6%, 78% 58%, 94% 42%, 94% 100%);
 }
 
 .sonos-ctrl-chip.is-playing::before {
     content: "";
+    flex: 0 0 auto;
     display: inline-block;
     width: 7px;
     height: 7px;
-    margin-right: 6px;
     border-radius: 50%;
     background: var(--sonos-live);
-    vertical-align: middle;
+}
+
+.sonos-ctrl-chip.is-master:not(.is-active).is-playing::before {
+    background: var(--sonos-chip-ink);
 }
 
 .sonos-ctrl-chip.is-offline {
@@ -378,7 +426,32 @@
     border-radius: 999px;
     padding: 4px 10px;
     cursor: pointer;
-    color: var(--sonos-name, var(--sonos-sub));
+    color: var(--sonos-sub);
+}
+
+.sonos-ctrl-groups label.is-grouped,
+.sonos-ctrl-groups label.is-other-group {
+    background: var(--sonos-group-bg, var(--sonos-panel-2));
+    box-shadow: inset 0 0 0 1.5px var(--sonos-group);
+    color: var(--sonos-fg);
+    font-weight: 600;
+}
+
+.sonos-ctrl-groups label.is-master {
+    color: var(--sonos-chip-ink);
+    background: var(--sonos-group);
+    font-weight: 800;
+}
+
+.sonos-ctrl-group-lead {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--sonos-group, var(--sonos-panel));
+    color: var(--sonos-chip-ink);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-weight: 800;
 }
 
 .sonos-ctrl-groups button {
