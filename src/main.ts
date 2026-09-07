@@ -25,6 +25,7 @@ import type {
 
 import { TTS } from './lib/tts';
 import { getChannelStates } from './lib/states';
+import { nextTrackFields } from './lib/next-track';
 import {
     getMediaRoot,
     isDirectPlayUri,
@@ -1358,6 +1359,11 @@ class Sonos extends utils.Adapter {
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_title' }, playing.title);
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_album' }, playing.album);
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_artist' }, playing.artist);
+        const next = nextTrackFields(sonosState.nextTrack);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'next_title' }, next.title);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'next_artist' }, next.artist);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'next_album' }, next.album);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'next_art' }, next.art);
         const resume = resumeFromPlayer(player);
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_uri' }, resume.uri);
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_metadata' }, resume.metadata);
@@ -1716,6 +1722,20 @@ class Sonos extends utils.Adapter {
                 { device: 'root', channel: memberIp, state: 'current_artist' },
                 { val: playing.artist, ack: true },
             );
+            const next = nextTrackFields(sonosState.nextTrack);
+            await this.setState(
+                { device: 'root', channel: memberIp, state: 'next_title' },
+                { val: next.title, ack: true },
+            );
+            await this.setState(
+                { device: 'root', channel: memberIp, state: 'next_artist' },
+                { val: next.artist, ack: true },
+            );
+            await this.setState(
+                { device: 'root', channel: memberIp, state: 'next_album' },
+                { val: next.album, ack: true },
+            );
+            await this.setState({ device: 'root', channel: memberIp, state: 'next_art' }, { val: next.art, ack: true });
             await this.setState(
                 { device: 'root', channel: memberIp, state: 'current_duration' },
                 { val: sonosState.currentTrack.duration, ack: true },

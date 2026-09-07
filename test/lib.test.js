@@ -24,6 +24,7 @@ const {
 } = require('../build/lib/content-directory');
 
 const { encodeSmapiId, parseSmapiId } = require('../build/lib/smapi');
+const { isSameQueueTrack, nextTrackFields, normalizeTrackText } = require('../build/lib/next-track');
 
 const LABELS = {
     radio: 'TuneIn Radio',
@@ -389,5 +390,47 @@ describe('svrooij backend: partial events', () => {
         });
         expect(d.transportUri).to.equal('x-sonosapi-stream:s25111?sid=254');
         expect(d.transportUriMetadata).to.be.a('string').and.to.contain('Some Station');
+    });
+});
+
+describe('next-track: Sonos next is not queue[n+1]', () => {
+    it('copies NextTrackMetaData fields', () => {
+        expect(
+            nextTrackFields({
+                title: ' Here To Mars ',
+                artist: 'Coheed and Cambria',
+                album: 'The Color Before The Sun',
+                albumArtUri: '/getaa?u=x',
+            }),
+        ).to.deep.equal({
+            title: 'Here To Mars',
+            artist: 'Coheed and Cambria',
+            album: 'The Color Before The Sun',
+            art: '/getaa?u=x',
+        });
+    });
+
+    it('clears next when Sonos has no upcoming track (radio)', () => {
+        expect(nextTrackFields({ title: '', artist: 'Station' })).to.deep.equal({
+            title: '',
+            artist: '',
+            album: '',
+            art: '',
+        });
+        expect(nextTrackFields(undefined)).to.deep.equal({ title: '', artist: '', album: '', art: '' });
+    });
+
+    it('matches the shuffled next row, not the sequential neighbor', () => {
+        const sequential = { title: 'Track B', artist: 'Artist' };
+        const shuffled = { title: 'Here To Mars', artist: 'Coheed and Cambria' };
+        const next = { title: 'Here To Mars', artist: 'Coheed and Cambria' };
+
+        expect(isSameQueueTrack(sequential, next)).to.be.false;
+        expect(isSameQueueTrack(shuffled, next)).to.be.true;
+        expect(isSameQueueTrack({ title: 'here to mars', artist: '' }, next)).to.be.true;
+    });
+
+    it('normalizes whitespace before comparing', () => {
+        expect(normalizeTrackText('  Here   To Mars ')).to.equal('here to mars');
     });
 });

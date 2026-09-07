@@ -267,6 +267,7 @@ adapter to get a working state back.
 * (kosmix1980) vis: group cluster and Master label use inline styles so vis cache cannot hide them
 * (kosmix1980) vis-2 widget bundle is shipped so grouping colors reach vis-2; vis-1 shows bonded members in the cluster
 * (kosmix1980) vis queue tab lists the current track and the upcoming titles; now-playing shows the next track
+* (kosmix1980) vis "Als Nächstes" follows Sonos Next (shuffle), not the next row in the queue list
 
 ### 4.2.1 (2026-09-07)
 * (@GermanBluefox) Added two widgets for the ioBroker.devices dashboard: SONOS player and SONOS rooms

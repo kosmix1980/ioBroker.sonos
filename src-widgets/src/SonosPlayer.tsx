@@ -387,6 +387,29 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
             .filter(item => item.title);
     }
 
+    /** Track Sonos will play on Next (shuffle-aware), not queue[n+1]. */
+    private playerNext(ip: string): { title: string; artist: string } | null {
+        const title = this.str(ip, 'next_title').trim();
+        if (!title) {
+            return null;
+        }
+        return { title, artist: this.str(ip, 'next_artist').trim() };
+    }
+
+    private isSameQueueTrack(
+        item: { title?: string; artist?: string },
+        next: { title?: string; artist?: string } | null,
+    ): boolean {
+        const norm = (value: string): string => value.replace(/\s+/g, ' ').trim().toLowerCase();
+        const nextTitle = norm(next?.title || '');
+        if (!nextTitle || norm(item.title || '') !== nextTitle) {
+            return false;
+        }
+        const itemArtist = norm(item.artist || '');
+        const nextArtist = norm(next?.artist || '');
+        return !itemArtist || !nextArtist || itemArtist === nextArtist;
+    }
+
     /** TV/HDMI has no transport control, so the buttons must not be offered */
     private isOnTv(ip: string): boolean {
         return this.num(ip, 'current_type') === 2 && this.str(ip, 'current_title') === 'TV';
@@ -832,27 +855,32 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
             const currentNo = this.num(coordinator, 'current_track_number');
             const all = this.parseQueueLines(coordinator);
             const start = currentNo > 0 ? Math.max(0, currentNo - 1) : 0;
-            const fromCurrent = currentNo > 0 && start === currentNo - 1;
+            const next = this.playerNext(coordinator);
+            let nextMarked = false;
             list = all
                 .slice(start)
                 .filter(item => matches(`${item.title} ${item.artist}`))
-                .map((item, index) =>
-                    this.renderItem(
+                .map(item => {
+                    const current = item.no === currentNo;
+                    const isNext = !current && !nextMarked && this.isSameQueueTrack(item, next);
+                    if (isNext) {
+                        nextMarked = true;
+                    }
+                    return this.renderItem(
                         `q-${item.no}`,
                         {
                             id: String(item.no),
                             title: item.title,
                             artist: item.artist,
-                            album:
-                                item.no === currentNo
-                                    ? Generic.t('now_playing')
-                                    : fromCurrent && index === 1
-                                      ? Generic.t('up_next')
-                                      : `#${item.no}`,
+                            album: current
+                                ? Generic.t('now_playing')
+                                : isNext
+                                  ? Generic.t('up_next')
+                                  : `#${item.no}`,
                         },
                         () => this.set(ip, 'current_track_number', item.no),
-                    ),
-                );
+                    );
+                });
         } else if (tab === 'recent') {
             const recent = this.parseJson<RecentTrack[]>(ip, 'recent_tracks') || [];
             list = recent
@@ -979,8 +1007,7 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
         const sub = [this.str(ip, 'current_artist'), this.str(ip, 'current_album') || station]
             .filter(Boolean)
             .join(' · ');
-        const currentNo = this.num(coordinator, 'current_track_number');
-        const next = currentNo > 0 ? this.parseQueueLines(coordinator)[currentNo] : undefined;
+        const next = this.playerNext(coordinator);
 
         const content = (
             <div style={styles.root}>

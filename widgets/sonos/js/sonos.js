@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.2.1g4',
+        version: '4.2.1g5',
         _bound: {},
         _tickers: {},
         _renderTimers: {},
@@ -499,6 +499,10 @@ vis.binds = vis.binds || {};
                         'current_elapsed_s',
                         'current_duration_s',
                         'current_track_number',
+                        'next_title',
+                        'next_artist',
+                        'next_album',
+                        'next_art',
                         'seek',
                         'shuffle',
                         'repeat',
@@ -674,6 +678,10 @@ vis.binds = vis.binds || {};
                     'current_elapsed_s',
                     'current_duration_s',
                     'current_track_number',
+                    'next_title',
+                    'next_artist',
+                    'next_album',
+                    'next_art',
                     'seek',
                     'shuffle',
                     'repeat',
@@ -690,6 +698,7 @@ vis.binds = vis.binds || {};
                     'recent_tracks',
                     'media_browse_result',
                     'current_uri',
+                    'current_metadata',
                 ].forEach(function (name) {
                     ids.push(player.id + '.' + name);
                 });
@@ -841,6 +850,34 @@ vis.binds = vis.binds || {};
                 });
             });
             return items;
+        },
+
+        playerNext: function (playerId) {
+            var title = String(vis.binds.sonos.state(playerId, 'next_title') || '').trim();
+            if (!title) {
+                return null;
+            }
+            return {
+                title: title,
+                artist: String(vis.binds.sonos.state(playerId, 'next_artist') || '').trim(),
+                album: String(vis.binds.sonos.state(playerId, 'next_album') || '').trim(),
+                cover: String(vis.binds.sonos.state(playerId, 'next_art') || '').trim(),
+            };
+        },
+
+        sameTrack: function (item, next) {
+            if (!item || !next || !next.title) {
+                return false;
+            }
+            var norm = function (value) {
+                return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            };
+            if (norm(item.title) !== norm(next.title)) {
+                return false;
+            }
+            var itemArtist = norm(item.artist);
+            var nextArtist = norm(next.artist);
+            return !itemArtist || !nextArtist || itemArtist === nextArtist;
         },
 
         upcomingQueue: function (items, currentNo) {
@@ -1613,7 +1650,7 @@ vis.binds = vis.binds || {};
             var queueItems = vis.binds.sonos.parseQueue(mediaId);
             var currentTrackNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
             var upcomingQueue = vis.binds.sonos.upcomingQueue(queueItems, currentTrackNo);
-            var nextTrack = upcomingQueue.length > 1 ? upcomingQueue[1] : null;
+            var nextTrack = vis.binds.sonos.playerNext(mediaId);
             if (sheetOpen && tab === 'favorites') {
                 var favorites = vis.binds.sonos.filterQuery(vis.binds.sonos.parseFavorites(mediaId), query, function (item) {
                     return item.title;
@@ -1693,12 +1730,15 @@ vis.binds = vis.binds || {};
                 var queue = vis.binds.sonos.filterQuery(query ? queueItems : upcomingQueue, query, function (item) {
                     return [item.title, item.artist, item.album].join(' ');
                 });
-                var fromCurrent = !query && upcomingQueue.length && upcomingQueue[0] &&
-                    (upcomingQueue[0].current || upcomingQueue[0].no === currentTrackNo);
+                var nextMarked = false;
                 listHtml = queue.length
-                    ? queue.map(function (item, index) {
+                    ? queue.map(function (item) {
                         var current = item.current || item.no === currentTrackNo;
-                        var badge = current ? t('nowTrack') : (fromCurrent && index === 1 ? t('upNext') : String(item.no));
+                        var isNext = !current && !nextMarked && vis.binds.sonos.sameTrack(item, nextTrack);
+                        if (isNext) {
+                            nextMarked = true;
+                        }
+                        var badge = current ? t('nowTrack') : (isNext ? t('upNext') : String(item.no));
                         return '<button type="button" class="sonos-ctrl-item' + (current ? ' is-current' : '') + '" data-track="' + item.no + '">' +
                             (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
                             '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
