@@ -16,6 +16,7 @@
     "player": "Sonos-speler",
     "playlists": "Afspeellijsten",
     "queue": "Wachtrij",
+    "queue_other_source": "Er speelt een afspeellijst of stream. Deze lijst is de opgeslagen Sonos-wachtrij, niet wat Next afspeelt.",
     "now_playing": "Nu",
     "up_next": "Hierna",
     "recent": "Recent",

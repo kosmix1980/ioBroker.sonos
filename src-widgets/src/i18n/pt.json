@@ -16,6 +16,7 @@
     "player": "Jogador Sonos",
     "playlists": "Listas de reprodução",
     "queue": "Fila",
+    "queue_other_source": "Uma playlist ou um stream está a tocar. Esta lista é a fila Sonos guardada, não o que o Next toca.",
     "now_playing": "Agora",
     "up_next": "A seguir",
     "recent": "Recente",

@@ -370,12 +370,12 @@ class Sonos extends utils.Adapter {
         }
         else if (id.state === 'next') {
             if (value) {
-                promise = media.next();
+                promise = this.skipQueueOrTransport(media, 1);
             }
         }
         else if (id.state === 'prev') {
             if (value) {
-                promise = media.previous();
+                promise = this.skipQueueOrTransport(media, -1);
             }
         }
         else if (id.state === 'seek') {
@@ -445,10 +445,10 @@ class Sonos extends utils.Adapter {
                         promise = media.pause();
                         break;
                     case 'next':
-                        promise = media.next();
+                        promise = this.skipQueueOrTransport(media, 1);
                         break;
                     case 'previous':
-                        promise = media.previous();
+                        promise = this.skipQueueOrTransport(media, -1);
                         break;
                     case 'mute':
                         promise = player.setMute(true);
@@ -545,6 +545,43 @@ class Sonos extends utils.Adapter {
         promise
             ?.then(() => this.log.debug(`command done: ${id.state} on ${id.channel}`))
             .catch(e => this.log.error(`Cannot execute command ${id.state} on ${id.channel}: ${e}`));
+    }
+    /**
+     * Next/Prev: when the speaker plays its own queue, seek to the next/previous
+     * row of that list so the widget "Als Nächstes" line matches the button.
+     * Cloud playlists and radio still use AVTransport Next/Previous.
+     */
+    async skipQueueOrTransport(media, delta) {
+        if (!(0, content_directory_1.isQueueUri)(media.transportUri)) {
+            if (delta > 0) {
+                await media.next();
+            }
+            else {
+                await media.previous();
+            }
+            return;
+        }
+        const ip = media.channel;
+        const trackState = ip ? await this.getStateAsync(`root.${ip}.current_track_number`) : undefined;
+        const trackNo = Number(trackState?.val) || media.state?.trackNo || 0;
+        const cached = this.queues[media.uuid] || [];
+        const queueState = ip ? await this.getStateAsync(`root.${ip}.queue`) : undefined;
+        const fromState = String(queueState?.val || '')
+            .split(/\s*,\s*(?=[^,]+\s-\s)/)
+            .filter(line => line.trim()).length;
+        const queueLen = cached.length || fromState;
+        const repeatVal = ip ? Number((await this.getStateAsync(`root.${ip}.repeat`))?.val) : 0;
+        const target = (0, next_track_1.queueSkipTarget)(trackNo, queueLen, delta, repeatVal === 1);
+        if (target) {
+            await media.seekTrack(target);
+            return;
+        }
+        if (delta > 0) {
+            await media.next();
+        }
+        else {
+            await media.previous();
+        }
     }
     // New message arrived. obj is array with current messages
     onMessage(obj) {
@@ -1168,6 +1205,7 @@ class Sonos extends utils.Adapter {
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'next_artist' }, next.artist);
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'next_album' }, next.album);
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'next_art' }, next.art);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'playing_queue' }, (0, content_directory_1.isQueueUri)(player.transportUri));
         const resume = (0, quickstart_1.resumeFromPlayer)(player);
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_uri' }, resume.uri);
         await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_metadata' }, resume.metadata);
@@ -1403,6 +1441,8 @@ class Sonos extends utils.Adapter {
             await this.setState({ device: 'root', channel: memberIp, state: 'next_artist' }, { val: next.artist, ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'next_album' }, { val: next.album, ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'next_art' }, { val: next.art, ack: true });
+            const coordinator = this.backend?.getDeviceByUuid(this.channels[coordinatorIp]?.uuid || '');
+            await this.setState({ device: 'root', channel: memberIp, state: 'playing_queue' }, { val: (0, content_directory_1.isQueueUri)(coordinator?.transportUri), ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'current_duration' }, { val: sonosState.currentTrack.duration, ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'current_duration_s' }, { val: toFormattedTime(sonosState.currentTrack.duration), ack: true });
             await this.setState({ device: 'root', channel: memberIp, state: 'current_track_number' }, { val: sonosState.trackNo, ack: true });

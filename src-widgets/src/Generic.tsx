@@ -19,6 +19,7 @@ export const ROOM_STATES = [
     'next_art',
     'next_artist',
     'next_title',
+    'playing_queue',
     'coordinator',
     'group_volume',
     'membersChannels',

@@ -16,9 +16,6 @@ exports.QUICKSTART_COUNT = 8;
 function isGroupingUri(uri) {
     return /^x-rincon:RINCON_/i.test(uri);
 }
-function isQueueUri(uri) {
-    return /^x-rincon-queue:/i.test(uri);
-}
 function emptyQuickstart() {
     return {
         title: '',
@@ -94,7 +91,7 @@ function resumeFromPlayer(player) {
     if ((0, content_directory_1.isTvStreamUri)(trackUri) || (0, content_directory_1.isTvStreamUri)(av)) {
         return { uri: '', metadata: '', tv: true };
     }
-    if (av && !isGroupingUri(av) && !isQueueUri(av)) {
+    if (av && !isGroupingUri(av) && !(0, content_directory_1.isQueueUri)(av)) {
         return { uri: av, metadata, tv: false };
     }
     if (trackUri && !isGroupingUri(trackUri)) {

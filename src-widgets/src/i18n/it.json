@@ -16,6 +16,7 @@
     "player": "Lettore Sonos",
     "playlists": "Playlist",
     "queue": "Coda",
+    "queue_other_source": "È in riproduzione una playlist o uno stream. Questo elenco è la coda Sonos salvata, non ciò che riproduce Next.",
     "now_playing": "Ora",
     "up_next": "Prossimo",
     "recent": "Recente",

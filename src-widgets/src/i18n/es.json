@@ -16,6 +16,7 @@
     "player": "reproductor sonos",
     "playlists": "Listas de reproducción",
     "queue": "Cola",
+    "queue_other_source": "Se está reproduciendo una lista o un stream. Esta lista es la cola Sonos guardada, no lo que reproduce Next.",
     "now_playing": "Ahora",
     "up_next": "Siguiente",
     "recent": "Reciente",

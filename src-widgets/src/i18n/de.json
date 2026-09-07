@@ -16,6 +16,7 @@
     "player": "Sonos Player",
     "playlists": "Playlists",
     "queue": "Warteschlange",
+    "queue_other_source": "Es läuft eine Playlist oder ein Stream. Diese Liste ist die gespeicherte Sonos-Warteschlange, nicht das, was Next spielt.",
     "now_playing": "Jetzt",
     "up_next": "Als Nächstes",
     "recent": "Zuletzt",

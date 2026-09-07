@@ -42,6 +42,24 @@ export function normalizeTrackText(value: string): string {
 }
 
 /** True when a queue row is the Sonos next track (title, and artist when both exist). */
+/**
+ * Track number Next/Prev should seek when playback is the Sonos queue.
+ * `null` means fall back to AVTransport Next/Previous (end of list, unknown position).
+ */
+export function queueSkipTarget(trackNo: number, queueLen: number, delta: 1 | -1, repeatAll: boolean): number | null {
+    if (trackNo < 1 || queueLen < 1) {
+        return null;
+    }
+    const target = trackNo + delta;
+    if (target > queueLen) {
+        return repeatAll ? 1 : null;
+    }
+    if (target < 1) {
+        return repeatAll ? queueLen : null;
+    }
+    return target;
+}
+
 export function isSameQueueTrack(
     item: { title?: string; artist?: string },
     next: { title?: string; artist?: string } | null | undefined,

@@ -16,6 +16,7 @@
     "player": "Odtwarzacz Sonosa",
     "playlists": "Listy odtwarzania",
     "queue": "Kolejka",
+    "queue_other_source": "Odtwarzana jest playlista lub strumień. Ta lista to zapisana kolejka Sonos, nie to, co odtwarza Next.",
     "now_playing": "Teraz",
     "up_next": "Następny",
     "recent": "Ostatni",

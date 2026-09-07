@@ -16,6 +16,7 @@
     "player": "Плеєр Sonos",
     "playlists": "Списки відтворення",
     "queue": "Черга",
+    "queue_other_source": "Грає плейлист або потік. Цей список — збережена черга Sonos, а не те, що ввімкне Next.",
     "now_playing": "Зараз",
     "up_next": "Далі",
     "recent": "Останні",

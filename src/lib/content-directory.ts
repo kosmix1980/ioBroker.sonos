@@ -219,6 +219,11 @@ export function isLineInStreamUri(uri: string | undefined): boolean {
     return /^x-rincon-stream:/i.test(String(uri || ''));
 }
 
+/** True when AVTransport is the speaker's own Sonos queue (not a cloud playlist or stream). */
+export function isQueueUri(uri: string | undefined): boolean {
+    return /^x-rincon-queue:/i.test(String(uri || ''));
+}
+
 function isPlaceholderTitle(title: string): boolean {
     const text = title.trim();
     if (!text) {

@@ -12,6 +12,7 @@ const {
     isDirectPlayUri,
     isHtAudioSilent,
     isLineInStreamUri,
+    isQueueUri,
     isStreamUri,
     isTvStreamUri,
     matchesMusicService,
@@ -24,7 +25,7 @@ const {
 } = require('../build/lib/content-directory');
 
 const { encodeSmapiId, parseSmapiId } = require('../build/lib/smapi');
-const { isSameQueueTrack, nextTrackFields, normalizeTrackText } = require('../build/lib/next-track');
+const { isSameQueueTrack, nextTrackFields, normalizeTrackText, queueSkipTarget } = require('../build/lib/next-track');
 
 const LABELS = {
     radio: 'TuneIn Radio',
@@ -432,5 +433,20 @@ describe('next-track: Sonos next is not queue[n+1]', () => {
 
     it('normalizes whitespace before comparing', () => {
         expect(normalizeTrackText('  Here   To Mars ')).to.equal('here to mars');
+    });
+
+    it('seeks to the next queue row instead of AVTransport Next', () => {
+        expect(queueSkipTarget(3, 10, 1, false)).to.equal(4);
+        expect(queueSkipTarget(1, 10, -1, false)).to.equal(null);
+        expect(queueSkipTarget(10, 10, 1, false)).to.equal(null);
+        expect(queueSkipTarget(10, 10, 1, true)).to.equal(1);
+        expect(queueSkipTarget(1, 10, -1, true)).to.equal(10);
+        expect(queueSkipTarget(0, 10, 1, false)).to.equal(null);
+    });
+
+    it('recognizes the Sonos queue URI', () => {
+        expect(isQueueUri('x-rincon-queue:RINCON_347E5C9E3A4801400#0')).to.be.true;
+        expect(isQueueUri('x-rincon-cpcontainer:1006206ccatalog')).to.be.false;
+        expect(isQueueUri('x-sonosapi-stream:s25111?sid=254')).to.be.false;
     });
 });

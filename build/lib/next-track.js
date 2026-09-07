@@ -8,6 +8,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.nextTrackFields = nextTrackFields;
 exports.normalizeTrackText = normalizeTrackText;
+exports.queueSkipTarget = queueSkipTarget;
 exports.isSameQueueTrack = isSameQueueTrack;
 /** Fields written to `next_*` states. Empty title clears the rest. */
 function nextTrackFields(track) {
@@ -29,6 +30,23 @@ function normalizeTrackText(value) {
         .toLowerCase();
 }
 /** True when a queue row is the Sonos next track (title, and artist when both exist). */
+/**
+ * Track number Next/Prev should seek when playback is the Sonos queue.
+ * `null` means fall back to AVTransport Next/Previous (end of list, unknown position).
+ */
+function queueSkipTarget(trackNo, queueLen, delta, repeatAll) {
+    if (trackNo < 1 || queueLen < 1) {
+        return null;
+    }
+    const target = trackNo + delta;
+    if (target > queueLen) {
+        return repeatAll ? 1 : null;
+    }
+    if (target < 1) {
+        return repeatAll ? queueLen : null;
+    }
+    return target;
+}
 function isSameQueueTrack(item, next) {
     const nextTitle = normalizeTrackText(next?.title || '');
     if (!nextTitle) {

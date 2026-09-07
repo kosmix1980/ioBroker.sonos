@@ -38,6 +38,7 @@ exports.matchesMusicService = matchesMusicService;
 exports.tvStreamUri = tvStreamUri;
 exports.isTvStreamUri = isTvStreamUri;
 exports.isLineInStreamUri = isLineInStreamUri;
+exports.isQueueUri = isQueueUri;
 exports.tvAudioFormat = tvAudioFormat;
 exports.streamContentFromDidl = streamContentFromDidl;
 exports.isHtAudioSilent = isHtAudioSilent;
@@ -249,6 +250,10 @@ function isTvStreamUri(uri) {
 }
 function isLineInStreamUri(uri) {
     return /^x-rincon-stream:/i.test(String(uri || ''));
+}
+/** True when AVTransport is the speaker's own Sonos queue (not a cloud playlist or stream). */
+function isQueueUri(uri) {
+    return /^x-rincon-queue:/i.test(String(uri || ''));
 }
 function isPlaceholderTitle(title) {
     const text = title.trim();

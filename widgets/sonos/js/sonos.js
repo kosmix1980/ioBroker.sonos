@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.2.1g5',
+        version: '4.2.1g6',
         _bound: {},
         _tickers: {},
         _renderTimers: {},
@@ -35,6 +35,7 @@ vis.binds = vis.binds || {};
                 nowTrack: 'Now',
                 upNext: 'Next',
                 emptyQueueNext: 'No further tracks in the queue.',
+                queueOtherSource: 'A playlist or stream is playing. This list is the saved Sonos queue, not what Next will play.',
                 emptyRecent: 'No recent tracks yet. They appear after something is played.',
                 emptySources: 'No entries in this folder.',
                 radio: 'TuneIn Radio',
@@ -81,6 +82,7 @@ vis.binds = vis.binds || {};
                 nowTrack: 'Jetzt',
                 upNext: 'Als Nächstes',
                 emptyQueueNext: 'Keine weiteren Titel in der Warteschlange.',
+                queueOtherSource: 'Es läuft eine Playlist oder ein Stream. Diese Liste ist die gespeicherte Sonos-Warteschlange, nicht das, was Next spielt.',
                 emptyRecent: 'Noch keine Titel. Die Liste füllt sich beim Abspielen.',
                 emptySources: 'In diesem Ordner gibt es keine Einträge.',
                 radio: 'TuneIn Radio',
@@ -503,6 +505,7 @@ vis.binds = vis.binds || {};
                         'next_artist',
                         'next_album',
                         'next_art',
+                        'playing_queue',
                         'seek',
                         'shuffle',
                         'repeat',
@@ -682,6 +685,7 @@ vis.binds = vis.binds || {};
                     'next_artist',
                     'next_album',
                     'next_art',
+                    'playing_queue',
                     'seek',
                     'shuffle',
                     'repeat',
@@ -1650,7 +1654,11 @@ vis.binds = vis.binds || {};
             var queueItems = vis.binds.sonos.parseQueue(mediaId);
             var currentTrackNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
             var upcomingQueue = vis.binds.sonos.upcomingQueue(queueItems, currentTrackNo);
-            var nextTrack = vis.binds.sonos.playerNext(mediaId);
+            var playingQueue = vis.binds.sonos.state(mediaId, 'playing_queue') === true ||
+                vis.binds.sonos.state(mediaId, 'playing_queue') === 'true';
+            var nextTrack = playingQueue
+                ? (upcomingQueue.length > 1 ? upcomingQueue[1] : null)
+                : vis.binds.sonos.playerNext(mediaId);
             if (sheetOpen && tab === 'favorites') {
                 var favorites = vis.binds.sonos.filterQuery(vis.binds.sonos.parseFavorites(mediaId), query, function (item) {
                     return item.title;
@@ -1727,17 +1735,19 @@ vis.binds = vis.binds || {};
                     ? items.map(vis.binds.sonos.browseItemButton).join('')
                     : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(path.length || query ? t('noSearchHits') : t('emptySources')) + '</div>');
             } else if (sheetOpen) {
-                var queue = vis.binds.sonos.filterQuery(query ? queueItems : upcomingQueue, query, function (item) {
+                var queueSource = playingQueue && !query ? upcomingQueue : queueItems;
+                var queue = vis.binds.sonos.filterQuery(queueSource, query, function (item) {
                     return [item.title, item.artist, item.album].join(' ');
                 });
-                var nextMarked = false;
-                listHtml = queue.length
-                    ? queue.map(function (item) {
-                        var current = item.current || item.no === currentTrackNo;
-                        var isNext = !current && !nextMarked && vis.binds.sonos.sameTrack(item, nextTrack);
-                        if (isNext) {
-                            nextMarked = true;
-                        }
+                var fromCurrent = playingQueue && !query && upcomingQueue.length && upcomingQueue[0] &&
+                    (upcomingQueue[0].current || upcomingQueue[0].no === currentTrackNo);
+                var hintHtml = !playingQueue && queueItems.length
+                    ? '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t('queueOtherSource')) + '</div>'
+                    : '';
+                listHtml = hintHtml + (queue.length
+                    ? queue.map(function (item, index) {
+                        var current = playingQueue && (item.current || item.no === currentTrackNo);
+                        var isNext = playingQueue && !current && fromCurrent && index === 1;
                         var badge = current ? t('nowTrack') : (isNext ? t('upNext') : String(item.no));
                         return '<button type="button" class="sonos-ctrl-item' + (current ? ' is-current' : '') + '" data-track="' + item.no + '">' +
                             (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
@@ -1745,7 +1755,7 @@ vis.binds = vis.binds || {};
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || '') + '</div></div>' +
                             '<div class="sonos-ctrl-item-badge">' + vis.binds.sonos.esc(badge) + '</div></button>';
                     }).join('')
-                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : (queueItems.length ? 'emptyQueueNext' : 'emptyQueue'))) + '</div>';
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : (queueItems.length ? 'emptyQueueNext' : 'emptyQueue'))) + '</div>');
             }
 
             var sub = [artist, album].filter(Boolean).join(' — ');

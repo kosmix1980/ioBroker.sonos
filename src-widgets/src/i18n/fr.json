@@ -16,6 +16,7 @@
     "player": "Lecteur Sonos",
     "playlists": "Listes de lecture",
     "queue": "File d'attente",
+    "queue_other_source": "Une playlist ou un flux est en lecture. Cette liste est la file Sonos enregistrée, pas ce que Next joue.",
     "now_playing": "En cours",
     "up_next": "À suivre",
     "recent": "Récent",

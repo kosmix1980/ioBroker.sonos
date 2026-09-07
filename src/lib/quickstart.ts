@@ -1,7 +1,7 @@
 /**
  * Eight shared quick-start slots for the VIS widget (instance state + Admin).
  */
-import { isTvStreamUri } from './content-directory';
+import { isQueueUri, isTvStreamUri } from './content-directory';
 
 export const QUICKSTART_COUNT = 8;
 
@@ -19,10 +19,6 @@ export interface QuickstartSlot {
 
 function isGroupingUri(uri: string): boolean {
     return /^x-rincon:RINCON_/i.test(uri);
-}
-
-function isQueueUri(uri: string): boolean {
-    return /^x-rincon-queue:/i.test(uri);
 }
 
 export function emptyQuickstart(): QuickstartSlot {

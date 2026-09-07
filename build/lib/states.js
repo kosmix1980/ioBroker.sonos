@@ -321,6 +321,15 @@ function getChannelStates() {
             desc: 'Cover image of the track Sonos will play on Next',
             name: 'Next art URL',
         },
+        playing_queue: {
+            def: false,
+            type: 'boolean',
+            read: true,
+            write: false,
+            role: 'media',
+            desc: 'True when the player is playing its own Sonos queue (Next follows the queue list)',
+            name: 'Playing queue',
+        },
         current_uri: {
             def: '',
             type: 'string',

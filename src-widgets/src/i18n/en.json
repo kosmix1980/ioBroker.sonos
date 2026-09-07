@@ -16,6 +16,7 @@
     "player": "Sonos player",
     "playlists": "Playlists",
     "queue": "Queue",
+    "queue_other_source": "A playlist or stream is playing. This list is the saved Sonos queue, not what Next will play.",
     "now_playing": "Now",
     "up_next": "Next",
     "recent": "Recent",

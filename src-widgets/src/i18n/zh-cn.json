@@ -16,6 +16,7 @@
     "player": "索诺斯播放器",
     "playlists": "播放列表",
     "queue": "队列",
+    "queue_other_source": "正在播放播放列表或流。此列表是已保存的 Sonos 队列，不是 Next 将播放的内容。",
     "now_playing": "正在播放",
     "up_next": "下一首",
     "recent": "最近的",
