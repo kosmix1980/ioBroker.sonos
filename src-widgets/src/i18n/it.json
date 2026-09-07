@@ -3,6 +3,7 @@
     "default_room_tooltip": "Stanza selezionata all'apertura della vista. Vuoto = primo dispositivo.",
     "favorites": "Preferiti",
     "group": "Gruppo",
+    "group_master": "Master",
     "instance": "Esempio",
     "legacy_oid": "Oggetto istanza (vis 1)",
     "mute": "Muto",

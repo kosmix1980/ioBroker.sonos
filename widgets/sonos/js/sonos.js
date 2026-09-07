@@ -138,6 +138,7 @@ vis.binds = vis.binds || {};
             $div.data('sonos-sheet', !!$div.data('sonos-sheet'));
             $div.data('sonos-player', $div.data('sonos-player') || vis.binds.sonos.loadRoom(widgetID, instance) || '');
 
+            vis.binds.sonos.injectGroupCss();
             vis.binds.sonos.unbind(widgetID);
 
             if (!instance) {
@@ -171,6 +172,21 @@ vis.binds = vis.binds || {};
 
         themeClass: function ($div) {
             return 'sonos-ctrl sonos-ctrl-theme-' + vis.binds.sonos.normalizeTheme($div && $div.data ? $div.data('sonos-theme') : '');
+        },
+
+        injectGroupCss: function () {
+            if (typeof document === 'undefined' || document.getElementById('sonos-ctrl-group-css')) {
+                return;
+            }
+            var el = document.createElement('style');
+            el.id = 'sonos-ctrl-group-css';
+            el.type = 'text/css';
+            el.appendChild(document.createTextNode(
+                '.sonos-ctrl-cluster{display:inline-flex!important;flex-wrap:wrap;align-items:center;gap:4px;padding:3px 4px;border-radius:16px;max-width:100%}' +
+                '.sonos-ctrl-chip-crown{flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}' +
+                '.sonos-ctrl-group-lead{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-weight:800}'
+            ));
+            (document.head || document.documentElement).appendChild(el);
         },
 
         resolveInstance: function (oid) {
@@ -1264,13 +1280,43 @@ vis.binds = vis.binds || {};
         },
 
         isGroupedWith: function (player, other) {
+            if (!player || !other) {
+                return false;
+            }
+            if (vis.binds.sonos.normIp(player.ip) === vis.binds.sonos.normIp(other.ip)) {
+                return true;
+            }
             var coordA = vis.binds.sonos.coordinatorOf(player);
             var coordB = vis.binds.sonos.coordinatorOf(other);
-            return coordA && coordA === coordB;
+            if (coordA && coordA === coordB) {
+                return true;
+            }
+            var listed = vis.binds.sonos.membersChannelsOf(player);
+            if (listed.length < 2) {
+                return false;
+            }
+            return listed.indexOf(vis.binds.sonos.normIp(other.ip)) !== -1;
+        },
+
+        normIp: function (value) {
+            return String(value || '').trim().replace(/[.\s]+/g, '_');
         },
 
         coordinatorOf: function (player) {
-            return String(vis.binds.sonos.state(player.id, 'coordinator') || player.ip);
+            var raw = String(vis.binds.sonos.state(player.id, 'coordinator') || '').trim();
+            if (!raw || raw === 'null' || raw === 'undefined') {
+                return vis.binds.sonos.normIp(player.ip);
+            }
+            return vis.binds.sonos.normIp(raw);
+        },
+
+        membersChannelsOf: function (player) {
+            var coord = vis.binds.sonos.coordinatorOf(player);
+            var coordId = String(player.id || '').replace(/\.[^.]+$/, '.' + coord);
+            var raw = vis.binds.sonos.state(coordId, 'membersChannels') || vis.binds.sonos.state(player.id, 'membersChannels');
+            return String(raw || '').split(',').map(function (item) {
+                return vis.binds.sonos.normIp(item.trim());
+            }).filter(Boolean);
         },
 
         groupMembers: function (player, players) {
@@ -1312,14 +1358,39 @@ vis.binds = vis.binds || {};
             return '--sonos-group:' + color + ';--sonos-group-bg:' + vis.binds.sonos.hexRgba(color, 0.32);
         },
 
+        clusterStyle: function (color) {
+            if (!color) {
+                return '';
+            }
+            return vis.binds.sonos.groupStyle(color) +
+                ';display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;padding:3px 4px;border-radius:16px;background:' +
+                vis.binds.sonos.hexRgba(color, 0.32) +
+                ';box-shadow:inset 0 0 0 2px ' + color;
+        },
+
+        chipGroupStyle: function (color, isMaster, isActive) {
+            var style = vis.binds.sonos.groupStyle(color);
+            if (!color) {
+                return style;
+            }
+            if (isMaster && !isActive) {
+                return style + ';background:' + color + ';color:#102018;font-weight:800;box-shadow:inset 0 0 0 2px ' + color;
+            }
+            if (isActive) {
+                return style + ';box-shadow:inset 0 0 0 2px #fff,0 0 0 2px ' + color;
+            }
+            return style + ';background:' + vis.binds.sonos.hexRgba(color, 0.32) + ';box-shadow:inset 0 0 0 2px ' + color;
+        },
+
         roomChipHtml: function (player, selectedIp, groupColor) {
             var isActive = player.ip === selectedIp;
             var isPlaying = vis.binds.sonos.state(vis.binds.sonos.mediaPlayerId(player), 'state') === 'play';
             var alive = vis.binds.sonos.state(player.id, 'alive') !== false;
-            var isMaster = Boolean(groupColor && vis.binds.sonos.coordinatorOf(player) === player.ip);
+            var isMaster = Boolean(groupColor && vis.binds.sonos.coordinatorOf(player) === vis.binds.sonos.normIp(player.ip));
             var title = isMaster
                 ? vis.binds.sonos.esc(player.name + ' · ' + vis.binds.sonos.t('groupMasterHint'))
                 : vis.binds.sonos.esc(player.name);
+            var chipStyle = groupColor ? vis.binds.sonos.chipGroupStyle(groupColor, isMaster, isActive) : '';
             return '<button type="button" class="sonos-ctrl-chip' +
                 (isActive ? ' is-active' : '') +
                 (isPlaying ? ' is-playing' : '') +
@@ -1327,15 +1398,16 @@ vis.binds = vis.binds || {};
                 (groupColor ? ' is-grouped' : '') +
                 (alive ? '' : ' is-offline') +
                 '" data-ip="' + vis.binds.sonos.esc(player.ip) + '"' +
-                (groupColor ? ' style="' + vis.binds.sonos.groupStyle(groupColor) + '"' : '') +
+                (chipStyle ? ' style="' + chipStyle + '"' : '') +
                 ' title="' + title + '"' +
                 (isMaster ? ' aria-label="' + title + '"' : '') + '>' +
                 '<span class="sonos-ctrl-chip-name">' + vis.binds.sonos.esc(player.name) + '</span>' +
-                (isMaster ? '<span class="sonos-ctrl-chip-crown" aria-hidden="true"></span>' : '') +
+                (isMaster ? '<span class="sonos-ctrl-chip-crown" aria-hidden="true">★ ' + vis.binds.sonos.esc(vis.binds.sonos.t('groupMaster')) + '</span>' : '') +
                 '</button>';
         },
 
         roomsHtml: function (players, selectedIp) {
+            vis.binds.sonos.injectGroupCss();
             var seen = {};
             return players.map(function (player) {
                 var accent = vis.binds.sonos.groupAccent(player, players);
@@ -1348,8 +1420,8 @@ vis.binds = vis.binds || {};
                 }
                 seen[coord] = true;
                 var members = vis.binds.sonos.groupMembers(player, players).slice().sort(function (a, b) {
-                    var aMaster = vis.binds.sonos.coordinatorOf(a) === a.ip ? 0 : 1;
-                    var bMaster = vis.binds.sonos.coordinatorOf(b) === b.ip ? 0 : 1;
+                    var aMaster = vis.binds.sonos.coordinatorOf(a) === vis.binds.sonos.normIp(a.ip) ? 0 : 1;
+                    var bMaster = vis.binds.sonos.coordinatorOf(b) === vis.binds.sonos.normIp(b.ip) ? 0 : 1;
                     if (aMaster !== bMaster) {
                         return aMaster - bMaster;
                     }
@@ -1358,7 +1430,7 @@ vis.binds = vis.binds || {};
                 var isCurrent = members.some(function (member) { return member.ip === selectedIp; });
                 return '<div class="sonos-ctrl-cluster' + (isCurrent ? ' is-current' : '') +
                     '" role="group" aria-label="' + vis.binds.sonos.esc(vis.binds.sonos.t('group')) + '"' +
-                    ' style="' + vis.binds.sonos.groupStyle(accent) + '">' +
+                    ' style="' + vis.binds.sonos.clusterStyle(accent) + '">' +
                     members.map(function (member) {
                         return vis.binds.sonos.roomChipHtml(member, selectedIp, accent);
                     }).join('') +
@@ -1461,30 +1533,37 @@ vis.binds = vis.binds || {};
 
             var roomsHtml = vis.binds.sonos.roomsHtml(players, selected.ip);
             var selectedGroupColor = vis.binds.sonos.groupAccent(selected, players);
-            var masterPlayer = players.filter(function (player) { return player.ip === coordinator; })[0];
+            var masterPlayer = players.filter(function (player) {
+                return vis.binds.sonos.normIp(player.ip) === vis.binds.sonos.normIp(coordinator);
+            })[0];
 
             var groupHtml = players.filter(function (player) { return player.ip !== selected.ip; }).map(function (player) {
                 var checked = vis.binds.sonos.isGroupedWith(selected, player);
                 var accent = vis.binds.sonos.groupAccent(player, players);
-                var isMaster = Boolean(accent && vis.binds.sonos.coordinatorOf(player) === player.ip);
+                var isMaster = Boolean(accent && vis.binds.sonos.coordinatorOf(player) === vis.binds.sonos.normIp(player.ip));
+                var labelStyle = accent
+                    ? (isMaster
+                        ? vis.binds.sonos.chipGroupStyle(accent, true, false)
+                        : vis.binds.sonos.groupStyle(accent) + ';background:' + vis.binds.sonos.hexRgba(accent, 0.32) + ';box-shadow:inset 0 0 0 2px ' + accent)
+                    : '';
                 return '<label class="' +
                     (checked ? 'is-grouped' : (accent ? 'is-other-group' : '')) +
                     (isMaster ? ' is-master' : '') + '"' +
-                    (accent ? ' style="' + vis.binds.sonos.groupStyle(accent) + '"' : '') +
+                    (labelStyle ? ' style="' + labelStyle + '"' : '') +
                     (isMaster ? ' title="' + vis.binds.sonos.esc(vis.binds.sonos.t('groupMasterHint')) + '"' : '') +
                     '><input type="checkbox" data-group-ip="' + vis.binds.sonos.esc(player.ip) + '"' + (checked ? ' checked' : '') + '>' +
-                    (isMaster ? '<span class="sonos-ctrl-chip-crown" aria-hidden="true"></span>' : '') +
-                    vis.binds.sonos.esc(player.name) + '</label>';
+                    vis.binds.sonos.esc(player.name) +
+                    (isMaster ? ' <span class="sonos-ctrl-chip-crown">★ ' + vis.binds.sonos.esc(vis.binds.sonos.t('groupMaster')) + '</span>' : '') +
+                    '</label>';
             }).join('');
 
             if (groupHtml) {
                 groupHtml = '<span>' + vis.binds.sonos.esc(t('group')) + '</span>' +
                     (grouped.length > 1 && masterPlayer
                         ? '<span class="sonos-ctrl-group-lead"' +
-                            (selectedGroupColor ? ' style="' + vis.binds.sonos.groupStyle(selectedGroupColor) + '"' : '') +
+                            (selectedGroupColor ? ' style="' + vis.binds.sonos.chipGroupStyle(selectedGroupColor, true, false) + '"' : '') +
                             ' title="' + vis.binds.sonos.esc(t('groupMasterHint')) + '">' +
-                            '<span class="sonos-ctrl-chip-crown" aria-hidden="true"></span>' +
-                            vis.binds.sonos.esc(t('groupMaster')) + ': ' + vis.binds.sonos.esc(masterPlayer.name) +
+                            '★ ' + vis.binds.sonos.esc(t('groupMaster')) + ': ' + vis.binds.sonos.esc(masterPlayer.name) +
                             '</span>'
                         : '') +
                     groupHtml +

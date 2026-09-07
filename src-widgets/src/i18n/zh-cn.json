@@ -3,6 +3,7 @@
     "default_room_tooltip": "视图打开时选择的房间。空 = 第一个设备。",
     "favorites": "收藏夹",
     "group": "团体",
+    "group_master": "Master",
     "instance": "实例",
     "legacy_oid": "实例对象（参见 1）",
     "mute": "沉默的",

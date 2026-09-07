@@ -3,6 +3,7 @@
     "default_room_tooltip": "Habitación que se selecciona cuando se abre la vista. Vacío = primer dispositivo.",
     "favorites": "Favoritos",
     "group": "Grupo",
+    "group_master": "Master",
     "instance": "Instancia",
     "legacy_oid": "Objeto de instancia (frente a 1)",
     "mute": "Silenciar",

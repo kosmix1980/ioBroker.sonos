@@ -3,6 +3,7 @@
     "default_room_tooltip": "Pokój wybrany po otwarciu widoku. Puste = pierwsze urządzenie.",
     "favorites": "Ulubione",
     "group": "Grupa",
+    "group_master": "Master",
     "instance": "Przykład",
     "legacy_oid": "Obiekt instancji (vis 1)",
     "mute": "Niemy",

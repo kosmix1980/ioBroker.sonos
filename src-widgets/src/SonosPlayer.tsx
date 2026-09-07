@@ -308,8 +308,42 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
 
     /** The room whose playback the selected room follows */
     private coordinatorOf(ip: string): string {
-        const coordinator = this.str(ip, 'coordinator').trim();
-        return coordinator && coordinator !== ip ? coordinator : ip;
+        const coordinator = this.normIp(this.str(ip, 'coordinator').trim());
+        const self = this.normIp(ip);
+        return coordinator && coordinator !== 'null' && coordinator !== 'undefined' ? coordinator : self;
+    }
+
+    private normIp(value: string): string {
+        return String(value || '')
+            .trim()
+            .replace(/[.\s]+/g, '_');
+    }
+
+    private groupMemberRooms(ip: string): SonosRoomInfo[] {
+        const coord = this.coordinatorOf(ip);
+        const listed = this.str(coord, 'membersChannels')
+            .split(',')
+            .map(item => this.normIp(item.trim()))
+            .filter(Boolean);
+        const members = this.state.rooms.filter(room => {
+            const roomIp = this.normIp(room.ip);
+            return this.coordinatorOf(room.ip) === coord || listed.includes(roomIp);
+        });
+        return members.length >= 2 ? members : [];
+    }
+
+    private groupAccent(ip: string): string {
+        if (this.groupMemberRooms(ip).length < 2) {
+            return '';
+        }
+        const palette = ['#7dd3fc', '#86efac', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fb7185', '#a3e635', '#818cf8'];
+        const key = this.coordinatorOf(ip);
+        let hash = 0;
+        for (let i = 0; i < key.length; i++) {
+            hash = (hash << 5) - hash + key.charCodeAt(i);
+            hash |= 0;
+        }
+        return palette[Math.abs(hash) % palette.length];
     }
 
     private set(ip: string, name: string, value: ioBroker.StateValue): void {
@@ -415,23 +449,78 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
             return null;
         }
 
+        const seen = new Set<string>();
+        const nodes: React.ReactNode[] = [];
+        this.state.rooms.forEach(room => {
+            const accent = this.groupAccent(room.ip);
+            if (!accent) {
+                nodes.push(this.renderRoomChip(room, '', false));
+                return;
+            }
+            const coord = this.coordinatorOf(room.ip);
+            if (seen.has(coord)) {
+                return;
+            }
+            seen.add(coord);
+            const members = this.groupMemberRooms(room.ip).slice().sort((a, b) => {
+                const aMaster = this.coordinatorOf(a.ip) === this.normIp(a.ip) ? 0 : 1;
+                const bMaster = this.coordinatorOf(b.ip) === this.normIp(b.ip) ? 0 : 1;
+                if (aMaster !== bMaster) {
+                    return aMaster - bMaster;
+                }
+                return a.name.localeCompare(b.name);
+            });
+            nodes.push(
+                <Box
+                    key={`group-${coord}`}
+                    component="div"
+                    sx={{
+                        display: 'inline-flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        p: 0.4,
+                        borderRadius: 2,
+                        bgcolor: `${accent}33`,
+                        outline: `2px solid ${accent}`,
+                    }}
+                >
+                    {members.map(member =>
+                        this.renderRoomChip(
+                            member,
+                            accent,
+                            this.coordinatorOf(member.ip) === this.normIp(member.ip),
+                        ),
+                    )}
+                </Box>,
+            );
+        });
+
+        return <div style={styles.rooms}>{nodes}</div>;
+    }
+
+    private renderRoomChip(room: SonosRoomInfo, accent: string, isMaster: boolean): React.JSX.Element {
+        const alive = this.val(room.ip, 'alive') !== false;
+        const selected = room.ip === this.state.selectedRoom;
         return (
-            <div style={styles.rooms}>
-                {this.state.rooms.map(room => {
-                    const alive = this.val(room.ip, 'alive') !== false;
-                    return (
-                        <Chip
-                            key={room.ip}
-                            size="small"
-                            label={room.name}
-                            color={room.ip === this.state.selectedRoom ? 'primary' : 'default'}
-                            variant={room.ip === this.state.selectedRoom ? 'filled' : 'outlined'}
-                            disabled={!alive}
-                            onClick={() => this.selectRoom(room.ip)}
-                        />
-                    );
-                })}
-            </div>
+            <Chip
+                key={room.ip}
+                size="small"
+                icon={isMaster ? <Star sx={{ color: 'inherit !important' }} /> : undefined}
+                label={isMaster ? `${room.name} · ${Generic.t('group_master')}` : room.name}
+                color={selected ? 'primary' : 'default'}
+                variant={selected ? 'filled' : 'outlined'}
+                disabled={!alive}
+                onClick={() => this.selectRoom(room.ip)}
+                title={isMaster ? Generic.t('group_master') : room.name}
+                sx={
+                    accent
+                        ? isMaster && !selected
+                            ? { bgcolor: accent, color: '#102018', fontWeight: 800, borderColor: accent }
+                            : { outline: `2px solid ${accent}` }
+                        : undefined
+                }
+            />
         );
     }
 
@@ -585,26 +674,37 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
         const coordinator = this.coordinatorOf(ip);
         const members = this.str(coordinator, 'membersChannels')
             .split(',')
-            .map(item => item.trim())
+            .map(item => this.normIp(item.trim()))
             .filter(Boolean);
 
         return (
             <div style={styles.groups}>
                 <Typography variant="caption">{Generic.t('group')}</Typography>
-                {this.state.rooms.map(room => (
-                    <FormControlLabel
-                        key={room.ip}
-                        control={
-                            <Checkbox
-                                size="small"
-                                disabled={room.ip === coordinator}
-                                checked={room.ip === coordinator || members.includes(room.ip)}
-                                onChange={(_e, checked) => this.toggleGroupMember(room.ip, checked)}
-                            />
-                        }
-                        label={<Typography variant="caption">{room.name}</Typography>}
-                    />
-                ))}
+                {this.state.rooms.map(room => {
+                    const isMaster = this.normIp(room.ip) === coordinator && this.groupMemberRooms(room.ip).length >= 2;
+                    return (
+                        <FormControlLabel
+                            key={room.ip}
+                            control={
+                                <Checkbox
+                                    size="small"
+                                    disabled={this.normIp(room.ip) === coordinator}
+                                    checked={
+                                        this.normIp(room.ip) === coordinator ||
+                                        members.includes(this.normIp(room.ip))
+                                    }
+                                    onChange={(_e, checked) => this.toggleGroupMember(room.ip, checked)}
+                                />
+                            }
+                            label={
+                                <Typography variant="caption">
+                                    {room.name}
+                                    {isMaster ? ` · ${Generic.t('group_master')}` : ''}
+                                </Typography>
+                            }
+                        />
+                    );
+                })}
             </div>
         );
     }

@@ -204,10 +204,11 @@
 
 .sonos-ctrl-chip-crown {
     flex: 0 0 auto;
-    width: 0.9em;
-    height: 0.72em;
-    background: currentColor;
-    clip-path: polygon(6% 100%, 6% 42%, 22% 58%, 50% 6%, 78% 58%, 94% 42%, 94% 100%);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .sonos-ctrl-chip.is-playing::before {

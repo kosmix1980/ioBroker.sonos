@@ -3,6 +3,7 @@
     "default_room_tooltip": "Sala que é selecionada quando a vista é aberta. Vazio = primeiro dispositivo.",
     "favorites": "Favoritos",
     "group": "Grupo",
+    "group_master": "Master",
     "instance": "Exemplo",
     "legacy_oid": "Objeto de instância (vis 1)",
     "mute": "Mudo",

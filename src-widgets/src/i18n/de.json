@@ -3,6 +3,7 @@
     "default_room_tooltip": "Raum, der beim Öffnen der Ansicht gewählt ist. Leer = erstes Gerät.",
     "favorites": "Favoriten",
     "group": "Gruppe",
+    "group_master": "Master",
     "instance": "Instanz",
     "legacy_oid": "Instanz-Objekt (vis 1)",
     "mute": "Stumm",

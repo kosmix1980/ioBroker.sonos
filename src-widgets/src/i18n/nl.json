@@ -3,6 +3,7 @@
     "default_room_tooltip": "Kamer die wordt geselecteerd wanneer de weergave wordt geopend. Leeg = eerste apparaat.",
     "favorites": "Favorieten",
     "group": "Groep",
+    "group_master": "Master",
     "instance": "Aanleg",
     "legacy_oid": "Instantieobject (vis 1)",
     "mute": "Stom",

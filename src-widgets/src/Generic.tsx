@@ -100,7 +100,12 @@ export default class Generic<
      * @param values state cache to read `coordinator` from
      */
     static getCoordinator(ip: string, values: Record<string, any>, namespace: string): string {
-        const coordinator = String(values[`${namespace}.root.${ip}.coordinator.val`] || '').trim();
-        return coordinator && coordinator !== ip ? coordinator : ip;
+        const coordinator = String(values[`${namespace}.root.${ip}.coordinator.val`] || '')
+            .trim()
+            .replace(/[.\s]+/g, '_');
+        const self = String(ip || '')
+            .trim()
+            .replace(/[.\s]+/g, '_');
+        return coordinator && coordinator !== 'null' && coordinator !== 'undefined' ? coordinator : self;
     }
 }

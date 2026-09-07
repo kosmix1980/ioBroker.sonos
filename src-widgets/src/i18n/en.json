@@ -3,6 +3,7 @@
     "default_room_tooltip": "Room that is selected when the view opens. Empty = first device.",
     "favorites": "Favorites",
     "group": "Group",
+    "group_master": "Master",
     "instance": "Instance",
     "legacy_oid": "Instance object (vis 1)",
     "mute": "Mute",
