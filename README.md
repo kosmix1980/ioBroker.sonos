@@ -265,6 +265,7 @@ adapter to get a working state back.
 * (kosmix1980) GitHub-installable 4.2.1 with vis-1 kiosk widget (themes, quick-starts, home-theater unmute) on the official backend switch
 * (kosmix1980) vis-1: grouped rooms sit in a colored cluster; the coordinator is marked as Master
 * (kosmix1980) vis: group cluster and Master label use inline styles so vis cache cannot hide them
+* (kosmix1980) vis-2 widget bundle is shipped so grouping colors reach vis-2; vis-1 shows bonded members in the cluster
 
 ### 4.2.1 (2026-09-07)
 * (@GermanBluefox) Added two widgets for the ioBroker.devices dashboard: SONOS player and SONOS rooms

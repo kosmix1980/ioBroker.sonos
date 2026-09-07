@@ -11,15 +11,11 @@ iob_npm.done
 # so GitHub installs include the start file build/main.js.
 *.tsbuildinfo
 
-# vis-2 widget sources and build output (built by "npm run build:widgets", shipped via prepublishOnly)
+# vis-2 widget sources stay local; the copied bundle in widgets/sonos/ is committed
+# so a GitHub install actually updates vis-2 (customWidgets.js).
 src-widgets/node_modules/
 src-widgets/build/
 src-widgets/.__mf__temp/
-widgets/sonos/assets/
-widgets/sonos/customWidgets.js
-widgets/sonos/mf-stats.json
-widgets/sonos/mf-manifest.json
-widgets/sonos/img/
 
 # JsonConfig custom component and ioBroker.devices widgets: the sources are built with vite and
 # the result is committed (admin/custom/, admin/dm-widgets/), because the module federation build

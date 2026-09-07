@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.2.1',
+        version: '4.2.1g3',
         _bound: {},
         _tickers: {},
         _renderTimers: {},
@@ -329,10 +329,11 @@ vis.binds = vis.binds || {};
             return Boolean(coord && coord !== player.ip && coord !== 'null' && coord !== 'undefined');
         },
 
-        findPlayers: function (instance) {
+        findPlayers: function (instance, opts) {
             var prefix = instance + '.root.';
             var seen = {};
             var players = [];
+            var includeHidden = opts && opts.includeHidden;
 
             function add(id, name) {
                 if (!id || id.indexOf(prefix) !== 0) {
@@ -387,6 +388,9 @@ vis.binds = vis.binds || {};
             players.sort(function (a, b) {
                 return String(a.name).localeCompare(String(b.name), vis.language || undefined);
             });
+            if (includeHidden) {
+                return players;
+            }
             var hidden = vis.binds.sonos.htSatelliteIps(instance);
             return players.filter(function (player) {
                 return !hidden[player.ip];
@@ -1326,7 +1330,9 @@ vis.binds = vis.binds || {};
         },
 
         groupAccent: function (player, players) {
-            if (vis.binds.sonos.groupMembers(player, players).length < 2) {
+            var visible = vis.binds.sonos.groupMembers(player, players).length;
+            var listed = vis.binds.sonos.membersChannelsOf(player).length;
+            if (visible < 2 && listed < 2) {
                 return '';
             }
             var palette = ['#7dd3fc', '#86efac', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fb7185', '#a3e635', '#818cf8'];
@@ -1382,8 +1388,9 @@ vis.binds = vis.binds || {};
             return style + ';background:' + vis.binds.sonos.hexRgba(color, 0.32) + ';box-shadow:inset 0 0 0 2px ' + color;
         },
 
-        roomChipHtml: function (player, selectedIp, groupColor) {
-            var isActive = player.ip === selectedIp;
+        roomChipHtml: function (player, selectedIp, groupColor, satPrimary) {
+            var isSat = Boolean(satPrimary);
+            var isActive = !isSat && player.ip === selectedIp;
             var isPlaying = vis.binds.sonos.state(vis.binds.sonos.mediaPlayerId(player), 'state') === 'play';
             var alive = vis.binds.sonos.state(player.id, 'alive') !== false;
             var isMaster = Boolean(groupColor && vis.binds.sonos.coordinatorOf(player) === vis.binds.sonos.normIp(player.ip));
@@ -1396,21 +1403,24 @@ vis.binds = vis.binds || {};
                 (isPlaying ? ' is-playing' : '') +
                 (isMaster ? ' is-master' : '') +
                 (groupColor ? ' is-grouped' : '') +
+                (isSat ? ' is-sat' : '') +
                 (alive ? '' : ' is-offline') +
-                '" data-ip="' + vis.binds.sonos.esc(player.ip) + '"' +
+                '" data-ip="' + vis.binds.sonos.esc(isSat ? satPrimary : player.ip) + '"' +
                 (chipStyle ? ' style="' + chipStyle + '"' : '') +
                 ' title="' + title + '"' +
                 (isMaster ? ' aria-label="' + title + '"' : '') + '>' +
                 '<span class="sonos-ctrl-chip-name">' + vis.binds.sonos.esc(player.name) + '</span>' +
-                (isMaster ? '<span class="sonos-ctrl-chip-crown" aria-hidden="true">★ ' + vis.binds.sonos.esc(vis.binds.sonos.t('groupMaster')) + '</span>' : '') +
+                (isMaster ? '<span class="sonos-ctrl-chip-crown">★ ' + vis.binds.sonos.esc(vis.binds.sonos.t('groupMaster')) + '</span>' : '') +
                 '</button>';
         },
 
-        roomsHtml: function (players, selectedIp) {
+        roomsHtml: function (players, selectedIp, allPlayers, satMap) {
             vis.binds.sonos.injectGroupCss();
+            allPlayers = allPlayers || players;
+            satMap = satMap || {};
             var seen = {};
             return players.map(function (player) {
-                var accent = vis.binds.sonos.groupAccent(player, players);
+                var accent = vis.binds.sonos.groupAccent(player, allPlayers);
                 if (!accent) {
                     return vis.binds.sonos.roomChipHtml(player, selectedIp, '');
                 }
@@ -1419,7 +1429,7 @@ vis.binds = vis.binds || {};
                     return '';
                 }
                 seen[coord] = true;
-                var members = vis.binds.sonos.groupMembers(player, players).slice().sort(function (a, b) {
+                var members = vis.binds.sonos.groupMembers(player, allPlayers).slice().sort(function (a, b) {
                     var aMaster = vis.binds.sonos.coordinatorOf(a) === vis.binds.sonos.normIp(a.ip) ? 0 : 1;
                     var bMaster = vis.binds.sonos.coordinatorOf(b) === vis.binds.sonos.normIp(b.ip) ? 0 : 1;
                     if (aMaster !== bMaster) {
@@ -1432,7 +1442,7 @@ vis.binds = vis.binds || {};
                     '" role="group" aria-label="' + vis.binds.sonos.esc(vis.binds.sonos.t('group')) + '"' +
                     ' style="' + vis.binds.sonos.clusterStyle(accent) + '">' +
                     members.map(function (member) {
-                        return vis.binds.sonos.roomChipHtml(member, selectedIp, accent);
+                        return vis.binds.sonos.roomChipHtml(member, selectedIp, accent, satMap[member.ip] || '');
                     }).join('') +
                     '</div>';
             }).join('');
@@ -1466,6 +1476,7 @@ vis.binds = vis.binds || {};
             }
 
             var t = vis.binds.sonos.t;
+            var allPlayers = vis.binds.sonos.findPlayers(instance, { includeHidden: true });
             var players = vis.binds.sonos.findPlayers(instance);
             if (!players.length) {
                 $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(t('noPlayers')) + '</div></div>');
@@ -1527,19 +1538,19 @@ vis.binds = vis.binds || {};
             }
             var coordinator = String(vis.binds.sonos.state(selected.id, 'coordinator') || selected.ip);
             var groupVolume = parseInt(vis.binds.sonos.state(mediaId, 'group_volume'), 10);
-            var grouped = players.filter(function (player) {
+            var grouped = allPlayers.filter(function (player) {
                 return vis.binds.sonos.isGroupedWith(selected, player);
             });
 
-            var roomsHtml = vis.binds.sonos.roomsHtml(players, selected.ip);
-            var selectedGroupColor = vis.binds.sonos.groupAccent(selected, players);
+            var roomsHtml = vis.binds.sonos.roomsHtml(players, selected.ip, allPlayers, satMap);
+            var selectedGroupColor = vis.binds.sonos.groupAccent(selected, allPlayers);
             var masterPlayer = players.filter(function (player) {
                 return vis.binds.sonos.normIp(player.ip) === vis.binds.sonos.normIp(coordinator);
             })[0];
 
             var groupHtml = players.filter(function (player) { return player.ip !== selected.ip; }).map(function (player) {
                 var checked = vis.binds.sonos.isGroupedWith(selected, player);
-                var accent = vis.binds.sonos.groupAccent(player, players);
+                var accent = vis.binds.sonos.groupAccent(player, allPlayers);
                 var isMaster = Boolean(accent && vis.binds.sonos.coordinatorOf(player) === vis.binds.sonos.normIp(player.ip));
                 var labelStyle = accent
                     ? (isMaster
@@ -1762,6 +1773,12 @@ vis.binds = vis.binds || {};
                         '<span class="sonos-ctrl-ver">' + vis.binds.sonos.esc(vis.binds.sonos.version) + '</span>' +
                         '<div class="sonos-ctrl-rooms">' + roomsHtml + '</div>' +
                     '</div>' +
+                    (grouped.length > 1 || vis.binds.sonos.membersChannelsOf(selected).length > 1
+                        ? '<div class="sonos-ctrl-group-banner" style="' + vis.binds.sonos.clusterStyle(selectedGroupColor || '#7dd3fc') + ';align-self:flex-start;font-weight:700">' +
+                            vis.binds.sonos.esc(t('group')) + ': ' + grouped.map(function (player) { return vis.binds.sonos.esc(player.name); }).join(' · ') +
+                            (masterPlayer ? ' — ★ ' + vis.binds.sonos.esc(t('groupMaster')) + ' ' + vis.binds.sonos.esc(masterPlayer.name) : '') +
+                            '</div>'
+                        : '') +
                     '<div class="sonos-ctrl-tabs">' + tabsHtml + '</div>' +
                     '<div class="sonos-ctrl-body">' +
                         '<div class="sonos-ctrl-main">' +

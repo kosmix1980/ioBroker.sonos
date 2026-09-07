@@ -225,6 +225,15 @@
     background: var(--sonos-chip-ink);
 }
 
+.sonos-ctrl-chip.is-sat {
+    opacity: 0.75;
+    cursor: default;
+}
+
+.sonos-ctrl-group-banner {
+    font-size: 12px;
+}
+
 .sonos-ctrl-chip.is-offline {
     opacity: 0.45;
 }
