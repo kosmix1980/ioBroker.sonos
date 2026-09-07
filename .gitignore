@@ -7,8 +7,8 @@ iob_npm.done
 #ignore .commitinfo created by ioBroker release script
 .commitinfo
 
-# compiled typescript
-build/
+# TypeScript incremental info. The compiled adapter (build/) is committed
+# so GitHub installs include the start file build/main.js.
 *.tsbuildinfo
 
 # vis-2 widget sources and build output (built by "npm run build:widgets", shipped via prepublishOnly)

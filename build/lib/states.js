@@ -1,12 +1,12 @@
+"use strict";
 /**
  * Definitions of the ioBroker states, that are created for every sonos device
  */
-
-/** Definition of one state. Some entries use additional attributes, like `values`, so an index signature is required */
-export type StateDefinition = Partial<ioBroker.StateCommon> & Record<string, unknown>;
-
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.newGroupStates = void 0;
+exports.getChannelStates = getChannelStates;
 /** States, that were added after the first version of the adapter */
-export const newGroupStates: Record<string, StateDefinition> = {
+exports.newGroupStates = {
     add_to_group: {
         def: '',
         type: 'string',
@@ -94,10 +94,9 @@ export const newGroupStates: Record<string, StateDefinition> = {
         name: 'Playlist array',
     },
 };
-
 // Definition of all states, that every sonos channel must have
-export function getChannelStates(): Record<string, StateDefinition> {
-    const states: Record<string, StateDefinition> = {
+function getChannelStates() {
+    const states = {
         state_simple: {
             // media.state -            Text state of player: stop, play, pause (read, write)
             def: false,
@@ -533,10 +532,9 @@ export function getChannelStates(): Record<string, StateDefinition> {
             name: 'Play browsed media',
         },
     };
-
-    for (const g in newGroupStates) {
-        states[g] = newGroupStates[g];
+    for (const g in exports.newGroupStates) {
+        states[g] = exports.newGroupStates[g];
     }
-
     return states;
 }
+//# sourceMappingURL=states.js.map

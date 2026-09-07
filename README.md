@@ -11,6 +11,10 @@
 
 Control and monitor SONOS devices with ioBroker.
 
+**GitHub install of this fork:** Admin → GitHub → `kosmix1980/ioBroker.sonos` → branch `cursor/vis1-on-420-93d4`. This branch includes `build/main.js`. Do **not** GitHub-install `ioBroker/ioBroker.sonos` master — that tree has no start file. Official releases come from npm.
+
+The instance setting **Sonos library** switches between `sonos-discovery` (default) and `@svrooij/sonos` (experimental).
+
 ## Widgets
 
 The adapter ships one widget for both visualisation adapters. Both are installed with the adapter;
@@ -256,6 +260,9 @@ adapter to get a working state back.
 	### **WORK IN PROGRESS**
 -->
 ## Changelog
+### **WORK IN PROGRESS**
+* (kosmix1980) GitHub-installable 4.2.1 with vis-1 kiosk widget (themes, quick-starts, home-theater unmute) on the official backend switch
+
 ### 4.2.1 (2026-09-07)
 * (@GermanBluefox) Added two widgets for the ioBroker.devices dashboard: SONOS player and SONOS rooms
 * (@GermanBluefox) Added a "Control" tab to the instance settings, which plays and groups the speakers directly in admin

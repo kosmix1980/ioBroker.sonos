@@ -220,6 +220,7 @@
     "fadeIn": 0,
     "fadeOut": 0,
     "webServer": "",
+    "quickstarts": [],
     "devices": [
       {
         "name": "Sonos1",
