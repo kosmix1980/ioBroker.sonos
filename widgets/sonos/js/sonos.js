@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.2.1g3',
+        version: '4.2.1g4',
         _bound: {},
         _tickers: {},
         _renderTimers: {},
@@ -32,6 +32,9 @@ vis.binds = vis.binds || {};
                 emptyFavorites: 'No favorites. Add them in the Sonos app first.',
                 emptyPlaylists: 'No playlists. Create them in the Sonos app first.',
                 emptyQueue: 'Queue is empty.',
+                nowTrack: 'Now',
+                upNext: 'Next',
+                emptyQueueNext: 'No further tracks in the queue.',
                 emptyRecent: 'No recent tracks yet. They appear after something is played.',
                 emptySources: 'No entries in this folder.',
                 radio: 'TuneIn Radio',
@@ -75,6 +78,9 @@ vis.binds = vis.binds || {};
                 emptyFavorites: 'Keine Favoriten. Lege sie zuerst in der Sonos-App an.',
                 emptyPlaylists: 'Keine Playlists. Lege sie zuerst in der Sonos-App an.',
                 emptyQueue: 'Die Warteschlange ist leer.',
+                nowTrack: 'Jetzt',
+                upNext: 'Als Nächstes',
+                emptyQueueNext: 'Keine weiteren Titel in der Warteschlange.',
                 emptyRecent: 'Noch keine Titel. Die Liste füllt sich beim Abspielen.',
                 emptySources: 'In diesem Ordner gibt es keine Einträge.',
                 radio: 'TuneIn Radio',
@@ -837,6 +843,24 @@ vis.binds = vis.binds || {};
             return items;
         },
 
+        upcomingQueue: function (items, currentNo) {
+            if (!items || !items.length) {
+                return [];
+            }
+            var idx = -1;
+            var i;
+            for (i = 0; i < items.length; i++) {
+                if (items[i].current || (currentNo > 0 && items[i].no === currentNo)) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx < 0 && currentNo > 0 && currentNo <= items.length) {
+                idx = currentNo - 1;
+            }
+            return idx > 0 ? items.slice(idx) : items;
+        },
+
         parseFavorites: function (playerId) {
             var html = String(vis.binds.sonos.state(playerId, 'favorites_list_html') || '');
             var items = [];
@@ -1586,6 +1610,10 @@ vis.binds = vis.binds || {};
 
             var listHtml = '';
             var serviceName = '';
+            var queueItems = vis.binds.sonos.parseQueue(mediaId);
+            var currentTrackNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
+            var upcomingQueue = vis.binds.sonos.upcomingQueue(queueItems, currentTrackNo);
+            var nextTrack = upcomingQueue.length > 1 ? upcomingQueue[1] : null;
             if (sheetOpen && tab === 'favorites') {
                 var favorites = vis.binds.sonos.filterQuery(vis.binds.sonos.parseFavorites(mediaId), query, function (item) {
                     return item.title;
@@ -1662,20 +1690,22 @@ vis.binds = vis.binds || {};
                     ? items.map(vis.binds.sonos.browseItemButton).join('')
                     : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(path.length || query ? t('noSearchHits') : t('emptySources')) + '</div>');
             } else if (sheetOpen) {
-                var queue = vis.binds.sonos.filterQuery(vis.binds.sonos.parseQueue(mediaId), query, function (item) {
+                var queue = vis.binds.sonos.filterQuery(query ? queueItems : upcomingQueue, query, function (item) {
                     return [item.title, item.artist, item.album].join(' ');
                 });
-                var currentNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
+                var fromCurrent = !query && upcomingQueue.length && upcomingQueue[0] &&
+                    (upcomingQueue[0].current || upcomingQueue[0].no === currentTrackNo);
                 listHtml = queue.length
-                    ? queue.map(function (item) {
-                        var current = item.current || item.no === currentNo;
+                    ? queue.map(function (item, index) {
+                        var current = item.current || item.no === currentTrackNo;
+                        var badge = current ? t('nowTrack') : (fromCurrent && index === 1 ? t('upNext') : String(item.no));
                         return '<button type="button" class="sonos-ctrl-item' + (current ? ' is-current' : '') + '" data-track="' + item.no + '">' +
                             (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
                             '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
                             '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || '') + '</div></div>' +
-                            '<div>' + item.no + '</div></button>';
+                            '<div class="sonos-ctrl-item-badge">' + vis.binds.sonos.esc(badge) + '</div></button>';
                     }).join('')
-                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyQueue')) + '</div>';
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : (queueItems.length ? 'emptyQueueNext' : 'emptyQueue'))) + '</div>';
             }
 
             var sub = [artist, album].filter(Boolean).join(' — ');
@@ -1786,6 +1816,11 @@ vis.binds = vis.binds || {};
                             '<div class="sonos-ctrl-meta">' +
                                 '<div class="sonos-ctrl-title">' + vis.binds.sonos.esc(title) + '</div>' +
                                 '<div class="sonos-ctrl-sub">' + vis.binds.sonos.esc(sub) + '</div>' +
+                                (nextTrack && nextTrack.title
+                                    ? '<div class="sonos-ctrl-next">' + vis.binds.sonos.esc(t('upNext')) + ': ' +
+                                        vis.binds.sonos.esc([nextTrack.title, nextTrack.artist].filter(Boolean).join(' — ')) +
+                                        '</div>'
+                                    : '') +
                                 '<div class="sonos-ctrl-buttons">' + buttonsHtml + '</div>' +
                                 seekHtml +
                                 '<div class="sonos-ctrl-volume">' +

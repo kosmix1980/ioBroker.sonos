@@ -16,6 +16,8 @@
     "player": "reproductor sonos",
     "playlists": "Listas de reproducción",
     "queue": "Cola",
+    "now_playing": "Ahora",
+    "up_next": "Siguiente",
     "recent": "Reciente",
     "repeat": "Repetir",
     "room": "Habitación",

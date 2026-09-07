@@ -49,6 +49,7 @@ const LIBRARY_STATES = [
     'favorites_list_array',
     'playlist_list_array',
     'queue',
+    'queue_html',
     'recent_tracks',
     'media_browse_result',
 ] as const;
@@ -363,6 +364,27 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
         } catch {
             return null;
         }
+    }
+
+    private parseQueueLines(ip: string): { no: number; title: string; artist: string }[] {
+        const raw = this.str(ip, 'queue').trim();
+        if (!raw) {
+            return [];
+        }
+        const parts = raw.includes('\n')
+            ? raw.split('\n')
+            : raw.split(/\s*,\s*(?=[^,]+\s-\s)/);
+        return parts
+            .map((line, index) => {
+                const text = line.trim();
+                const dash = text.indexOf(' - ');
+                return {
+                    no: index + 1,
+                    artist: dash === -1 ? '' : text.slice(0, dash).trim(),
+                    title: (dash === -1 ? text : text.slice(dash + 3)).trim(),
+                };
+            })
+            .filter(item => item.title);
     }
 
     /** TV/HDMI has no transport control, so the buttons must not be offered */
@@ -807,15 +829,30 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
                     this.renderItem(`pl-${name}`, { id: name, title: name }, () => this.set(ip, 'playlist_set', name)),
                 );
         } else if (tab === 'queue') {
-            const queue = this.str(coordinator, 'queue')
-                .split('\n')
-                .map(line => line.trim())
-                .filter(Boolean);
-            list = queue.filter(matches).map((line, index) =>
-                this.renderItem(`q-${index}`, { id: String(index), title: line }, () =>
-                    this.set(ip, 'current_track_number', index + 1),
-                ),
-            );
+            const currentNo = this.num(coordinator, 'current_track_number');
+            const all = this.parseQueueLines(coordinator);
+            const start = currentNo > 0 ? Math.max(0, currentNo - 1) : 0;
+            const fromCurrent = currentNo > 0 && start === currentNo - 1;
+            list = all
+                .slice(start)
+                .filter(item => matches(`${item.title} ${item.artist}`))
+                .map((item, index) =>
+                    this.renderItem(
+                        `q-${item.no}`,
+                        {
+                            id: String(item.no),
+                            title: item.title,
+                            artist: item.artist,
+                            album:
+                                item.no === currentNo
+                                    ? Generic.t('now_playing')
+                                    : fromCurrent && index === 1
+                                      ? Generic.t('up_next')
+                                      : `#${item.no}`,
+                        },
+                        () => this.set(ip, 'current_track_number', item.no),
+                    ),
+                );
         } else if (tab === 'recent') {
             const recent = this.parseJson<RecentTrack[]>(ip, 'recent_tracks') || [];
             list = recent
@@ -935,12 +972,15 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
         }
 
         const ip = this.state.selectedRoom;
+        const coordinator = this.coordinatorOf(ip);
         const cover = this.str(ip, 'current_cover');
         const title = this.str(ip, 'current_title') || Generic.t('nothing_playing');
         const station = this.str(ip, 'current_station');
         const sub = [this.str(ip, 'current_artist'), this.str(ip, 'current_album') || station]
             .filter(Boolean)
             .join(' · ');
+        const currentNo = this.num(coordinator, 'current_track_number');
+        const next = currentNo > 0 ? this.parseQueueLines(coordinator)[currentNo] : undefined;
 
         const content = (
             <div style={styles.root}>
@@ -956,6 +996,11 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
                     <div style={styles.meta}>
                         <div style={styles.title}>{title}</div>
                         <div style={styles.sub}>{sub}</div>
+                        {next ? (
+                            <div style={{ ...styles.sub, opacity: 0.55 }}>
+                                {Generic.t('up_next')}: {[next.title, next.artist].filter(Boolean).join(' · ')}
+                            </div>
+                        ) : null}
                         {this.renderTransport(ip)}
                         {this.renderSeek(ip)}
                         {this.renderVolume(ip)}

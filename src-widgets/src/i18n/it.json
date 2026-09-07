@@ -16,6 +16,8 @@
     "player": "Lettore Sonos",
     "playlists": "Playlist",
     "queue": "Coda",
+    "now_playing": "Ora",
+    "up_next": "Prossimo",
     "recent": "Recente",
     "repeat": "Ripetere",
     "room": "Camera",

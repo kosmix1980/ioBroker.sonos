@@ -16,6 +16,8 @@
     "player": "Sonos-speler",
     "playlists": "Afspeellijsten",
     "queue": "Wachtrij",
+    "now_playing": "Nu",
+    "up_next": "Hierna",
     "recent": "Recent",
     "repeat": "Herhalen",
     "room": "Kamer",

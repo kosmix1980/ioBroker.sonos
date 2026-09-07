@@ -16,6 +16,8 @@
     "player": "Sonos Player",
     "playlists": "Playlists",
     "queue": "Warteschlange",
+    "now_playing": "Jetzt",
+    "up_next": "Als Nächstes",
     "recent": "Zuletzt",
     "repeat": "Wiederholen",
     "room": "Raum",

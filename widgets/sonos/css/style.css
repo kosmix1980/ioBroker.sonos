@@ -297,6 +297,14 @@
     text-overflow: ellipsis;
 }
 
+.sonos-ctrl-next {
+    color: var(--sonos-muted);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .sonos-ctrl-buttons {
     display: flex;
     align-items: center;
@@ -573,6 +581,18 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.sonos-ctrl-item-badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--sonos-muted);
+    text-align: right;
+    min-width: 4.8em;
+}
+
+.sonos-ctrl-item.is-current .sonos-ctrl-item-badge {
+    color: #fff;
 }
 
 .sonos-ctrl-search {
