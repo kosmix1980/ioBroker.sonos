@@ -15,10 +15,13 @@ const {
     isLineInStreamUri,
     isQueueUri,
     isSeekableListUri,
+    isRinconPlaylistUri,
     isStreamUri,
     parseCpContainerUri,
     cpContainerBrowseIds,
     parseCurrentUri,
+    didlParentId,
+    playContextKey,
     queueCoverUrl,
     isTvStreamUri,
     isPlayingTv,
@@ -38,6 +41,7 @@ const {
     normalizeTrackText,
     nowPlayingQueueEntries,
     queueSkipTarget,
+    queueContainsTrack,
 } = require('../build/lib/next-track');
 
 const LABELS = {
@@ -489,8 +493,12 @@ describe('next-track: Sonos next is not queue[n+1]', () => {
             objectId: 'spotify:playlist:37i9dQZF1DX0XUsMxB6UJI',
             browseId: '1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI',
         });
+        expect(
+            parseCpContainerUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI'),
+        ).to.include({ sid: 9, objectId: 'spotify:playlist:37i9dQZF1DX0XUsMxB6UJI' });
         expect(isCpContainerUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9')).to.be.true;
         expect(isSeekableListUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9')).to.be.true;
+        expect(isSeekableListUri('x-rincon-playlist:RINCON_1#Share/Rock.m3u')).to.be.true;
         expect(isSeekableListUri('x-sonosapi-stream:s25111?sid=254')).to.be.false;
         expect(cpContainerBrowseIds(parsed)).to.include('1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI');
         expect(cpContainerBrowseIds(parsed)).to.include('spotify:playlist:37i9dQZF1DX0XUsMxB6UJI');
@@ -514,6 +522,18 @@ describe('next-track: Sonos next is not queue[n+1]', () => {
         );
     });
 
+    it('reads the playlist parent from DIDL and ignores query noise in cache keys', () => {
+        expect(
+            didlParentId(
+                '<item id="00032020spotify%3atrack%3aabc" parentID="1006206cspotify%3aplaylist%3aXYZ">',
+            ),
+        ).to.equal('1006206cspotify:playlist:XYZ');
+        expect(
+            playContextKey('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9&flags=8300&sn=1'),
+        ).to.equal(playContextKey('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9'));
+        expect(isRinconPlaylistUri('x-rincon-playlist:RINCON_1#Share/Rock.m3u')).to.be.true;
+    });
+
     it('builds a fallback list from current and next metadata', () => {
         expect(
             nowPlayingQueueEntries(
@@ -525,6 +545,8 @@ describe('next-track: Sonos next is not queue[n+1]', () => {
             { title: 'Later', artist: 'B', album: '', albumArtUri: '/b' },
         ]);
         expect(nowPlayingQueueEntries({ title: 'Only' }, { title: 'Only' })).to.have.length(1);
+        expect(queueContainsTrack([{ title: 'Now', artist: 'A' }], { title: 'Now', artist: 'A' })).to.be.true;
+        expect(queueContainsTrack([{ title: 'Now', artist: 'A' }], { title: 'Other', artist: 'A' })).to.be.false;
     });
 });
 

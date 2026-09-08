@@ -11,6 +11,7 @@ exports.normalizeTrackText = normalizeTrackText;
 exports.nowPlayingQueueEntries = nowPlayingQueueEntries;
 exports.queueSkipTarget = queueSkipTarget;
 exports.isSameQueueTrack = isSameQueueTrack;
+exports.queueContainsTrack = queueContainsTrack;
 /** Fields written to `next_*` states. Empty title clears the rest. */
 function nextTrackFields(track) {
     const title = String(track?.title || '').trim();
@@ -81,5 +82,12 @@ function isSameQueueTrack(item, next) {
     const itemArtist = normalizeTrackText(item.artist || '');
     const nextArtist = normalizeTrackText(next?.artist || '');
     return !itemArtist || !nextArtist || itemArtist === nextArtist;
+}
+/** True when the playing title is a row of this list. */
+function queueContainsTrack(entries, track) {
+    if (!entries?.length || !String(track?.title || '').trim()) {
+        return false;
+    }
+    return entries.some(item => isSameQueueTrack(item, track));
 }
 //# sourceMappingURL=next-track.js.map

@@ -101,3 +101,14 @@ export function isSameQueueTrack(
     const nextArtist = normalizeTrackText(next?.artist || '');
     return !itemArtist || !nextArtist || itemArtist === nextArtist;
 }
+
+/** True when the playing title is a row of this list. */
+export function queueContainsTrack(
+    entries: Array<{ title?: string; artist?: string }> | undefined,
+    track?: { title?: string; artist?: string } | null,
+): boolean {
+    if (!entries?.length || !String(track?.title || '').trim()) {
+        return false;
+    }
+    return entries.some(item => isSameQueueTrack(item, track));
+}

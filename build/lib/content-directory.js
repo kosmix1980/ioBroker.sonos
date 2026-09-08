@@ -41,8 +41,13 @@ exports.isLineInStreamUri = isLineInStreamUri;
 exports.isPlayingTv = isPlayingTv;
 exports.isQueueUri = isQueueUri;
 exports.isCpContainerUri = isCpContainerUri;
+exports.isRinconPlaylistUri = isRinconPlaylistUri;
 exports.isSeekableListUri = isSeekableListUri;
+exports.playContextKey = playContextKey;
+exports.sidFromMusicUri = sidFromMusicUri;
 exports.parseCpContainerUri = parseCpContainerUri;
+exports.parseObjectIdAsContainer = parseObjectIdAsContainer;
+exports.didlParentId = didlParentId;
 exports.cpContainerBrowseIds = cpContainerBrowseIds;
 exports.queueCoverUrl = queueCoverUrl;
 exports.tvAudioFormat = tvAudioFormat;
@@ -291,35 +296,109 @@ function isQueueUri(uri) {
 function isCpContainerUri(uri) {
     return /^x-rincon-cpcontainer:/i.test(String(uri || ''));
 }
-/** Queue and cloud playlists can seek by track number; radio cannot. */
+/** Music-library / share playlist (Mediathek, Netzlaufwerk). */
+function isRinconPlaylistUri(uri) {
+    return /^x-rincon-playlist:/i.test(String(uri || ''));
+}
+/** Queue and playlists can seek by track number; radio cannot. */
 function isSeekableListUri(uri) {
-    return isQueueUri(uri) || isCpContainerUri(uri);
+    return isQueueUri(uri) || isCpContainerUri(uri) || isRinconPlaylistUri(uri);
+}
+function playContextKey(uri) {
+    return String(uri || '')
+        .trim()
+        .replace(/[?&](?:sid|flags|sn)=[^&]*/gi, '')
+        .replace(/[?&]+$/, '')
+        .replace(/\?$/, '');
+}
+function sidFromMusicUri(blob) {
+    const text = String(blob || '').toLowerCase();
+    const sid = Number((String(blob || '').match(/[?&]sid=(\d+)/i) || [])[1]);
+    if (sid) {
+        return sid;
+    }
+    if (/spotify|x-sonos-spotify|scdn\.co/.test(text)) {
+        return 9;
+    }
+    if (/tidal/.test(text)) {
+        return 44591;
+    }
+    if (/deezer/.test(text)) {
+        return 2;
+    }
+    if (/apple|itunes|catalog\/pl|catalog\/album/.test(text)) {
+        return 204;
+    }
+    if (/amazon|prime/.test(text)) {
+        return 20199;
+    }
+    if (/youtube|youtu\.be|googlevideo/.test(text)) {
+        return 677;
+    }
+    if (/soundcloud/.test(text)) {
+        return 160;
+    }
+    return 0;
 }
 /**
  * `x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a…?sid=9&flags=…`
  * → SMAPI service id and the playlist/album object id.
+ * `sid` is optional: some CurrentURI values omit the query string.
  */
 function parseCpContainerUri(uri) {
     const value = String(uri || '');
-    const match = value.match(/^x-rincon-cpcontainer:([0-9a-f]{8})([^?]*)/i);
-    if (!match) {
+    if (!isCpContainerUri(value)) {
         return null;
     }
-    const sid = Number((value.match(/[?&]sid=(\d+)/i) || [])[1]);
-    if (!sid) {
+    const payload = value.replace(/^x-rincon-cpcontainer:/i, '');
+    const browseId = payload.split(/[?&]/)[0].trim();
+    if (!browseId) {
         return null;
     }
-    const encoded = match[2] || '';
-    const browseId = `${match[1]}${encoded}`;
-    let objectId = encoded;
+    const hex = browseId.match(/^([0-9a-f]{8})(.*)$/i);
+    const encoded = hex ? hex[2] : browseId;
+    let objectId = encoded || browseId;
     try {
         objectId = decodeURIComponent(objectId);
     }
     catch {
         objectId = objectId.replace(/%3a/gi, ':');
     }
-    objectId = objectId.replace(/%3a/gi, ':').trim();
-    return objectId ? { sid, objectId, browseId } : null;
+    objectId = objectId.replace(/%3a/gi, ':').trim() || browseId;
+    const sid = sidFromMusicUri(`${value} ${objectId}`);
+    return { sid, objectId, browseId };
+}
+function parseObjectIdAsContainer(objectId, hintUri) {
+    const id = String(objectId || '').trim();
+    if (!id || isFollowCoordinatorUri(id) || isQueueUri(id) || isTvStreamUri(id)) {
+        return null;
+    }
+    if (isCpContainerUri(id)) {
+        return parseCpContainerUri(id);
+    }
+    if (/^[0-9a-f]{8}/i.test(id) || /spotify:|playlist|album|catalog\//i.test(id)) {
+        const sidQuery = String(hintUri || '').match(/[?&]sid=\d+/i);
+        const query = sidQuery ? `?${sidQuery[0].replace(/^[?&]/, '')}` : '';
+        return parseCpContainerUri(`x-rincon-cpcontainer:${id}${query}`);
+    }
+    return null;
+}
+/** parentID of the playing item — often the playlist/album object id. */
+function didlParentId(xml) {
+    const source = String(xml || '');
+    const decoded = /&lt;(?:DIDL-Lite|item)\b/i.test(source) ? decodeXml(source) : source;
+    const match = decoded.match(/\bparentID="([^"]+)"/i) || source.match(/\bparentID="([^"]+)"/i);
+    if (!match) {
+        return '';
+    }
+    let id = decodeXml(match[1]).trim();
+    try {
+        id = decodeURIComponent(id);
+    }
+    catch {
+        id = id.replace(/%3a/gi, ':');
+    }
+    return id;
 }
 /** ContentDirectory / SMAPI ids that can list the tracks of a playing cloud playlist. */
 function cpContainerBrowseIds(container) {
@@ -336,6 +415,19 @@ function cpContainerBrowseIds(container) {
     }
     add(container.objectId);
     add(container.objectId.replace(/:/g, '%3a'));
+    const encoded = container.objectId.replace(/:/g, '%3a');
+    if (/playlist|favorites/i.test(container.objectId)) {
+        add(`1006206c${encoded}`);
+        add(`0006206c${encoded}`);
+    }
+    if (/album/i.test(container.objectId)) {
+        add(`1004206c${encoded}`);
+        add(`0004206c${encoded}`);
+    }
+    if (/artist/i.test(container.objectId)) {
+        add(`100e206c${encoded}`);
+        add(`000e206c${encoded}`);
+    }
     return ids;
 }
 /** Cover for queue_html: SMAPI often sends an absolute https URL. */
@@ -685,7 +777,7 @@ async function browseAllTracks(baseUrl, objectId, maxItems = 400) {
     const visited = new Set();
     const collect = async (id) => {
         const key = String(id || '').trim();
-        if (!key || visited.has(key) || visited.size > 6) {
+        if (!key || visited.has(key) || visited.size > 12) {
             return [];
         }
         visited.add(key);
@@ -710,8 +802,14 @@ async function browseAllTracks(baseUrl, objectId, maxItems = 400) {
         if (tracks.length) {
             return tracks.slice(0, maxItems);
         }
-        const folder = firstPage.find(item => item.folder && item.id && item.id !== key);
-        return folder ? collect(folder.id) : [];
+        const folders = firstPage.filter(item => item.folder && item.id && item.id !== key).slice(0, 4);
+        for (const folder of folders) {
+            const nested = await collect(folder.id);
+            if (nested.length) {
+                return nested;
+            }
+        }
+        return [];
     };
     return collect(objectId);
 }

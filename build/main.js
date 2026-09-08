@@ -580,10 +580,8 @@ class Sonos extends utils.Adapter {
         const fromState = String(queueState?.val || '')
             .split(/\s*,\s*(?=[^,]+\s-\s)/)
             .filter(line => line.trim()).length;
-        const queueLen = (0, content_directory_1.isCpContainerUri)(uri)
-            ? context
-                ? context.start + context.entries.length - 1
-                : 0
+        const queueLen = context?.entries.length
+            ? context.start + context.entries.length - 1
             : cached.length || fromState;
         const repeatVal = ip ? Number((await this.getStateAsync(`root.${ip}.repeat`))?.val) : 0;
         const target = (0, next_track_1.queueSkipTarget)(trackNo, queueLen, delta, repeatVal === 1);
@@ -2355,58 +2353,123 @@ class Sonos extends utils.Adapter {
     }
     /**
      * Fill the widget queue with the tracks that will actually play: the Sonos
-     * queue, the current SMAPI playlist, or at least current + next metadata.
+     * queue, the current SMAPI/library playlist, or at least current + next metadata.
      */
     async refreshPlayContextQueue(ip, player, sonosState) {
+        const current = sonosState.currentTrack;
+        const cache = this.playContext[ip];
+        const currentMissing = Boolean(String(current?.title || '').trim()) && !(0, next_track_1.queueContainsTrack)(cache?.entries, current);
         let uri = String(player.transportUri || '');
-        if (!(0, content_directory_1.isQueueUri)(uri) && !(0, content_directory_1.isCpContainerUri)(uri)) {
-            const live = await this.liveTransportUri(player);
-            if ((0, content_directory_1.isQueueUri)(live) || (0, content_directory_1.isCpContainerUri)(live)) {
+        if (!(0, content_directory_1.isSeekableListUri)(uri) || currentMissing) {
+            const live = await this.liveTransportUri(player, currentMissing);
+            if ((0, content_directory_1.isSeekableListUri)(live)) {
                 uri = live;
             }
         }
-        if ((0, content_directory_1.isQueueUri)(uri)) {
-            try {
-                const queue = await player.getQueue();
-                if (queue?.length) {
-                    this.queues[player.uuid] = queue;
-                    this.playContext[ip] = { uri, start: 1, entries: queue, complete: true, source: 'queue' };
-                    await this.takeSonosQueue(ip, player, queue);
+        const meta = typeof player.transportUriMetadata === 'string' ? player.transportUriMetadata : '';
+        const fromParent = (0, content_directory_1.parseObjectIdAsContainer)((0, content_directory_1.didlParentId)(meta), uri);
+        const container = (0, content_directory_1.parseCpContainerUri)(uri) || fromParent;
+        const contextKey = (0, content_directory_1.playContextKey)(container ? `x-rincon-cpcontainer:${container.browseId}` : uri);
+        const trackNo = Math.max(1, sonosState.trackNo || 1);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'playing_queue' }, (0, content_directory_1.isSeekableListUri)(uri) || Boolean(container));
+        if ((0, content_directory_1.isQueueUri)(uri) || (0, content_directory_1.isRinconPlaylistUri)(uri)) {
+            if (await this.applySpeakerQueue(ip, player, uri, current, (0, content_directory_1.isRinconPlaylistUri)(uri))) {
+                return;
+            }
+            if ((0, content_directory_1.isRinconPlaylistUri)(uri)) {
+                const objectId = uri.replace(/^x-rincon-playlist:/i, '').split(/[?&]/)[0];
+                const tracks = await this.tracksFromObjectIds(player, [objectId]);
+                if (tracks.length) {
+                    this.playContext[ip] = {
+                        uri: contextKey,
+                        start: 1,
+                        entries: tracks,
+                        complete: true,
+                        source: 'container',
+                    };
+                    await this.takeSonosQueue(ip, player, tracks);
+                    return;
                 }
             }
-            catch (err) {
-                this.log.debug(`Cannot read Sonos queue: ${err}`);
-            }
-            return;
         }
-        const trackNo = Math.max(1, sonosState.trackNo || 1);
-        const container = (0, content_directory_1.parseCpContainerUri)(uri);
         if (container) {
-            const cache = this.playContext[ip];
             const stillValid = cache &&
-                cache.uri === uri &&
+                (0, content_directory_1.playContextKey)(cache.uri) === contextKey &&
                 cache.source === 'container' &&
-                (cache.complete || cache.entries.length >= trackNo);
+                (cache.complete || cache.entries.length >= trackNo) &&
+                !currentMissing;
             if (!stillValid) {
-                await this.fetchContainerQueue(ip, player, container, trackNo, sonosState, uri);
+                await this.fetchContainerQueue(ip, player, container, trackNo, sonosState, contextKey);
             }
             return;
         }
-        const fallback = (0, next_track_1.nowPlayingQueueEntries)(sonosState.currentTrack, sonosState.nextTrack);
-        this.playContext[ip] = { uri, start: 1, entries: fallback, complete: false, source: 'fallback' };
+        if (await this.applySpeakerQueue(ip, player, uri, current, true)) {
+            return;
+        }
+        const fallback = (0, next_track_1.nowPlayingQueueEntries)(current, sonosState.nextTrack);
+        this.playContext[ip] = { uri: contextKey, start: 1, entries: fallback, complete: false, source: 'fallback' };
         if (fallback.length) {
             await this.takeSonosQueue(ip, player, fallback, trackNo);
         }
     }
-    async liveTransportUri(player) {
+    async applySpeakerQueue(ip, player, uri, current, requireCurrent) {
+        try {
+            const queue = await player.getQueue();
+            if (!queue?.length) {
+                return false;
+            }
+            if (requireCurrent && current?.title && !(0, next_track_1.queueContainsTrack)(queue, current)) {
+                return false;
+            }
+            this.queues[player.uuid] = queue;
+            this.playContext[ip] = {
+                uri: (0, content_directory_1.playContextKey)(uri),
+                start: 1,
+                entries: queue,
+                complete: true,
+                source: 'queue',
+            };
+            await this.takeSonosQueue(ip, player, queue);
+            return true;
+        }
+        catch (err) {
+            this.log.debug(`Cannot read Sonos queue: ${err}`);
+            return false;
+        }
+    }
+    async tracksFromObjectIds(player, objectIds) {
+        for (const objectId of objectIds) {
+            if (!objectId) {
+                continue;
+            }
+            try {
+                const tracks = await (0, content_directory_1.browseAllTracks)(player.baseUrl, objectId, 400);
+                if (tracks.length) {
+                    return tracks.map(item => ({
+                        title: item.title,
+                        artist: item.artist,
+                        album: item.album,
+                        albumArtUri: item.cover,
+                        uri: item.uri,
+                    }));
+                }
+            }
+            catch (err) {
+                this.log.debug(`ContentDirectory playlist ${objectId}: ${err}`);
+            }
+        }
+        return [];
+    }
+    async liveTransportUri(player, force = false) {
         const now = Date.now();
+        const token = String(player.transportUri || '');
         const cached = this.lastMediaUri[player.uuid];
-        if (cached && now - cached.at < 3000) {
+        if (!force && cached && now - cached.at < 3000 && cached.token === token) {
             return cached.uri;
         }
         try {
             const live = (0, content_directory_1.parseCurrentUri)(await (0, content_directory_1.soapGetMediaInfo)(player.baseUrl));
-            this.lastMediaUri[player.uuid] = { uri: live, at: now };
+            this.lastMediaUri[player.uuid] = { uri: live, at: now, token };
             return live;
         }
         catch (err) {
@@ -2417,6 +2480,10 @@ class Sonos extends utils.Adapter {
     scheduleQueueRefresh(ip) {
         if (this.queueRefreshTimer[ip]) {
             clearTimeout(this.queueRefreshTimer[ip]);
+        }
+        const uuid = this.channels[ip]?.uuid;
+        if (uuid) {
+            delete this.lastMediaUri[uuid];
         }
         this.queueRefreshTimer[ip] = setTimeout(() => {
             this.queueRefreshTimer[ip] = null;
@@ -2436,41 +2503,37 @@ class Sonos extends utils.Adapter {
         }
         return sid === 9 ? 'Spotify' : undefined;
     }
-    async fetchContainerQueue(ip, player, container, trackNo, sonosState, transportUri) {
-        const serviceName = this.serviceNameBySid(container.sid);
-        let entries = [];
-        let complete = false;
-        for (const objectId of (0, content_directory_1.cpContainerBrowseIds)(container)) {
-            try {
-                const tracks = await (0, content_directory_1.browseAllTracks)(player.baseUrl, objectId, 400);
-                if (tracks.length) {
-                    entries = tracks.map(item => ({
-                        title: item.title,
-                        artist: item.artist,
-                        album: item.album,
-                        albumArtUri: item.cover,
-                        uri: item.uri,
-                    }));
-                    complete = tracks.length < 400;
-                    break;
-                }
-            }
-            catch (err) {
-                this.log.debug(`ContentDirectory playlist ${objectId}: ${err}`);
+    serviceNameForContainer(container, uri) {
+        if (container.sid) {
+            const named = this.serviceNameBySid(container.sid);
+            if (named) {
+                return named;
             }
         }
+        const services = this.backend?.musicServices || {};
+        const blob = `${uri} ${container.objectId} ${container.browseId}`;
+        return Object.keys(services).find(name => (0, content_directory_1.matchesMusicService)(blob, name, services[name]));
+    }
+    async fetchContainerQueue(ip, player, container, trackNo, sonosState, transportUri) {
+        const serviceName = this.serviceNameForContainer(container, transportUri);
+        const entries = await this.tracksFromObjectIds(player, (0, content_directory_1.cpContainerBrowseIds)(container));
+        let complete = entries.length > 0 && entries.length < 400;
         if (!entries.length && serviceName && this.backend?.music) {
             try {
-                let objectId = container.objectId;
-                const first = await this.backend.music.browse(serviceName, objectId, this.isGermanUi(), 0);
-                if (!(first.items || []).some(item => !item.folder && item.title)) {
+                const smapiIds = [container.objectId, ...(0, content_directory_1.cpContainerBrowseIds)(container)];
+                let objectId = smapiIds[0];
+                for (const candidate of smapiIds) {
+                    const first = await this.backend.music.browse(serviceName, candidate, this.isGermanUi(), 0);
+                    const tracks = (first.items || []).filter(item => !item.folder && item.title);
+                    if (tracks.length) {
+                        objectId = candidate;
+                        break;
+                    }
                     const folder = (first.items || []).find(item => item.folder);
                     const nested = folder ? (0, smapi_1.parseSmapiId)(folder.id) : undefined;
-                    if (nested) {
-                        objectId = nested.itemId;
-                    }
-                    else if (folder?.id) {
-                        objectId = folder.id;
+                    if (nested || folder?.id) {
+                        objectId = nested?.itemId || folder?.id || candidate;
+                        break;
                     }
                 }
                 while (entries.length < Math.max(trackNo + 40, 100) && entries.length < 400) {
@@ -2497,6 +2560,12 @@ class Sonos extends utils.Adapter {
             }
             catch (err) {
                 this.log.warn(`Cannot browse playing playlist (${serviceName}): ${err}`);
+            }
+        }
+        if (!entries.length) {
+            await this.applySpeakerQueue(ip, player, transportUri, sonosState.currentTrack, true);
+            if (this.playContext[ip]?.source === 'queue') {
+                return;
             }
         }
         if (entries.length) {
