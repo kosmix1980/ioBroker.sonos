@@ -43,6 +43,7 @@ exports.isQueueUri = isQueueUri;
 exports.isCpContainerUri = isCpContainerUri;
 exports.isSeekableListUri = isSeekableListUri;
 exports.parseCpContainerUri = parseCpContainerUri;
+exports.cpContainerBrowseIds = cpContainerBrowseIds;
 exports.queueCoverUrl = queueCoverUrl;
 exports.tvAudioFormat = tvAudioFormat;
 exports.streamContentFromDidl = streamContentFromDidl;
@@ -52,9 +53,12 @@ exports.hasHomeTheater = hasHomeTheater;
 exports.parseHtAudioIn = parseHtAudioIn;
 exports.soapGetZoneInfo = soapGetZoneInfo;
 exports.soapGetPositionInfo = soapGetPositionInfo;
+exports.soapGetMediaInfo = soapGetMediaInfo;
+exports.parseCurrentUri = parseCurrentUri;
 exports.nowPlayingLabels = nowPlayingLabels;
 exports.getMediaRoot = getMediaRoot;
 exports.browseMedia = browseMedia;
+exports.browseAllTracks = browseAllTracks;
 exports.albumArtFromXml = albumArtFromXml;
 exports.isStreamUri = isStreamUri;
 exports.isOnDemandUri = isOnDemandUri;
@@ -148,7 +152,7 @@ function extractDidl(soapXml) {
     }
     return decodeXml(tagged[1]);
 }
-function soapBrowse(baseUrl, objectId) {
+function soapBrowse(baseUrl, objectId, startIndex = 0) {
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
   <s:Body>
@@ -156,7 +160,7 @@ function soapBrowse(baseUrl, objectId) {
       <ObjectID>${xmlEscape(objectId)}</ObjectID>
       <BrowseFlag>BrowseDirectChildren</BrowseFlag>
       <Filter>*</Filter>
-      <StartingIndex>0</StartingIndex>
+      <StartingIndex>${Math.max(0, Math.floor(startIndex) || 0)}</StartingIndex>
       <RequestedCount>${BROWSE_LIMIT}</RequestedCount>
       <SortCriteria></SortCriteria>
     </u:Browse>
@@ -305,7 +309,9 @@ function parseCpContainerUri(uri) {
     if (!sid) {
         return null;
     }
-    let objectId = match[2] || '';
+    const encoded = match[2] || '';
+    const browseId = `${match[1]}${encoded}`;
+    let objectId = encoded;
     try {
         objectId = decodeURIComponent(objectId);
     }
@@ -313,7 +319,24 @@ function parseCpContainerUri(uri) {
         objectId = objectId.replace(/%3a/gi, ':');
     }
     objectId = objectId.replace(/%3a/gi, ':').trim();
-    return objectId ? { sid, objectId } : null;
+    return objectId ? { sid, objectId, browseId } : null;
+}
+/** ContentDirectory / SMAPI ids that can list the tracks of a playing cloud playlist. */
+function cpContainerBrowseIds(container) {
+    const ids = [];
+    const add = (id) => {
+        const value = String(id || '').trim();
+        if (value && !ids.includes(value)) {
+            ids.push(value);
+        }
+    };
+    add(container.browseId);
+    if (/^1[0-9a-f]{7}/i.test(container.browseId)) {
+        add(`0${container.browseId.slice(1)}`);
+    }
+    add(container.objectId);
+    add(container.objectId.replace(/:/g, '%3a'));
+    return ids;
 }
 /** Cover for queue_html: SMAPI often sends an absolute https URL. */
 function queueCoverUrl(baseUrl, cover) {
@@ -530,6 +553,60 @@ function soapGetPositionInfo(baseUrl) {
         req.end();
     });
 }
+function soapGetMediaInfo(baseUrl) {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <InstanceID>0</InstanceID>
+    </u:GetMediaInfo>
+  </s:Body>
+</s:Envelope>`;
+    const url = new URL(`${baseUrl.replace(/\/$/, '')}/MediaRenderer/AVTransport/Control`);
+    const payload = Buffer.from(body, 'utf8');
+    return new Promise((resolve, reject) => {
+        const req = http.request({
+            hostname: url.hostname,
+            port: url.port || 1400,
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+                'CONTENT-TYPE': 'text/xml; charset="utf-8"',
+                SOAPACTION: '"urn:schemas-upnp-org:service:AVTransport:1#GetMediaInfo"',
+                'CONTENT-LENGTH': payload.length,
+            },
+        }, res => {
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => {
+                const xml = Buffer.concat(chunks).toString('utf8');
+                if ((res.statusCode || 500) >= 400) {
+                    reject(new Error(`GetMediaInfo failed: HTTP ${res.statusCode}`));
+                    return;
+                }
+                resolve(xml);
+            });
+        });
+        req.on('error', reject);
+        req.setTimeout(5000, () => {
+            req.destroy();
+            reject(new Error('GetMediaInfo timed out'));
+        });
+        req.write(payload);
+        req.end();
+    });
+}
+function parseCurrentUri(xml) {
+    const source = String(xml || '');
+    let uri = tagText(source, 'CurrentURI');
+    if (!uri) {
+        uri = tagText(source, 'TrackURI');
+    }
+    if (/&amp;|&lt;|&gt;|&quot;/.test(uri)) {
+        uri = decodeXml(uri);
+    }
+    return uri.trim();
+}
 /** Friendly now-playing text when Sonos leaves TV HDMI / line-in metadata empty. */
 function nowPlayingLabels(track, labels, extra) {
     const uri = String(track.uri || '');
@@ -596,9 +673,47 @@ function getMediaRoot(services, labels, playerUuid, options) {
     available.sort((a, b) => a.localeCompare(b)).forEach(name => addService(name));
     return { id: 'root', title: '', items };
 }
-async function browseMedia(baseUrl, objectId) {
-    const xml = await soapBrowse(baseUrl, objectId);
+async function browseMedia(baseUrl, objectId, startIndex = 0) {
+    const xml = await soapBrowse(baseUrl, objectId, startIndex);
     return parseDidl(extractDidl(xml), baseUrl);
+}
+/**
+ * Tracks of a playing SMAPI playlist/album via the speaker ContentDirectory.
+ * The speaker is already signed in to the music service; the adapter SMAPI token is not required.
+ */
+async function browseAllTracks(baseUrl, objectId, maxItems = 400) {
+    const visited = new Set();
+    const collect = async (id) => {
+        const key = String(id || '').trim();
+        if (!key || visited.has(key) || visited.size > 6) {
+            return [];
+        }
+        visited.add(key);
+        const tracks = [];
+        let start = 0;
+        let firstPage = [];
+        while (tracks.length < maxItems) {
+            const page = await browseMedia(baseUrl, key, start);
+            if (start === 0) {
+                firstPage = page;
+            }
+            const pageTracks = page.filter(item => !item.folder && item.title);
+            if (!pageTracks.length) {
+                break;
+            }
+            tracks.push(...pageTracks);
+            if (page.length < BROWSE_LIMIT) {
+                break;
+            }
+            start += page.length;
+        }
+        if (tracks.length) {
+            return tracks.slice(0, maxItems);
+        }
+        const folder = firstPage.find(item => item.folder && item.id && item.id !== key);
+        return folder ? collect(folder.id) : [];
+    };
+    return collect(objectId);
 }
 function albumArtFromXml(xml) {
     const source = String(xml || '');

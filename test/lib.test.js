@@ -17,6 +17,8 @@ const {
     isSeekableListUri,
     isStreamUri,
     parseCpContainerUri,
+    cpContainerBrowseIds,
+    parseCurrentUri,
     queueCoverUrl,
     isTvStreamUri,
     isPlayingTv,
@@ -482,10 +484,16 @@ describe('next-track: Sonos next is not queue[n+1]', () => {
         const parsed = parseCpContainerUri(
             'x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI?sid=9&flags=8300&sn=1',
         );
-        expect(parsed).to.deep.equal({ sid: 9, objectId: 'spotify:playlist:37i9dQZF1DX0XUsMxB6UJI' });
+        expect(parsed).to.deep.equal({
+            sid: 9,
+            objectId: 'spotify:playlist:37i9dQZF1DX0XUsMxB6UJI',
+            browseId: '1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI',
+        });
         expect(isCpContainerUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9')).to.be.true;
         expect(isSeekableListUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9')).to.be.true;
         expect(isSeekableListUri('x-sonosapi-stream:s25111?sid=254')).to.be.false;
+        expect(cpContainerBrowseIds(parsed)).to.include('1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI');
+        expect(cpContainerBrowseIds(parsed)).to.include('spotify:playlist:37i9dQZF1DX0XUsMxB6UJI');
     });
 
     it('keeps https covers and prefixes speaker-relative ones', () => {
@@ -493,6 +501,17 @@ describe('next-track: Sonos next is not queue[n+1]', () => {
             'https://i.scdn.co/art.jpg',
         );
         expect(queueCoverUrl('http://192.168.1.10:1400', '/getaa?u=x')).to.equal('http://192.168.1.10:1400/getaa?u=x');
+    });
+
+    it('reads CurrentURI from GetMediaInfo', () => {
+        expect(
+            parseCurrentUri(
+                '<u:GetMediaInfoResponse><CurrentURI>x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9</CurrentURI></u:GetMediaInfoResponse>',
+            ),
+        ).to.equal('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9');
+        expect(parseCurrentUri('<CurrentURI>x-rincon-queue:RINCON_1#0</CurrentURI>')).to.equal(
+            'x-rincon-queue:RINCON_1#0',
+        );
     });
 
     it('builds a fallback list from current and next metadata', () => {

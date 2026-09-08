@@ -271,6 +271,7 @@ adapter to get a working state back.
 * (kosmix1980) Next on the Sonos queue seeks the next queue row, so it matches "Als Nächstes"
 * (kosmix1980) Queue tab shows the upcoming titles of the playing playlist, not the leftover saved queue
 * (kosmix1980) After HDMI, transport buttons return and night/speech hide when a playlist or song starts
+* (kosmix1980) Queue tab lists the playing playlist via the speaker catalog, not a leftover HDMI/TV queue
 
 ### 4.2.1 (2026-09-07)
 * (@GermanBluefox) Added two widgets for the ioBroker.devices dashboard: SONOS player and SONOS rooms

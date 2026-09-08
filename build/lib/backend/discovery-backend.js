@@ -98,7 +98,12 @@ class DiscoveryDevice {
         return this.player.groupState;
     }
     get transportUri() {
-        return String(this.player.avTransportUri || this.player.state?.currentTrack?.uri || '');
+        const av = String(this.player.avTransportUri || '');
+        if (av) {
+            return av;
+        }
+        const track = String(this.player.state?.currentTrack?.uri || '');
+        return (0, content_directory_1.isTvStreamUri)(track) ? '' : track;
     }
     get transportUriMetadata() {
         return typeof this.player.avTransportUriMetadata === 'string' ? this.player.avTransportUriMetadata : '';

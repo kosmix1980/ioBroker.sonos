@@ -14,7 +14,16 @@ import { PlayMode } from '@svrooij/sonos/lib/models';
 import type { BrowseResponse, Track } from '@svrooij/sonos/lib/models';
 import type { AVTransportServiceEvent, RenderingControlServiceEvent } from '@svrooij/sonos/lib/services';
 
-import { htAudioInLabel, isHtAudioSilent, mediaItem, streamContentFromDidl, tvAudioFormat } from '../content-directory';
+import {
+    htAudioInLabel,
+    isCpContainerUri,
+    isHtAudioSilent,
+    isQueueUri,
+    isTvStreamUri,
+    mediaItem,
+    streamContentFromDidl,
+    tvAudioFormat,
+} from '../content-directory';
 import { SmapiHub } from '../smapi';
 
 import type { MusicServiceAccess, SonosBackend, SonosDevice } from './sonos-backend';
@@ -212,7 +221,11 @@ export class SvrooijDevice implements SonosDevice {
     }
 
     get transportUri(): string {
-        return this.lastTransportUri || this.cached.currentTrack.uri || '';
+        if (this.lastTransportUri) {
+            return this.lastTransportUri;
+        }
+        const track = String(this.cached.currentTrack?.uri || '');
+        return isTvStreamUri(track) ? '' : track;
     }
 
     get transportUriMetadata(): string {
@@ -229,6 +242,14 @@ export class SvrooijDevice implements SonosDevice {
     applyTransportEvent(data: AVTransportServiceEvent): void {
         if (data.AVTransportURI !== undefined) {
             this.lastTransportUri = String(data.AVTransportURI);
+        }
+        if (data.CurrentTrackURI !== undefined && data.AVTransportURI === undefined) {
+            const trackUri = String(data.CurrentTrackURI);
+            if (isQueueUri(trackUri) || isCpContainerUri(trackUri)) {
+                this.lastTransportUri = trackUri;
+            } else if (isTvStreamUri(this.lastTransportUri) && trackUri && !isTvStreamUri(trackUri)) {
+                this.lastTransportUri = '';
+            }
         }
         // The library hands this over parsed whenever it can, but TTS has to put the exact
         // DIDL back after an announcement, so a parsed track is turned back into a string.

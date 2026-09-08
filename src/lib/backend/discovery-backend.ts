@@ -13,6 +13,7 @@ import {
     hasHomeTheater,
     htAudioInLabel,
     isHtAudioSilent,
+    isTvStreamUri,
     parseHtAudioIn,
     soapGetPositionInfo,
     soapGetZoneInfo,
@@ -141,7 +142,12 @@ class DiscoveryDevice implements SonosDevice {
     }
 
     get transportUri(): string {
-        return String(this.player.avTransportUri || this.player.state?.currentTrack?.uri || '');
+        const av = String(this.player.avTransportUri || '');
+        if (av) {
+            return av;
+        }
+        const track = String(this.player.state?.currentTrack?.uri || '');
+        return isTvStreamUri(track) ? '' : track;
     }
 
     get transportUriMetadata(): string {

@@ -93,7 +93,7 @@ function extractDidl(soapXml: string): string {
     return decodeXml(tagged[1]);
 }
 
-function soapBrowse(baseUrl: string, objectId: string): Promise<string> {
+function soapBrowse(baseUrl: string, objectId: string, startIndex = 0): Promise<string> {
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
   <s:Body>
@@ -101,7 +101,7 @@ function soapBrowse(baseUrl: string, objectId: string): Promise<string> {
       <ObjectID>${xmlEscape(objectId)}</ObjectID>
       <BrowseFlag>BrowseDirectChildren</BrowseFlag>
       <Filter>*</Filter>
-      <StartingIndex>0</StartingIndex>
+      <StartingIndex>${Math.max(0, Math.floor(startIndex) || 0)}</StartingIndex>
       <RequestedCount>${BROWSE_LIMIT}</RequestedCount>
       <SortCriteria></SortCriteria>
     </u:Browse>
@@ -264,7 +264,9 @@ export function isSeekableListUri(uri: string | undefined): boolean {
  * `x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a…?sid=9&flags=…`
  * → SMAPI service id and the playlist/album object id.
  */
-export function parseCpContainerUri(uri: string | undefined): { sid: number; objectId: string } | null {
+export function parseCpContainerUri(
+    uri: string | undefined,
+): { sid: number; objectId: string; browseId: string } | null {
     const value = String(uri || '');
     const match = value.match(/^x-rincon-cpcontainer:([0-9a-f]{8})([^?]*)/i);
     if (!match) {
@@ -274,14 +276,34 @@ export function parseCpContainerUri(uri: string | undefined): { sid: number; obj
     if (!sid) {
         return null;
     }
-    let objectId = match[2] || '';
+    const encoded = match[2] || '';
+    const browseId = `${match[1]}${encoded}`;
+    let objectId = encoded;
     try {
         objectId = decodeURIComponent(objectId);
     } catch {
         objectId = objectId.replace(/%3a/gi, ':');
     }
     objectId = objectId.replace(/%3a/gi, ':').trim();
-    return objectId ? { sid, objectId } : null;
+    return objectId ? { sid, objectId, browseId } : null;
+}
+
+/** ContentDirectory / SMAPI ids that can list the tracks of a playing cloud playlist. */
+export function cpContainerBrowseIds(container: { sid: number; objectId: string; browseId: string }): string[] {
+    const ids: string[] = [];
+    const add = (id: string): void => {
+        const value = String(id || '').trim();
+        if (value && !ids.includes(value)) {
+            ids.push(value);
+        }
+    };
+    add(container.browseId);
+    if (/^1[0-9a-f]{7}/i.test(container.browseId)) {
+        add(`0${container.browseId.slice(1)}`);
+    }
+    add(container.objectId);
+    add(container.objectId.replace(/:/g, '%3a'));
+    return ids;
 }
 
 /** Cover for queue_html: SMAPI often sends an absolute https URL. */
@@ -526,6 +548,67 @@ export function soapGetPositionInfo(baseUrl: string): Promise<string> {
     });
 }
 
+export function soapGetMediaInfo(baseUrl: string): Promise<string> {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <InstanceID>0</InstanceID>
+    </u:GetMediaInfo>
+  </s:Body>
+</s:Envelope>`;
+
+    const url = new URL(`${baseUrl.replace(/\/$/, '')}/MediaRenderer/AVTransport/Control`);
+    const payload = Buffer.from(body, 'utf8');
+
+    return new Promise((resolve, reject) => {
+        const req = http.request(
+            {
+                hostname: url.hostname,
+                port: url.port || 1400,
+                path: url.pathname,
+                method: 'POST',
+                headers: {
+                    'CONTENT-TYPE': 'text/xml; charset="utf-8"',
+                    SOAPACTION: '"urn:schemas-upnp-org:service:AVTransport:1#GetMediaInfo"',
+                    'CONTENT-LENGTH': payload.length,
+                },
+            },
+            res => {
+                const chunks: Buffer[] = [];
+                res.on('data', chunk => chunks.push(chunk as Buffer));
+                res.on('end', () => {
+                    const xml = Buffer.concat(chunks).toString('utf8');
+                    if ((res.statusCode || 500) >= 400) {
+                        reject(new Error(`GetMediaInfo failed: HTTP ${res.statusCode}`));
+                        return;
+                    }
+                    resolve(xml);
+                });
+            },
+        );
+        req.on('error', reject);
+        req.setTimeout(5000, () => {
+            req.destroy();
+            reject(new Error('GetMediaInfo timed out'));
+        });
+        req.write(payload);
+        req.end();
+    });
+}
+
+export function parseCurrentUri(xml: string | undefined): string {
+    const source = String(xml || '');
+    let uri = tagText(source, 'CurrentURI');
+    if (!uri) {
+        uri = tagText(source, 'TrackURI');
+    }
+    if (/&amp;|&lt;|&gt;|&quot;/.test(uri)) {
+        uri = decodeXml(uri);
+    }
+    return uri.trim();
+}
+
 export interface NowPlayingLabels {
     title: string;
     artist: string;
@@ -626,9 +709,50 @@ export function getMediaRoot(
     return { id: 'root', title: '', items };
 }
 
-export async function browseMedia(baseUrl: string, objectId: string): Promise<MediaBrowseItem[]> {
-    const xml = await soapBrowse(baseUrl, objectId);
+export async function browseMedia(baseUrl: string, objectId: string, startIndex = 0): Promise<MediaBrowseItem[]> {
+    const xml = await soapBrowse(baseUrl, objectId, startIndex);
     return parseDidl(extractDidl(xml), baseUrl);
+}
+
+/**
+ * Tracks of a playing SMAPI playlist/album via the speaker ContentDirectory.
+ * The speaker is already signed in to the music service; the adapter SMAPI token is not required.
+ */
+export async function browseAllTracks(baseUrl: string, objectId: string, maxItems = 400): Promise<MediaBrowseItem[]> {
+    const visited = new Set<string>();
+
+    const collect = async (id: string): Promise<MediaBrowseItem[]> => {
+        const key = String(id || '').trim();
+        if (!key || visited.has(key) || visited.size > 6) {
+            return [];
+        }
+        visited.add(key);
+        const tracks: MediaBrowseItem[] = [];
+        let start = 0;
+        let firstPage: MediaBrowseItem[] = [];
+        while (tracks.length < maxItems) {
+            const page = await browseMedia(baseUrl, key, start);
+            if (start === 0) {
+                firstPage = page;
+            }
+            const pageTracks = page.filter(item => !item.folder && item.title);
+            if (!pageTracks.length) {
+                break;
+            }
+            tracks.push(...pageTracks);
+            if (page.length < BROWSE_LIMIT) {
+                break;
+            }
+            start += page.length;
+        }
+        if (tracks.length) {
+            return tracks.slice(0, maxItems);
+        }
+        const folder = firstPage.find(item => item.folder && item.id && item.id !== key);
+        return folder ? collect(folder.id) : [];
+    };
+
+    return collect(objectId);
 }
 
 export function albumArtFromXml(xml: string | undefined): string {

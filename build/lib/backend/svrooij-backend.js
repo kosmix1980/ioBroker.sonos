@@ -206,7 +206,11 @@ class SvrooijDevice {
         return this.cached.groupState || { volume: 0, mute: false };
     }
     get transportUri() {
-        return this.lastTransportUri || this.cached.currentTrack.uri || '';
+        if (this.lastTransportUri) {
+            return this.lastTransportUri;
+        }
+        const track = String(this.cached.currentTrack?.uri || '');
+        return (0, content_directory_1.isTvStreamUri)(track) ? '' : track;
     }
     get transportUriMetadata() {
         return this.lastTransportMetadata;
@@ -221,6 +225,15 @@ class SvrooijDevice {
     applyTransportEvent(data) {
         if (data.AVTransportURI !== undefined) {
             this.lastTransportUri = String(data.AVTransportURI);
+        }
+        if (data.CurrentTrackURI !== undefined && data.AVTransportURI === undefined) {
+            const trackUri = String(data.CurrentTrackURI);
+            if ((0, content_directory_1.isQueueUri)(trackUri) || (0, content_directory_1.isCpContainerUri)(trackUri)) {
+                this.lastTransportUri = trackUri;
+            }
+            else if ((0, content_directory_1.isTvStreamUri)(this.lastTransportUri) && trackUri && !(0, content_directory_1.isTvStreamUri)(trackUri)) {
+                this.lastTransportUri = '';
+            }
         }
         // The library hands this over parsed whenever it can, but TTS has to put the exact
         // DIDL back after an announcement, so a parsed track is turned back into a string.
