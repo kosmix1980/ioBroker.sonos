@@ -1,7 +1,7 @@
 /**
  * Eight shared quick-start slots for the VIS widget (instance state + Admin).
  */
-import { isQueueUri, isTvStreamUri } from './content-directory';
+import { isPlayingTv, isQueueUri, isTvStreamUri } from './content-directory';
 
 export const QUICKSTART_COUNT = 8;
 
@@ -103,16 +103,20 @@ export function resumeFromPlayer(player: {
     const av = String(player.transportUri || '');
     const metadata = typeof player.transportUriMetadata === 'string' ? player.transportUriMetadata : '';
 
-    if (isTvStreamUri(trackUri) || isTvStreamUri(av)) {
+    if (isPlayingTv(av, trackUri)) {
         return { uri: '', metadata: '', tv: true };
     }
 
-    if (av && !isGroupingUri(av) && !isQueueUri(av)) {
+    if (av && !isGroupingUri(av) && !isQueueUri(av) && !isTvStreamUri(av)) {
         return { uri: av, metadata, tv: false };
     }
 
-    if (trackUri && !isGroupingUri(trackUri)) {
+    if (trackUri && !isGroupingUri(trackUri) && !isTvStreamUri(trackUri)) {
         return { uri: trackUri, metadata, tv: false };
+    }
+
+    if (av && !isGroupingUri(av) && !isTvStreamUri(av)) {
+        return { uri: av, metadata, tv: false };
     }
 
     return { uri: '', metadata, tv: false };

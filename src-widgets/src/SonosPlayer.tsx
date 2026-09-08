@@ -41,7 +41,7 @@ import {
 
 import type { RxRenderWidgetProps, RxWidgetInfo, VisRxWidgetProps, VisRxWidgetState } from '@iobroker/types-vis-2';
 
-import Generic, { ROOM_STATES } from './Generic';
+import Generic, { ROOM_STATES, isTvNow } from './Generic';
 import type { LibraryTab, MediaBrowseItem, MediaBrowseResult, RecentTrack, SonosRoomInfo } from './types';
 
 /** Library states of the selected room and of its group coordinator. */
@@ -398,7 +398,7 @@ export default class SonosPlayer extends Generic<SonosPlayerRxData, SonosPlayerS
 
     /** TV/HDMI has no transport control, so the buttons must not be offered */
     private isOnTv(ip: string): boolean {
-        return this.num(ip, 'current_type') === 2 && this.str(ip, 'current_title') === 'TV';
+        return isTvNow(this.num(ip, 'current_type'), this.str(ip, 'current_title'), this.str(ip, 'current_uri'));
     }
 
     // ---- actions ------------------------------------------------------------

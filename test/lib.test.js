@@ -19,6 +19,7 @@ const {
     parseCpContainerUri,
     queueCoverUrl,
     isTvStreamUri,
+    isPlayingTv,
     matchesMusicService,
     mediaItem,
     nowPlayingLabels,
@@ -59,6 +60,23 @@ describe('content-directory: URI helpers', () => {
         expect(isTvStreamUri('x-rincon:RINCON_1')).to.be.false;
         expect(isTvStreamUri(undefined)).to.be.false;
         expect(isTvStreamUri('')).to.be.false;
+    });
+
+    it('drops HDMI as soon as AVTransport or the track is a playlist or song', () => {
+        const hdmi = tvStreamUri(UUID);
+        const playlist = 'x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9';
+        const queue = `x-rincon-queue:${UUID}#0`;
+        const song = 'x-sonos-spotify:spotify%3atrack%3aabc';
+        const follow = `x-rincon:${UUID}`;
+
+        expect(isPlayingTv(hdmi, hdmi)).to.be.true;
+        expect(isPlayingTv(hdmi, '')).to.be.true;
+        expect(isPlayingTv('', hdmi)).to.be.true;
+        expect(isPlayingTv(playlist, hdmi)).to.be.false;
+        expect(isPlayingTv(queue, hdmi)).to.be.false;
+        expect(isPlayingTv(hdmi, song)).to.be.false;
+        expect(isPlayingTv(follow, hdmi)).to.be.true;
+        expect(isPlayingTv(follow, song)).to.be.false;
     });
 
     it('recognizes line-in', () => {
@@ -488,5 +506,29 @@ describe('next-track: Sonos next is not queue[n+1]', () => {
             { title: 'Later', artist: 'B', album: '', albumArtUri: '/b' },
         ]);
         expect(nowPlayingQueueEntries({ title: 'Only' }, { title: 'Only' })).to.have.length(1);
+    });
+});
+
+const { resumeFromPlayer } = require('../build/lib/quickstart');
+
+describe('quickstart: resumeFromPlayer', () => {
+    it('does not keep HDMI as the resume URI after a playlist or song starts', () => {
+        const hdmi = `x-sonos-htastream:${UUID}:spdif`;
+        const playlist = 'x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9';
+        const song = 'x-sonos-spotify:spotify%3atrack%3aabc';
+
+        expect(resumeFromPlayer({ transportUri: hdmi, state: { currentTrack: { uri: hdmi } } })).to.deep.equal({
+            uri: '',
+            metadata: '',
+            tv: true,
+        });
+        expect(resumeFromPlayer({ transportUri: playlist, state: { currentTrack: { uri: hdmi } } })).to.deep.include({
+            uri: playlist,
+            tv: false,
+        });
+        expect(resumeFromPlayer({ transportUri: hdmi, state: { currentTrack: { uri: song } } })).to.deep.include({
+            uri: song,
+            tv: false,
+        });
     });
 });

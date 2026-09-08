@@ -270,6 +270,7 @@ adapter to get a working state back.
 * (kosmix1980) vis "Als Nächstes" follows Sonos Next (shuffle), not the next row in the queue list
 * (kosmix1980) Next on the Sonos queue seeks the next queue row, so it matches "Als Nächstes"
 * (kosmix1980) Queue tab shows the upcoming titles of the playing playlist, not the leftover saved queue
+* (kosmix1980) After HDMI, transport buttons return and night/speech hide when a playlist or song starts
 
 ### 4.2.1 (2026-09-07)
 * (@GermanBluefox) Added two widgets for the ioBroker.devices dashboard: SONOS player and SONOS rooms

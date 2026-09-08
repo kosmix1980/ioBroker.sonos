@@ -219,6 +219,32 @@ export function isLineInStreamUri(uri: string | undefined): boolean {
     return /^x-rincon-stream:/i.test(String(uri || ''));
 }
 
+function isFollowCoordinatorUri(uri: string | undefined): boolean {
+    return /^x-rincon:RINCON_/i.test(String(uri || ''));
+}
+
+/** Queue, playlist, song or radio — not HDMI/TV and not a grouped follower. */
+function isNonTvSourceUri(uri: string | undefined): boolean {
+    const value = String(uri || '');
+    if (!value || isTvStreamUri(value) || isLineInStreamUri(value) || isFollowCoordinatorUri(value)) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * HDMI/TV is the current source. AVTransport wins over a leftover currentTrack
+ * HDMI URI; a real song/playlist URI wins over a leftover HDMI AVTransport.
+ */
+export function isPlayingTv(transportUri?: string, trackUri?: string): boolean {
+    const av = String(transportUri || '');
+    const track = String(trackUri || '');
+    if (isNonTvSourceUri(av) || isNonTvSourceUri(track)) {
+        return false;
+    }
+    return isTvStreamUri(av) || isTvStreamUri(track);
+}
+
 /** True when AVTransport is the speaker's own Sonos queue (not a cloud playlist or stream). */
 export function isQueueUri(uri: string | undefined): boolean {
     return /^x-rincon-queue:/i.test(String(uri || ''));

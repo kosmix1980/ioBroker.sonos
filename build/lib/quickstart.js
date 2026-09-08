@@ -88,14 +88,17 @@ function resumeFromPlayer(player) {
     const trackUri = String(player.state?.currentTrack?.uri || '');
     const av = String(player.transportUri || '');
     const metadata = typeof player.transportUriMetadata === 'string' ? player.transportUriMetadata : '';
-    if ((0, content_directory_1.isTvStreamUri)(trackUri) || (0, content_directory_1.isTvStreamUri)(av)) {
+    if ((0, content_directory_1.isPlayingTv)(av, trackUri)) {
         return { uri: '', metadata: '', tv: true };
     }
-    if (av && !isGroupingUri(av) && !(0, content_directory_1.isQueueUri)(av)) {
+    if (av && !isGroupingUri(av) && !(0, content_directory_1.isQueueUri)(av) && !(0, content_directory_1.isTvStreamUri)(av)) {
         return { uri: av, metadata, tv: false };
     }
-    if (trackUri && !isGroupingUri(trackUri)) {
+    if (trackUri && !isGroupingUri(trackUri) && !(0, content_directory_1.isTvStreamUri)(trackUri)) {
         return { uri: trackUri, metadata, tv: false };
+    }
+    if (av && !isGroupingUri(av) && !(0, content_directory_1.isTvStreamUri)(av)) {
+        return { uri: av, metadata, tv: false };
     }
     return { uri: '', metadata, tv: false };
 }

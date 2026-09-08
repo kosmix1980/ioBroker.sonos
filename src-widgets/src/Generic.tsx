@@ -15,6 +15,7 @@ export const ROOM_STATES = [
     'current_title',
     'current_track_number',
     'current_type',
+    'current_uri',
     'next_album',
     'next_art',
     'next_artist',
@@ -32,6 +33,28 @@ export const ROOM_STATES = [
     'state_simple',
     'volume',
 ] as const;
+
+/** HDMI chrome (no transport, night/speech). False after a playlist or song URI. */
+export function isTvNow(type: number, title: string, uri: string): boolean {
+    const value = String(uri || '');
+    if (
+        /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-sonos-mms:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:|spotify:|file:)/i.test(
+            value,
+        )
+    ) {
+        return false;
+    }
+    if (/^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|pndrradio:|aac:)/i.test(value)) {
+        return false;
+    }
+    if (type === 0) {
+        return false;
+    }
+    if (/^x-sonos-htastream:/i.test(value)) {
+        return true;
+    }
+    return type === 2 && !value && title === 'TV';
+}
 
 /**
  * Base class of the SONOS vis-2 widgets.

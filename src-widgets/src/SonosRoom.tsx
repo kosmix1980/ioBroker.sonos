@@ -14,7 +14,7 @@ import {
 
 import type { RxRenderWidgetProps, RxWidgetInfo, VisRxWidgetProps, VisRxWidgetState } from '@iobroker/types-vis-2';
 
-import Generic from './Generic';
+import Generic, { isTvNow } from './Generic';
 import type { SonosRoomInfo } from './types';
 
 /** Only what a single compact card shows. */
@@ -26,6 +26,7 @@ const ROOM_STATES = [
     'current_station',
     'current_title',
     'current_type',
+    'current_uri',
     'muted',
     'state_simple',
     'volume',
@@ -218,7 +219,11 @@ export default class SonosRoom extends Generic<SonosRoomRxData, SonosRoomState> 
         }
 
         const ip = room.ip;
-        const onTv = Number(this.val(ip, 'current_type')) === 2 && this.str(ip, 'current_title') === 'TV';
+        const onTv = isTvNow(
+            Number(this.val(ip, 'current_type')) || 0,
+            this.str(ip, 'current_title'),
+            this.str(ip, 'current_uri'),
+        );
         const playing = this.val(ip, 'state_simple') === true;
         const muted = this.val(ip, 'muted') === true;
         const cover = this.str(ip, 'current_cover');

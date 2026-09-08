@@ -12,7 +12,7 @@ vis.binds = vis.binds || {};
     }
 
     vis.binds.sonos = {
-        version: '4.2.1g7',
+        version: '4.2.1g8',
         _bound: {},
         _tickers: {},
         _renderTimers: {},
@@ -1023,24 +1023,28 @@ vis.binds = vis.binds || {};
             var durationS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_duration_s'));
             var durationN = parseFloat(vis.binds.sonos.state(playerId, 'current_duration'));
             var tvLabel = vis.binds.sonos.t('tv');
-            if (!title) {
-                title = station;
-            }
-            if (!title && type === 2) {
-                title = tvLabel;
-            }
-            if (!title) {
-                title = vis.binds.sonos.t('nothing');
-            }
-            var isTv = type === 2 && (
-                station === 'TV' ||
-                station === tvLabel ||
-                title === 'TV' ||
-                title === tvLabel
-            );
             var hasDuration = durationS > 0 || durationN > 0;
             var onDemand = /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-sonos-mms:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:|spotify:|file:)/i.test(uri);
             var radioUri = /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|pndrradio:|aac:)/i.test(uri);
+            var tvUri = /^x-sonos-htastream:/i.test(uri);
+            // Leftover HDMI URI / station "TV" after a playlist start must not keep TV chrome.
+            var isTv = false;
+            if (!onDemand && !radioUri && type !== 0) {
+                if (tvUri) {
+                    isTv = true;
+                } else if (type === 2 && !uri) {
+                    isTv = title === 'TV' || title === tvLabel;
+                }
+            }
+            if (!title) {
+                if (isTv) {
+                    title = tvLabel;
+                } else if (station && station !== 'TV' && station !== tvLabel) {
+                    title = station;
+                } else {
+                    title = vis.binds.sonos.t('nothing');
+                }
+            }
             return {
                 title: title,
                 artist: artist,
@@ -1567,10 +1571,13 @@ vis.binds = vis.binds || {};
             var now = vis.binds.sonos.nowPlaying(mediaId);
             var hint = vis.binds.sonos.readNowHint($div);
             var nothing = vis.binds.sonos.t('nothing');
-            if (hint && (now.title === nothing || !String(vis.binds.sonos.state(mediaId, 'current_title') || '').trim())) {
-                now.title = hint.title || now.title;
-                now.artist = hint.artist || now.artist;
-                now.album = hint.album || now.album;
+            if (hint && !/^x-sonos-htastream:/i.test(hint.uri || '')) {
+                if (now.title === nothing || !String(vis.binds.sonos.state(mediaId, 'current_title') || '').trim() || now.isTv) {
+                    now.title = hint.title || now.title;
+                    now.artist = hint.artist || now.artist;
+                    now.album = hint.album || now.album;
+                }
+                now.isTv = false;
                 now.isRadio = false;
             }
             var title = now.title;
