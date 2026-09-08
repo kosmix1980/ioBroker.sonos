@@ -1,4 +1,6 @@
 {
+  "@svrooij/sonos (experimental)": "@svrooij/sonos (expérimental)",
+  "Control": "Contrôle",
   "Devices": "Dispositifs",
   "Fade in (text2speech)": "Fondu pour les sorties vocales",
   "Fade out (text2speech)": "Fondu sortant pour les sorties vocales ",
@@ -8,14 +10,25 @@
   "Room": "Chambre",
   "SONOS devices": "Les appareils SONOS",
   "Search": "Chercher",
+  "Sonos library": "Bibliothèque Sonos",
   "Update of elapsed time": "Mise à jour du temps écoulé",
   "Web server": "serveur Web",
+  "backend_help": "Quelle bibliothèque parle aux locuteurs. Le nouveau est en cours de test - revenez à la valeur par défaut si la lecture, les groupes ou les annonces se comportent mal.",
   "in milliseconds": "en millisecondes",
+  "sonos-discovery (default)": "sonos-discovery (par défaut)",
   "tooltip_elapsedInterval": "À quelle fréquence sera mis à jour le temps écoulé pour les pistes en ms. Ne le faites pas trop petit pour réduire la charge sur le système.",
   "tooltip_fadeIn": "Fade in interval en ms pour les annonces vocales. 0 - Le fondu entrant est désactivé.",
   "tooltip_fadeOut": "Fade out intervalle en ms pour les annonces vocales. 0 - Le fondu est désactivé.",
   "tooltip_webserverEnabled": "Afficher l'interface Web de SONOS",
   "tooltip_webserverPort": "Port pour l'interface Web",
   "update adapter information": "Parcourir pour les appareils",
-  "used for TTS": "utilisé pour TTS"
+  "used for TTS": "utilisé pour TTS",
+  "Quick start": "Quick start",
+  "Load current shortcuts": "Load current shortcuts",
+  "Shortcuts": "Shortcuts",
+  "Artist": "Artist",
+  "URI": "URI",
+  "Favorite": "Favorite",
+  "TV HDMI": "TV HDMI",
+  "tooltip_quickstarts": "Eight shortcuts for the VIS widget. Click a free button in the widget to save what is playing. Long-press a button to rename, replace or clear it. Click “Load current shortcuts” here before editing, then save. An empty table does not delete widget shortcuts."
 }

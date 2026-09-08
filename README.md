@@ -11,45 +11,106 @@
 
 Control and monitor SONOS devices with ioBroker.
 
-## VIS widget
+**GitHub install of this fork:** Admin → GitHub → `kosmix1980/ioBroker.sonos` → branch `cursor/vis1-on-420-93d4`. This branch includes `build/main.js`. Do **not** GitHub-install `ioBroker/ioBroker.sonos` master — that tree has no start file. Official releases come from npm.
 
-The adapter includes a VIS widget **Sonos Control**. One widget can switch rooms, control playback, form groups, and start favorites, playlists and queue tracks.
+The instance setting **Sonos library** switches between `sonos-discovery` (default) and `@svrooij/sonos` (experimental).
 
-1. Install this adapter and make sure the **vis** adapter is running.
-2. Restart **vis.0** (the adapter already asks vis to restart on install).
-3. Reload the VIS editor with Ctrl+F5.
-4. From the widget group **sonos**, drag **Sonos Control** onto a view.
-5. Set the object to the instance, for example `sonos.0` — not a single `play` state.
-6. Size the widget around **900 × 520**.
+## Widgets
 
-After that, every discovered speaker appears as a chip at the top. Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area shows the track of the group, not the last local title of that room. Library buttons under the rooms (**Favorites**, **Playlists**, **Queue**, **Recent**, **Sources**) open a slightly transparent sheet below the buttons. **Recent** lists the last tracks of the selected room. **Sources** browses TuneIn, Spotify, YouTube Music, the music library, network shares, line-in and TV HDMI. Spotify search uses the Sonos catalog. YouTube Music search lists catalog titles and tells the speaker to play them via `sid=284` (the official YTM account on the player). If a title does not start, save it as a favorite in the Sonos app.
+The adapter ships one widget for both visualisation adapters. Both are installed with the adapter;
+**vis** and **vis-2** are restarted automatically, and the editor needs a hard reload (Ctrl+F5).
 
-![Sonos Control – player](img/widget-player.png)
+**Sonos Control** switches rooms, controls playback, forms groups and starts favorites, playlists,
+queue tracks, recent tracks and sources. Bind it to an *instance*, for example `sonos.0` - not to a
+single state such as `play`. The widget discovers every speaker of that instance on its own.
+
+Every discovered speaker appears as a chip at the top. Rooms that play together sit in a
+colored cluster; the group coordinator (Master) is filled in that color and marked with a crown.
+Group membership is toggled with the checkboxes. If a room belongs to a group, the now-playing area
+shows the track of the group, not the last local title of that room. The library buttons
+(**Favorites**, **Playlists**, **Queue**, **Recent**, **Sources**) open a sheet below them.
+**Recent** lists the last tracks of the selected room.
+
+![Sonos Control - player](img/widget-player.png)
 
 *Rooms, grouping and now-playing*
 
-![Sonos Control – favorites](img/widget-favorites.png)
+![Sonos Control - favorites](img/widget-favorites.png)
 
-*Library buttons open a slightly transparent sheet below the rooms*
+*The library buttons open a sheet below the rooms*
 
-![Sonos Control – sources](img/widget-sources.png)
+![Sonos Control - sources](img/widget-sources.png)
 
-*Sources including TV HDMI, TuneIn, Spotify and YouTube Music*
+*Sources: TuneIn, the music library, network shares, line-in and TV HDMI*
 
-![Sonos Control – TV HDMI](img/widget-hdmi.png)
+![Sonos Control - TV HDMI](img/widget-hdmi.png)
 
 *TV HDMI: title TV, format, mute, night sound and speech enhancement*
 
-To install this fork over the official adapter: in Admin open **Adapters** → GitHub button → `https://github.com/kosmix1980/ioBroker.sonos`, then restart vis and hard-reload the editor.
+### vis-2 and vis 1
 
-This branch does not include the compiled `build/` folder (same as official, for an upstream PR). For a GitHub install that starts immediately, use the branch `cursor/vis-sonos-widget-93d4`. ioBroker needs `build/main.js` as start file. After a GitHub install of this branch, if the log shows `cannot find start file`, compile once on the host:
+There are two implementations of **Sonos Control** under the same template id `tplSonosControl`:
+a React one for vis-2 (`src-widgets`) and the original jQuery one for vis 1 (`widgets/sonos.html`).
 
-```
-cd /opt/iobroker/node_modules/iobroker.sonos
-npm install
-npm run build
-iobroker restart sonos.0
-```
+Each editor only ever shows one of them. Because the adapter declares `common.visWidgets`, vis-2
+skips `widgets/sonos.html` completely and loads the React widget; vis 1 does not know about React
+widget sets and loads the jQuery one. Views that were built with the vis-1 widget keep their
+`oid` binding when they are opened in vis-2.
+
+vis-2 additionally offers **Sonos room**, one speaker as a compact card with cover, title, transport
+and volume. It has no vis-1 counterpart.
+
+In vis-2 each part of Sonos Control (rooms, groups, volume, library) can be switched off, and the
+widget can start on a given room.
+
+### Sources
+
+**Sources** browses TuneIn radio, the music library, network shares and line-in through the
+speaker's content directory. Music services are listed only when the household actually reports
+them, and services with a SMAPI catalog (Spotify for example) can be searched after a one-time
+sign-in. Services without such a catalog only show what is already saved in the Sonos app as a
+favorite or playlist.
+
+**TV** appears only on speakers that really have an HDMI or optical input (Arc, Beam, Playbar,
+Playbase, Ray, Amp). On the TV input there is no transport control - play, pause, seek, next and
+previous are not offered; mute, night sound and speech enhancement are.
+
+## Widgets for ioBroker.devices
+
+Besides the vis widgets the adapter delivers two widgets for the dashboard of the
+**ioBroker.devices** adapter. They are added there with **+ → SONOS player** / **SONOS rooms**, and
+every widget is configured with its own settings dialog - no state has to be picked by hand.
+
+**SONOS player** is one speaker. The settings ask for the instance and the speaker; the list of
+speakers comes from the adapter itself, so it always matches the devices on the *SONOS devices* tab.
+
+| Size | What is shown |
+| --- | --- |
+| 1x1 | The cover as background, the room, the title and play/pause |
+| 2x0.5 | A strip: cover thumbnail, title, previous/play/next, mute |
+| 2x1, 2x2 | The whole player: cover, title, transport, shuffle, repeat, progress and volume |
+
+Cover, progress, volume and the shuffle/repeat buttons can be switched off individually. On a
+speaker that plays its TV input the transport buttons are hidden, because the HDMI input cannot be
+controlled - only mute stays.
+
+**SONOS rooms** is the whole household in one widget: how many speakers are playing, what each of
+them plays, and their volume. The small sizes show the counter and open the list in a dialog; 2x1
+and 2x2 show the list directly.
+
+It also forms groups: the link button of a speaker marks it as the group master, and the link
+button of every other speaker then adds it to that group or removes it again. Clicking the master a
+second time leaves the mode.
+
+## Control tab in admin
+
+The instance settings have a third tab, **Control**. It is the same player as in vis, but inside
+admin: pick a speaker on the left, and control it on the right - transport, progress, volume,
+grouping, and the library with favorites, playlists, queue, recently played and sources.
+
+This is meant for checking that a freshly added speaker really answers, without leaving the adapter
+configuration. The tab talks to the running instance, so it stays empty while the instance is
+stopped.
 
 ## Handling of groups
 * States for handling SONOS groups:
@@ -140,12 +201,60 @@ Please note: highlighting current playing favorite is not supported.
 }
 ```
 
+## Development
+
+Three front-ends live next to the adapter, each built with vite and module federation:
+
+| Sources | Build output | Loaded by |
+| --- | --- | --- |
+| `src-widgets/` | `widgets/sonos/` | vis-2 |
+| `src-admin/` | `admin/custom/` | the **Control** tab of the instance settings |
+| `src-devices/` | `admin/dm-widgets/` | the dashboard of ioBroker.devices |
+
+```bash
+npm run npm:all        # install the adapter and all three front-ends
+npm run build          # adapter + vis-2 widgets - what CI and npm publish run
+npm run build:admin    # the Control tab component  -> admin/custom
+npm run build:devices  # the ioBroker.devices widgets -> admin/dm-widgets
+npm run build:all      # everything
+```
+
+`admin/custom/` and `admin/dm-widgets/` are committed, because a cold module federation build
+pre-builds the whole shared GUI stack and takes several minutes - rebuild them with the scripts
+above whenever something below `src-admin/` or `src-devices/` changed, and commit the result.
+
+`src-devices` has a dev harness: `cd src-devices && npm start` opens the widgets on
+`http://localhost:3000` against a real ioBroker admin on `localhost:8081`, so they can be developed
+without rebuilding into ioBroker.devices every time.
+
 ## To Do
 * Rewrite with https://github.com/svrooij/node-sonos-ts
 
 ## Configuration
 - Web server - [optional] If web server enabled or not
 - Update of elapsed time(ms) - Interval in ms how often to update elapsed timer when the title is playing. (Default 2000)
+- Sonos library - which client library talks to the speakers, see below
+
+### Sonos library
+
+The adapter ships two client libraries and the setting picks one. Nothing else changes:
+the states, their names and their values are the same either way.
+
+| Setting | Library | Status |
+| --- | --- | --- |
+| `sonos-discovery (default)` | `sonos-discovery` | What the adapter has always used |
+| `@svrooij/sonos (experimental)` | `@svrooij/sonos` | Maintained replacement, being tested |
+
+`sonos-discovery` has not seen a release since 2022 and one of its dependencies broke the
+adapter on start, so the replacement is being prepared. It is offered here so that it can be
+tried on real households - there is no SONOS hardware in the CI, and the parts that only real
+speakers exercise cannot be covered by tests.
+
+If you try it, the interesting cases are grouping speakers and dissolving the group again,
+announcements over running playback, starting a favorite or a playlist, the TV input on a
+soundbar, and searching a music service. **Switch back to the default if anything misbehaves**
+and please report what you saw - the setting exists so that nobody has to downgrade the
+adapter to get a working state back.
 
 <!--
 	Placeholder for the next version (at the beginning of the line):
@@ -153,12 +262,39 @@ Please note: highlighting current playing favorite is not supported.
 -->
 ## Changelog
 ### **WORK IN PROGRESS**
-* (kosmix1980) VIS widget: rooms, groups, favorites, playlists, queue, recent tracks and sources
-* (kosmix1980) Sources: TuneIn, library, shares, line-in, Spotify/SMAPI search, YouTube Music catalog (sid=284, no stream proxy)
+* (kosmix1980) GitHub-installable 4.2.1 with vis-1 kiosk widget (themes, quick-starts, home-theater unmute) on the official backend switch
+* (kosmix1980) vis-1: grouped rooms sit in a colored cluster; the coordinator is marked as Master
+* (kosmix1980) vis: group cluster and Master label use inline styles so vis cache cannot hide them
+* (kosmix1980) vis-2 widget bundle is shipped so grouping colors reach vis-2; vis-1 shows bonded members in the cluster
+* (kosmix1980) vis queue tab lists the current track and the upcoming titles; now-playing shows the next track
+* (kosmix1980) vis "Als Nächstes" follows Sonos Next (shuffle), not the next row in the queue list
+* (kosmix1980) Next on the Sonos queue seeks the next queue row, so it matches "Als Nächstes"
+* (kosmix1980) Queue tab shows the upcoming titles of the playing playlist, not the leftover saved queue
+* (kosmix1980) After HDMI, transport buttons return and night/speech hide when a playlist or song starts
+* (kosmix1980) Queue tab lists the playing playlist via the speaker catalog, not a leftover HDMI/TV queue
+* (kosmix1980) Queue follows the playing source: Spotify/Apple/library playlists, not only URIs with sid=
+
+### 4.2.1 (2026-09-07)
+* (@GermanBluefox) Added two widgets for the ioBroker.devices dashboard: SONOS player and SONOS rooms
+* (@GermanBluefox) Added a "Control" tab to the instance settings, which plays and groups the speakers directly in admin
+
+### 4.2.0 (2026-09-06)
+* (@GermanBluefox) The client library can be switched in the instance settings
+* (@GermanBluefox) Added `@svrooij/sonos` as an experimental alternative to `sonos-discovery`
+* (@GermanBluefox) The adapter talks to a backend interface now, so both libraries fill the same states
+
+### 4.1.0 (2026-09-06)
+* (@GermanBluefox) Added a React implementation of `Sonos Control` for vis-2, plus the new `Sonos room` widget
+* (kosmix1980) vis widget: rooms, groups, favorites, playlists, queue, recent tracks and sources
+* (kosmix1980) Sources: TuneIn, music library, network shares, line-in and SMAPI catalog search
 * (kosmix1980) TV HDMI as a playable source with format, cover, night sound and speech enhancement
-* (kosmix1980) Library buttons open a slightly transparent popup below the buttons
 * (kosmix1980) Added `playlist_list` / `playlist_list_array` and per-room `recent_tracks`
 * (kosmix1980) Group members follow the coordinator's now-playing and transport
+* (@GermanBluefox) TV is offered only on speakers that have an HDMI/optical input
+* (@GermanBluefox) Music services are listed only when the household reports them
+* (@GermanBluefox) Removed the YouTube Music catalog search: it used a private, undocumented Google endpoint
+* (@GermanBluefox) Only the group coordinator updates the elapsed time of the group now
+* (@GermanBluefox) SMAPI account tokens are stored with restrictive file permissions
 
 ### 4.0.3 (2026-08-13)
 * (@GermanBluefox) Fixed TTS: without a volume in the file name, the announcement was played with volume 0
@@ -167,7 +303,7 @@ Please note: highlighting current playing favorite is not supported.
 * (@GermanBluefox) An empty value in the `tts` state stops the running announcement
 * (@GermanBluefox) The adapter was migrated to TypeScript and is now based on classes
 * (@GermanBluefox) The "root" device object is created now by js-controller from io-package.json
-* (biglouis) Missing states of the already existing devices will be created at start
+* (biglouis) Missing states of the already existing devices will be created at the start
 * (VierlingMt) Fixed the error if `favorites_set` was called with an empty value
 * (seb2010) Added support for treble and bass information
 * (Apollon77) stores the tts files in files instead of binary states
@@ -175,15 +311,6 @@ Please note: highlighting current playing favorite is not supported.
 ### 3.0.0 (2023-10-09)
 * (udondan) Added support for the playing Sonos playlists (added new state `playlist_set`)
 * (bluefox) The minimal node.js version is 16
-
-### 2.3.3 (2023-09-21)
-* (foxriver76) fixed cover url
-
-### 2.3.2 (2023-09-20)
-* (foxriver76) stores the cover file in files instead of binary states
-
-### 2.3.1 (2023-03-22)
-* (Apollon77) Prepare for future js-controller versions
 
 ## License
 

@@ -1,4 +1,6 @@
 {
+  "@svrooij/sonos (experimental)": "@svrooij/sonos (экспериментально)",
+  "Control": "Управление",
   "Devices": "Устройства",
   "Fade in (text2speech)": "Нарастание громкости речи",
   "Fade out (text2speech)": "Затухание громкости речи ",
@@ -8,14 +10,25 @@
   "Room": "Комната",
   "SONOS devices": "SONOS Устройства",
   "Search": "Поиск",
+  "Sonos library": "Библиотека Сонос",
   "Update of elapsed time": "Обновления таймера композиции",
   "Web server": "Веб сервер",
+  "backend_help": "Какая библиотека разговаривает со спикерами. Новый тестируется - вернитесь к настройкам по умолчанию, если воспроизведение, группы или объявления плохо себя ведут.",
   "in milliseconds": "в миллисекундах",
+  "sonos-discovery (default)": "sonos-discovery (по умолчанию)",
   "tooltip_elapsedInterval": "Как часто будет обновлятся текущее время проигрывания. Не делайте слишком маленьким, что бы уменьшить нагрузку на систему.",
   "tooltip_fadeIn": "Нарастание громкости для произношения текста. 0 - выключено",
   "tooltip_fadeOut": "Затухание громкости для произношения текста. 0 - выключено",
   "tooltip_webserverEnabled": "Показывать веб интерфейс SONOS",
   "tooltip_webserverPort": "Порт для веб интерфейса",
   "update adapter information": "Поиск устройств",
-  "used for TTS": "используется для ТТС"
+  "used for TTS": "используется для ТТС",
+  "Quick start": "Quick start",
+  "Load current shortcuts": "Load current shortcuts",
+  "Shortcuts": "Shortcuts",
+  "Artist": "Artist",
+  "URI": "URI",
+  "Favorite": "Favorite",
+  "TV HDMI": "TV HDMI",
+  "tooltip_quickstarts": "Eight shortcuts for the VIS widget. Click a free button in the widget to save what is playing. Long-press a button to rename, replace or clear it. Click “Load current shortcuts” here before editing, then save. An empty table does not delete widget shortcuts."
 }
