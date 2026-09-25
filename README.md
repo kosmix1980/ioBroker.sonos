@@ -114,8 +114,9 @@ stopped.
 
 ## Instance link (web GUI)
 
-The adapter ships a standalone page in `www/`. The **web** adapter serves it at `/sonos/`, and
-admin shows it as the instance link (the link icon next to `sonos.0`).
+The adapter ships a standalone page in `www/`. The **web** adapter serves it at `/sonos/`.
+Admin shows a **Web-GUI** button on the instance list (and on the Intro page). The same
+button sits at the top of the instance settings.
 
 `http://<ioBroker-IP>:<web-port>/sonos/index.html?instance=0`
 
@@ -287,6 +288,7 @@ adapter to get a working state back.
 * (kosmix1980) Queue tab lists the playing playlist via the speaker catalog, not a leftover HDMI/TV queue
 * (kosmix1980) Queue follows the playing source: Spotify/Apple/library playlists, not only URIs with sid=
 * (kosmix1980) Instance link opens a SONOS web GUI (same player as vis-1), served by the web adapter at /sonos/
+* (kosmix1980) Instance list and settings show a Web-GUI button that opens that page
 
 ### 4.2.1 (2026-09-07)
 * (@GermanBluefox) Added two widgets for the ioBroker.devices dashboard: SONOS player and SONOS rooms

@@ -158,28 +158,36 @@
     "restartAdapters": [
       "vis",
       "vis-2",
-      "web"
+      "web",
+      "admin"
     ],
     "localLink": "%web_protocol%://%ip%:%web_port%/sonos/index.html?instance=%instance%",
     "localLinks": {
       "_default": {
         "link": "%web_protocol%://%ip%:%web_port%/sonos/index.html?instance=%instance%",
         "name": {
-          "en": "SONOS",
-          "de": "SONOS",
-          "ru": "SONOS",
-          "pt": "SONOS",
-          "nl": "SONOS",
-          "fr": "SONOS",
-          "it": "SONOS",
-          "es": "SONOS",
-          "pl": "SONOS",
-          "uk": "SONOS",
-          "zh-cn": "SONOS"
+          "en": "Web GUI",
+          "de": "Web-GUI",
+          "ru": "Web GUI",
+          "pt": "Web GUI",
+          "nl": "Web-GUI",
+          "fr": "Interface web",
+          "it": "GUI web",
+          "es": "Interfaz web",
+          "pl": "Web-GUI",
+          "uk": "Web-GUI",
+          "zh-cn": "Web GUI"
         },
         "icon": "sonos.admin/sonos.png",
-        "color": "#e31c23"
+        "color": "#e31c23",
+        "intro": true
       }
+    },
+    "welcomeScreen": {
+      "link": "sonos/index.html",
+      "name": "SONOS",
+      "img": "sonos.admin/sonos.png",
+      "color": "#e31c23"
     },
     "visWidgets": {
       "vis2SonosWidgets": {

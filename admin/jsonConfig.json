@@ -6,6 +6,18 @@
       "type": "panel",
       "label": "Main settings",
       "items": {
+        "_openGui": {
+          "type": "sendTo",
+          "command": "guiUrl",
+          "label": "open_gui",
+          "variant": "contained",
+          "icon": "web",
+          "openUrl": true,
+          "color": "primary",
+          "sm": 12,
+          "md": 4,
+          "lg": 3
+        },
         "webServer": {
           "type": "instance",
           "adapter": "web",
@@ -207,6 +219,18 @@
       "type": "panel",
       "label": "Control",
       "items": {
+        "_openGui": {
+          "type": "sendTo",
+          "command": "guiUrl",
+          "label": "open_gui",
+          "variant": "contained",
+          "icon": "web",
+          "openUrl": true,
+          "color": "primary",
+          "sm": 12,
+          "md": 4,
+          "lg": 3
+        },
         "_control": {
           "type": "custom",
           "i18n": true,

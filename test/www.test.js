@@ -37,9 +37,16 @@ describe('www instance-link GUI', () => {
         const pkg = JSON.parse(read('package.json'));
         expect(pkg.files).to.include('www/');
         expect(io.common.restartAdapters).to.include('web');
+        expect(io.common.restartAdapters).to.include('admin');
         expect(io.common.localLink).to.include('/sonos/index.html');
         expect(io.common.localLinks._default.link).to.include('/sonos/index.html');
         expect(io.common.localLinks._default.link).to.include('%instance%');
+        expect(io.common.localLinks._default.name.de).to.equal('Web-GUI');
+        expect(io.common.localLinks._default.intro).to.equal(true);
+        expect(io.common.welcomeScreen.link).to.equal('sonos/index.html');
+        const config = JSON.parse(read('admin/jsonConfig.json'));
+        expect(config.items.mainTab.items._openGui.command).to.equal('guiUrl');
+        expect(config.items.mainTab.items._openGui.openUrl).to.equal(true);
     });
 
     it('loads the vis shim without a browser', () => {

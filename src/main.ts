@@ -75,6 +75,22 @@ import { isYoutubeMusicName, searchYoutubeMusic } from './lib/ytmusic';
 const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
 const TV_IMAGE = `${__dirname}/../img/tv-cover.png`;
 
+/** Instance-overview / Admin button: web adapter serves `www/` at /sonos/. */
+const GUI_LINK = '%web_protocol%://%ip%:%web_port%/sonos/index.html?instance=%instance%';
+const GUI_LINK_NAME = {
+    en: 'Web GUI',
+    de: 'Web-GUI',
+    ru: 'Web GUI',
+    pt: 'Web GUI',
+    nl: 'Web-GUI',
+    fr: 'Interface web',
+    it: 'GUI web',
+    es: 'Interfaz web',
+    pl: 'Web-GUI',
+    uk: 'Web-GUI',
+    'zh-cn': 'Web GUI',
+} as const;
+
 /** Information about one sonos device */
 interface ChannelInfo {
     uuid: string;
@@ -727,6 +743,25 @@ class Sonos extends utils.Adapter {
                 }
                 break;
 
+            case 'guiUrl':
+                if (obj.callback) {
+                    wait = true;
+                    this.sendGuiUrl(obj).catch(e => {
+                        this.log.error(`Cannot build GUI URL: ${e}`);
+                        this.sendTo(
+                            obj.from,
+                            obj.command,
+                            {
+                                error: this.isGermanUi()
+                                    ? 'Keine GUI-Adresse. web.0 starten.'
+                                    : 'No GUI address. Start web.0.',
+                            },
+                            obj.callback,
+                        );
+                    });
+                }
+                break;
+
             case 'sonos:getRooms':
                 if (obj.callback) {
                     // Used by the ioBroker.devices widgets to fill their room picker. The shape
@@ -810,6 +845,117 @@ class Sonos extends utils.Adapter {
     private async sendQuickstarts(obj: ioBroker.Message): Promise<void> {
         const current = await this.getStateAsync('quickstarts');
         this.sendTo(obj.from, obj.command, { native: { quickstarts: parseQuickstarts(current?.val) } }, obj.callback);
+    }
+
+    /**
+     * Write `localLink` / `localLinks` onto this instance object.
+     *
+     * Admin reads those fields from `system.adapter.sonos.N`, not only from io-package.json.
+     * An instance created before the web GUI existed would otherwise have no button in the
+     * instance list until it is deleted and added again.
+     */
+    private async ensureInstanceLink(): Promise<void> {
+        const id = `system.adapter.${this.namespace}`;
+        const obj = await this.getForeignObjectAsync(id);
+        if (!obj?.common) {
+            return;
+        }
+        const currentLink = typeof obj.common.localLink === 'string' ? obj.common.localLink : '';
+        const stored = obj.common.localLinks as { _default?: { link?: string } | string } | undefined;
+        const storedDefault = stored?._default;
+        const currentDefault = typeof storedDefault === 'string' ? storedDefault : storedDefault?.link || '';
+        if (currentLink === GUI_LINK && currentDefault === GUI_LINK) {
+            return;
+        }
+        await this.extendForeignObjectAsync(id, {
+            common: {
+                localLink: GUI_LINK,
+                localLinks: {
+                    _default: {
+                        link: GUI_LINK,
+                        name: GUI_LINK_NAME,
+                        icon: 'sonos.admin/sonos.png',
+                        color: '#e31c23',
+                        intro: true,
+                    },
+                },
+            },
+        });
+    }
+
+    /** Admin sendTo `guiUrl` with `openUrl: true` opens this address in a new tab. */
+    private async sendGuiUrl(obj: ioBroker.Message): Promise<void> {
+        const openUrl = await this.buildGuiUrl();
+        if (!openUrl) {
+            this.sendTo(
+                obj.from,
+                obj.command,
+                {
+                    error: this.isGermanUi()
+                        ? 'Kein Web-Adapter gefunden. web.0 starten.'
+                        : 'No web adapter found. Start web.0.',
+                },
+                obj.callback,
+            );
+            return;
+        }
+        this.sendTo(obj.from, obj.command, { openUrl }, obj.callback);
+    }
+
+    /** Prefer the configured TTS web instance, otherwise the first enabled `web.x`. */
+    private async buildGuiUrl(): Promise<string> {
+        let webId = String(this.config.webServer || '').trim();
+        if (webId && !webId.startsWith('system.adapter.')) {
+            webId = `system.adapter.${webId}`;
+        }
+        if (!webId) {
+            const view = await this.getObjectViewAsync('system', 'instance', {
+                startkey: 'system.adapter.web.',
+                endkey: 'system.adapter.web.\u9999',
+            });
+            const rows = view.rows || [];
+            const enabled = rows.find(row => row.value?.common?.enabled);
+            webId = String((enabled || rows[0])?.id || '');
+        }
+        if (!webId) {
+            return '';
+        }
+        const web = await this.getForeignObjectAsync(webId);
+        if (!web?.native) {
+            return '';
+        }
+        const port = Number(web.native.port) || 8082;
+        const proto = web.native.secure ? 'https' : 'http';
+        const host = await this.resolveListenHost(String(web.native.bind || ''));
+        return `${proto}://${host}:${port}/sonos/index.html?instance=${this.instance}`;
+    }
+
+    private async resolveListenHost(bind: string): Promise<string> {
+        if (bind && bind !== '0.0.0.0' && bind !== '::' && bind !== '127.0.0.1' && bind !== 'localhost') {
+            return bind;
+        }
+        try {
+            const hostObj = await this.getForeignObjectAsync(`system.host.${this.host}`);
+            const addr = (hostObj?.native as { address?: string | string[] } | undefined)?.address;
+            if (Array.isArray(addr)) {
+                const ipv4 = addr.find(item => item.includes('.') && !item.startsWith('127.'));
+                if (ipv4) {
+                    return ipv4;
+                }
+            } else if (typeof addr === 'string' && addr && !addr.startsWith('127.')) {
+                return addr;
+            }
+        } catch {
+            // fall through to the first non-internal IPv4
+        }
+        for (const list of Object.values(os.networkInterfaces())) {
+            for (const net of list || []) {
+                if (net.family === 'IPv4' && !net.internal) {
+                    return net.address;
+                }
+            }
+        }
+        return this.host || '127.0.0.1';
     }
 
     /** Instance state `quickstarts` is the runtime source. Non-empty Admin config overwrites it after save. */
@@ -3331,6 +3477,7 @@ class Sonos extends utils.Adapter {
         await this.syncConfig();
         await this.ensureQuickstarts();
         await this.ensureHomeTheaterState();
+        await this.ensureInstanceLink();
 
         this.cacheDir = path.join(utils.getAbsoluteDefaultDataDir(), 'sonosCache') + path.sep;
 
