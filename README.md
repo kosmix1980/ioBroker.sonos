@@ -11,7 +11,7 @@
 
 Control and monitor SONOS devices with ioBroker.
 
-**GitHub install of this fork:** Admin → GitHub → `kosmix1980/ioBroker.sonos` → branch `cursor/vis1-on-420-93d4`. This branch includes `build/main.js`. Do **not** GitHub-install `ioBroker/ioBroker.sonos` master — that tree has no start file. Official releases come from npm.
+**GitHub install of this fork:** Admin → GitHub → `kosmix1980/ioBroker.sonos` → branch `cursor/sonos-web-gui-93d4`. This branch includes `build/main.js`. Do **not** GitHub-install `ioBroker/ioBroker.sonos` master — that tree has no start file. Official releases come from npm.
 
 The instance setting **Sonos library** switches between `sonos-discovery` (default) and `@svrooij/sonos` (experimental).
 
@@ -112,6 +112,18 @@ This is meant for checking that a freshly added speaker really answers, without 
 configuration. The tab talks to the running instance, so it stays empty while the instance is
 stopped.
 
+## Instance link (web GUI)
+
+The adapter ships a standalone page in `www/`. The **web** adapter serves it at `/sonos/`, and
+admin shows it as the instance link (the link icon next to `sonos.0`).
+
+`http://<ioBroker-IP>:<web-port>/sonos/index.html?instance=0`
+
+It is the same player as the vis-1 widget: rooms, groups, transport, volume, favorites, playlists,
+queue, recent tracks, sources, TV HDMI and the quick-start buttons. After a GitHub install,
+restart `sonos.0` and `web.0`, then open the instance link. `?theme=midnight` and `?kiosk=1`
+change the look; `?kiosk=1` hides the thin top bar.
+
 ## Handling of groups
 * States for handling SONOS groups:
    * **`coordinator`**: set/get the coordinator, so the SONOS device which is the master and coordinating the group. It requires the IP address (channel name) of the SONOS device to be the coordinator, but with underscore `_` instead of dot `.`, so use for example `192_168_0_100` for IP address `192.168.0.100`. If the device does not belong to any group, then the value is equal to the own channel name (IP).
@@ -210,6 +222,7 @@ Three front-ends live next to the adapter, each built with vite and module feder
 | `src-widgets/` | `widgets/sonos/` | vis-2 |
 | `src-admin/` | `admin/custom/` | the **Control** tab of the instance settings |
 | `src-devices/` | `admin/dm-widgets/` | the dashboard of ioBroker.devices |
+| `widgets/sonos/` + `www/` | `www/` (instance link) | the web adapter at `/sonos/` |
 
 ```bash
 npm run npm:all        # install the adapter and all three front-ends
@@ -273,6 +286,7 @@ adapter to get a working state back.
 * (kosmix1980) After HDMI, transport buttons return and night/speech hide when a playlist or song starts
 * (kosmix1980) Queue tab lists the playing playlist via the speaker catalog, not a leftover HDMI/TV queue
 * (kosmix1980) Queue follows the playing source: Spotify/Apple/library playlists, not only URIs with sid=
+* (kosmix1980) Instance link opens a SONOS web GUI (same player as vis-1), served by the web adapter at /sonos/
 
 ### 4.2.1 (2026-09-07)
 * (@GermanBluefox) Added two widgets for the ioBroker.devices dashboard: SONOS player and SONOS rooms

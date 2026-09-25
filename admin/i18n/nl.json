@@ -23,6 +23,7 @@
   "tooltip_webserverPort": "Poort voor webinterface",
   "update adapter information": "Blader naar apparaten",
   "used for TTS": "gebruikt voor TTS",
+  "www_hint": "De instantielink (het linkpictogram van deze instantie) opent de SONOS-webpagina. De webadapter levert die onder /sonos/.",
   "Quick start": "Quick start",
   "Load current shortcuts": "Load current shortcuts",
   "Shortcuts": "Shortcuts",

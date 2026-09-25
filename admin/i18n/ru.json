@@ -23,6 +23,7 @@
   "tooltip_webserverPort": "Порт для веб интерфейса",
   "update adapter information": "Поиск устройств",
   "used for TTS": "используется для ТТС",
+  "www_hint": "Ссылка экземпляра открывает веб-страницу SONOS. Веб-адаптер отдаёт её по адресу /sonos/.",
   "Quick start": "Quick start",
   "Load current shortcuts": "Load current shortcuts",
   "Shortcuts": "Shortcuts",

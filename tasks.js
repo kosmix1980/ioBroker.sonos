@@ -36,6 +36,26 @@ function copyWidgets() {
     // mf-manifest.json is kept: vis-2 reads it to decide whether the set was built against a
     // compatible React, and asks for it before mf-stats.json (see visWidgetSetCompatibility.ts).
     copyFiles(['src-widgets/build/**/*', '!src-widgets/build/index.html'], 'widgets/sonos/');
+    syncWww();
+}
+
+/**
+ * Copies the vis-1 widget CSS/JS into `www/` so the instance-link page (web adapter, /sonos/)
+ * can reuse the same player without a second implementation.
+ */
+function syncWww() {
+    const cssDir = `${__dirname}/www/css`;
+    const jsDir = `${__dirname}/www/js`;
+    fs.mkdirSync(cssDir, { recursive: true });
+    fs.mkdirSync(jsDir, { recursive: true });
+    fs.copyFileSync(`${__dirname}/widgets/sonos/css/style.css`, `${cssDir}/style.css`);
+    const widget = fs.readFileSync(`${__dirname}/widgets/sonos/js/sonos.js`, 'utf8');
+    const banner =
+        '/* Synced from widgets/sonos/js/sonos.js — do not edit. Run: node tasks.js --www */\n';
+    fs.writeFileSync(`${jsDir}/sonos-widget.js`, widget.startsWith('/* Synced') ? widget : banner + widget);
+    if (fs.existsSync(`${__dirname}/admin/sonos.png`)) {
+        fs.copyFileSync(`${__dirname}/admin/sonos.png`, `${__dirname}/www/sonos.png`);
+    }
 }
 
 /**
@@ -90,6 +110,10 @@ async function buildDevices() {
 }
 
 async function main() {
+    if (process.argv.includes('--www')) {
+        syncWww();
+        return;
+    }
     if (process.argv.includes('--copy-files')) {
         copyWidgets();
         return;

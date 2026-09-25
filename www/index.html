@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="de">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="theme-color" content="#141414" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="SONOS" />
+        <title>SONOS</title>
+        <link rel="icon" href="sonos.png" type="image/png" />
+        <link rel="apple-touch-icon" href="sonos.png" />
+        <link rel="manifest" href="manifest.json" />
+        <link rel="stylesheet" href="css/style.css" />
+        <link rel="stylesheet" href="css/app.css" />
+        <script src="../_socket/info.js"></script>
+    </head>
+    <body>
+        <noscript>JavaScript is required for the SONOS page.</noscript>
+        <div id="sonos-www" class="sonos-www">
+            <header class="sonos-www-bar" id="sonos-www-bar">
+                <div class="sonos-www-brand" aria-hidden="true">SONOS</div>
+                <span class="sonos-www-ver" id="sonos-www-ver"></span>
+                <label class="sonos-www-instance is-hidden" id="sonos-www-instance-wrap">
+                    <span id="sonos-www-instance-label">Instance</span>
+                    <select id="sonos-www-instance"></select>
+                </label>
+                <div class="sonos-www-themes" id="sonos-www-themes" role="group"></div>
+                <span class="sonos-www-status" id="sonos-www-status" data-state="connecting">…</span>
+            </header>
+            <main class="sonos-www-main">
+                <div id="sonos_web" class="sonos-www-widget"></div>
+                <div class="sonos-www-overlay" id="sonos-www-overlay" hidden>
+                    <div class="sonos-www-card">
+                        <div class="sonos-www-brand">SONOS</div>
+                        <p class="sonos-www-msg" id="sonos-www-msg"></p>
+                        <form class="sonos-www-login" id="sonos-www-login" hidden>
+                            <label>
+                                <span id="sonos-www-user-label">User</span>
+                                <input id="sonos-www-user" name="user" autocomplete="username" />
+                            </label>
+                            <label>
+                                <span id="sonos-www-pass-label">Password</span>
+                                <input id="sonos-www-pass" name="password" type="password" autocomplete="current-password" />
+                            </label>
+                            <button type="submit" id="sonos-www-login-btn">Sign in</button>
+                            <p class="sonos-www-error" id="sonos-www-login-error" hidden></p>
+                        </form>
+                    </div>
+                </div>
+            </main>
+        </div>
+        <script src="js/jquery.min.js"></script>
+        <script src="js/conn.js"></script>
+        <script src="js/sonos-widget.js"></script>
+        <script src="js/app.js"></script>
+    </body>
+</html>

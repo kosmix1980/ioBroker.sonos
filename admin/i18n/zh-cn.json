@@ -23,6 +23,7 @@
   "tooltip_webserverPort": "网络接口端口",
   "update adapter information": "浏览设备",
   "used for TTS": "用于语音合成",
+  "www_hint": "实例链接会打开 SONOS 网页。由 web 适配器在 /sonos/ 提供。",
   "Quick start": "Quick start",
   "Load current shortcuts": "Load current shortcuts",
   "Shortcuts": "Shortcuts",

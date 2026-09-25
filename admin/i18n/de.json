@@ -23,6 +23,7 @@
   "tooltip_webserverPort": "Port für die Webseite",
   "update adapter information": "Gerätesuche",
   "used for TTS": "für TTS verwendet",
+  "www_hint": "Der Instanzlink (Link-Symbol dieser Instanz) öffnet die SONOS-Webseite. Sie wird vom Web-Adapter unter /sonos/ ausgeliefert.",
   "Quick start": "Schnellstart",
   "Load current shortcuts": "Aktuelle Tasten laden",
   "Shortcuts": "Tasten",

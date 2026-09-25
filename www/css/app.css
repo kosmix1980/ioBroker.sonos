@@ -1,0 +1,220 @@
+html,
+body {
+    margin: 0;
+    height: 100%;
+    background: #0b0b0b;
+    color: #f3f3f3;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+.sonos-www {
+    box-sizing: border-box;
+    min-height: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0b0b0b;
+}
+
+.sonos-www *,
+.sonos-www *::before,
+.sonos-www *::after {
+    box-sizing: border-box;
+}
+
+.sonos-www-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 8px 14px;
+    background: #101010;
+    border-bottom: 1px solid #242424;
+}
+
+.sonos-www.is-kiosk .sonos-www-bar {
+    display: none;
+}
+
+.sonos-www-brand {
+    flex: 0 0 auto;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    font-size: 14px;
+    background: linear-gradient(90deg, #ff8a3d, #e31c23);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.sonos-www-ver {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8a8a8a;
+}
+
+.sonos-www-instance {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #b0b0b0;
+}
+
+.sonos-www-instance.is-hidden {
+    display: none;
+}
+
+.sonos-www-instance select {
+    border: 0;
+    border-radius: 999px;
+    background: #2a2a2a;
+    color: #fff;
+    padding: 4px 10px;
+    font: inherit;
+}
+
+.sonos-www-themes {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.sonos-www-themes button {
+    border: 0;
+    background: #2a2a2a;
+    color: #ddd;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.sonos-www-themes button.is-on {
+    background: #f15b2a;
+    color: #fff;
+}
+
+.sonos-www-status {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #8a8a8a;
+}
+
+.sonos-www-status[data-state="ok"] {
+    color: #4ade80;
+}
+
+.sonos-www-status[data-state="error"],
+.sonos-www-status[data-state="auth"] {
+    color: #f87171;
+}
+
+.sonos-www-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    display: flex;
+}
+
+.sonos-www-widget {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.sonos-www-widget .sonos-ctrl {
+    border-radius: 0;
+    height: 100%;
+}
+
+.sonos-www-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(8, 8, 8, 0.72);
+    z-index: 20;
+}
+
+.sonos-www-overlay[hidden] {
+    display: none;
+}
+
+.sonos-www-card {
+    width: min(420px, 100%);
+    background: #171717;
+    border-radius: 16px;
+    padding: 28px 24px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.sonos-www-msg {
+    margin: 16px 0 0;
+    color: #c8c8c8;
+    line-height: 1.45;
+}
+
+.sonos-www-login {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.sonos-www-login[hidden] {
+    display: none;
+}
+
+.sonos-www-login label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: #9a9a9a;
+}
+
+.sonos-www-login input {
+    border: 0;
+    border-radius: 8px;
+    background: #2a2a2a;
+    color: #fff;
+    padding: 10px 12px;
+    font: inherit;
+}
+
+.sonos-www-login button {
+    border: 0;
+    border-radius: 999px;
+    background: #e31c23;
+    color: #fff;
+    font-weight: 700;
+    padding: 10px 14px;
+    cursor: pointer;
+}
+
+.sonos-www-error {
+    margin: 0;
+    color: #f87171;
+    font-size: 12px;
+}
+
+.sonos-www-error[hidden] {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    .sonos-www-bar {
+        flex-wrap: wrap;
+    }
+
+    .sonos-www-themes {
+        margin-left: 0;
+    }
+}

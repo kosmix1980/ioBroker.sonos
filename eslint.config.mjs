@@ -27,6 +27,7 @@ export default [
             'admin/**/*',
             'test/**/*',
             'widgets/**/*',
+            'www/**/*',
             // the three front-ends are built separately and have their own tsconfig
             'src-widgets/**/*',
             'src-admin/**/*',

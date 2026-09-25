@@ -23,6 +23,7 @@
   "tooltip_webserverPort": "Porta per l'interfaccia web",
   "update adapter information": "Cerca i dispositivi",
   "used for TTS": "utilizzato per la sintesi vocale",
+  "www_hint": "Il link dell’istanza apre la pagina web SONOS. L’adapter web la serve in /sonos/.",
   "Quick start": "Quick start",
   "Load current shortcuts": "Load current shortcuts",
   "Shortcuts": "Shortcuts",

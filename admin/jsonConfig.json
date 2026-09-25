@@ -17,6 +17,13 @@
           "md": 6,
           "lg": 3
         },
+        "_wwwHint": {
+          "type": "staticText",
+          "text": "www_hint",
+          "sm": 12,
+          "md": 12,
+          "lg": 12
+        },
         "elapsedInterval": {
           "newLine": true,
           "type": "number",

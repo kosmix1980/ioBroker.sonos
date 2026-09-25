@@ -1,0 +1,2186 @@
+/* Synced from widgets/sonos/js/sonos.js — do not edit. Run: node tasks.js --www */
+'use strict';
+
+/* global vis, jQuery */
+
+window.vis = window.vis || {};
+vis.binds = vis.binds || {};
+
+(function ($) {
+    if (typeof $ !== 'function') {
+        console.error('sonos widget: jQuery is not available');
+        return;
+    }
+
+    vis.binds.sonos = {
+        version: '4.2.1g8',
+        _bound: {},
+        _tickers: {},
+        _renderTimers: {},
+        words: {
+            en: {
+                hint: 'Set the object to the Sonos instance, e.g. sonos.0',
+                noPlayers: 'No players found. Check the adapter objects under sonos.x.root.',
+                rooms: 'Rooms',
+                group: 'Group',
+                dissolve: 'Ungroup',
+                favorites: 'Favorites',
+                playlists: 'Playlists',
+                queue: 'Queue',
+                recent: 'Recent',
+                sources: 'Sources',
+                back: 'Back',
+                emptyFavorites: 'No favorites. Add them in the Sonos app first.',
+                emptyPlaylists: 'No playlists. Create them in the Sonos app first.',
+                emptyQueue: 'Queue is empty.',
+                nowTrack: 'Now',
+                upNext: 'Next',
+                emptyQueueNext: 'No further tracks in the queue.',
+                queueOtherSource: 'A playlist or stream is playing. This list is the saved Sonos queue, not what Next will play.',
+                emptyRecent: 'No recent tracks yet. They appear after something is played.',
+                emptySources: 'No entries in this folder.',
+                radio: 'TuneIn Radio',
+                library: 'Music library',
+                shares: 'Network shares',
+                lineIn: 'Line-In',
+                tv: 'TV',
+                tvHdmi: 'HDMI',
+                search: 'Search…',
+                searchGo: 'Search',
+                noSearchHits: 'No matching titles.',
+                signedIn: 'Signed in',
+                loginOpen: 'Open this link in a browser to connect the music service.',
+                unknown: 'Unknown room',
+                groupMaster: 'Master',
+                groupMasterHint: 'Group coordinator',
+                nothing: 'Nothing playing',
+                nightSound: 'Night sound',
+                speechEnhance: 'Speech enhancement',
+                quickEmpty: 'Free',
+                quickSave: 'Save what is playing',
+                quickPlay: 'Play',
+                quickEdit: 'Edit shortcut',
+                quickReplace: 'Replace with current',
+                quickRename: 'Save name',
+                quickClear: 'Clear',
+                quickNothing: 'Nothing is playing that can be saved.',
+            },
+            de: {
+                hint: 'Als Objekt die Sonos-Instanz setzen, z. B. sonos.0',
+                noPlayers: 'Keine Player gefunden. Prüfe die Objekte unter sonos.x.root.',
+                rooms: 'Räume',
+                group: 'Gruppe',
+                dissolve: 'Auflösen',
+                favorites: 'Favoriten',
+                playlists: 'Playlists',
+                queue: 'Warteschlange',
+                recent: 'Zuletzt',
+                sources: 'Quellen',
+                back: 'Zurück',
+                emptyFavorites: 'Keine Favoriten. Lege sie zuerst in der Sonos-App an.',
+                emptyPlaylists: 'Keine Playlists. Lege sie zuerst in der Sonos-App an.',
+                emptyQueue: 'Die Warteschlange ist leer.',
+                nowTrack: 'Jetzt',
+                upNext: 'Als Nächstes',
+                emptyQueueNext: 'Keine weiteren Titel in der Warteschlange.',
+                queueOtherSource: 'Es läuft eine Playlist oder ein Stream. Diese Liste ist die gespeicherte Sonos-Warteschlange, nicht das, was Next spielt.',
+                emptyRecent: 'Noch keine Titel. Die Liste füllt sich beim Abspielen.',
+                emptySources: 'In diesem Ordner gibt es keine Einträge.',
+                radio: 'TuneIn Radio',
+                library: 'Mediathek',
+                shares: 'Netzlaufwerke',
+                lineIn: 'Line-In',
+                tv: 'TV',
+                tvHdmi: 'HDMI',
+                search: 'Suchen…',
+                searchGo: 'Suchen',
+                noSearchHits: 'Keine passenden Titel.',
+                signedIn: 'Anmeldung abgeschlossen',
+                loginOpen: 'Diesen Link im Browser öffnen, um den Dienst zu verbinden.',
+                unknown: 'Unbekannter Raum',
+                groupMaster: 'Master',
+                groupMasterHint: 'Gruppenmaster',
+                nothing: 'Nichts spielt',
+                nightSound: 'Nachtsound',
+                speechEnhance: 'Sprachverbesserung',
+                quickEmpty: 'Frei',
+                quickSave: 'Laufendes Stück speichern',
+                quickPlay: 'Abspielen',
+                quickEdit: 'Taste bearbeiten',
+                quickReplace: 'Durch Aktuelles ersetzen',
+                quickRename: 'Name speichern',
+                quickClear: 'Löschen',
+                quickNothing: 'Gerade läuft nichts, das sich speichern lässt.',
+            },
+        },
+
+        t: function (key) {
+            var lang = String((vis.language || (typeof visConfig !== 'undefined' && visConfig.language) || 'en')).substring(0, 2);
+            var pack = vis.binds.sonos.words[lang] || vis.binds.sonos.words.en;
+            return pack[key] || vis.binds.sonos.words.en[key] || key;
+        },
+
+        createWidget: function (widgetID, view, data, style) {
+            var $div = $('#' + widgetID);
+            if (!$div.length) {
+                return setTimeout(function () {
+                    vis.binds.sonos.createWidget(widgetID, view, data, style);
+                }, 100);
+            }
+
+            var oid = '';
+            try {
+                oid = (data && data.oid) || (data && data.attr && data.attr('oid')) || '';
+            } catch (e) {
+                oid = '';
+            }
+
+            var instance = vis.binds.sonos.resolveInstance(oid);
+            var theme;
+            try {
+                theme = String((data && data.theme) || (data && data.attr && data.attr('theme')) || 'dark');
+            } catch (e) {
+                theme = 'dark';
+            }
+            $div.data('sonos-theme', vis.binds.sonos.normalizeTheme(theme));
+            $div.data('sonos-tab', $div.data('sonos-tab') || 'favorites');
+            $div.data('sonos-sheet', !!$div.data('sonos-sheet'));
+            $div.data('sonos-player', $div.data('sonos-player') || vis.binds.sonos.loadRoom(widgetID, instance) || '');
+
+            vis.binds.sonos.injectGroupCss();
+            vis.binds.sonos.unbind(widgetID);
+
+            if (!instance) {
+                $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(vis.binds.sonos.t('hint')) + '</div></div>');
+                return;
+            }
+
+            var paint = function () {
+                try {
+                    vis.binds.sonos.draw(widgetID, instance);
+                    vis.binds.sonos.bindStates(widgetID, instance);
+                } catch (err) {
+                    $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(String(err)) + '</div></div>');
+                }
+            };
+
+            paint();
+            vis.binds.sonos.loadStates(instance, paint);
+        },
+
+        normalizeTheme: function (value) {
+            var theme = String(value || '').toLowerCase();
+            if (theme === 'light' || theme === 'white' || theme === 'hell') {
+                return 'light';
+            }
+            if (theme === 'midnight' || theme === 'blue') {
+                return 'midnight';
+            }
+            return 'dark';
+        },
+
+        themeClass: function ($div) {
+            return 'sonos-ctrl sonos-ctrl-theme-' + vis.binds.sonos.normalizeTheme($div && $div.data ? $div.data('sonos-theme') : '');
+        },
+
+        injectGroupCss: function () {
+            if (typeof document === 'undefined' || document.getElementById('sonos-ctrl-group-css')) {
+                return;
+            }
+            var el = document.createElement('style');
+            el.id = 'sonos-ctrl-group-css';
+            el.type = 'text/css';
+            el.appendChild(document.createTextNode(
+                '.sonos-ctrl-cluster{display:inline-flex!important;flex-wrap:wrap;align-items:center;gap:4px;padding:3px 4px;border-radius:16px;max-width:100%}' +
+                '.sonos-ctrl-chip-crown{flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}' +
+                '.sonos-ctrl-group-lead{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-weight:800}'
+            ));
+            (document.head || document.documentElement).appendChild(el);
+        },
+
+        resolveInstance: function (oid) {
+            oid = String(oid || '').replace(/\.+$/, '');
+            if (!oid || oid === 'nothing_selected') {
+                return '';
+            }
+            var match = oid.match(/^(sonos\.\d+)/);
+            if (match) {
+                return match[1];
+            }
+            var parts = oid.split('.');
+            if (parts.length >= 2) {
+                return parts[0] + '.' + parts[1];
+            }
+            return oid;
+        },
+
+        roomKey: function (widgetID, instance) {
+            return 'iobroker.sonos.widget.room.' + instance + '.' + widgetID;
+        },
+
+        loadRoom: function (widgetID, instance) {
+            try {
+                return window.localStorage.getItem(vis.binds.sonos.roomKey(widgetID, instance)) || '';
+            } catch (e) {
+                return '';
+            }
+        },
+
+        saveRoom: function (widgetID, instance, ip) {
+            if (!ip) {
+                return;
+            }
+            try {
+                window.localStorage.setItem(vis.binds.sonos.roomKey(widgetID, instance), ip);
+            } catch (e) {
+                // ignore
+            }
+        },
+
+        esc: function (value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        },
+
+        val: function (id) {
+            if (!id) {
+                return '';
+            }
+            if (vis.states) {
+                var value = vis.states[id + '.val'];
+                if (value === undefined && vis.states.attr) {
+                    value = vis.states.attr(id + '.val');
+                }
+                if (value !== undefined && value !== null) {
+                    return value;
+                }
+            }
+            return '';
+        },
+
+        parseList: function (value) {
+            if (Array.isArray(value)) {
+                return value.map(function (item) {
+                    if (item && typeof item === 'object') {
+                        return String(item.title || item.name || '').trim();
+                    }
+                    return String(item || '').trim();
+                }).filter(Boolean);
+            }
+            if (value == null || value === '') {
+                return [];
+            }
+            if (typeof value === 'string') {
+                try {
+                    var parsed = JSON.parse(value);
+                    if (Array.isArray(parsed)) {
+                        return vis.binds.sonos.parseList(parsed);
+                    }
+                } catch (e) {
+                    // comma-separated fallback
+                }
+                return value.split(/\s*,\s*/).filter(Boolean);
+            }
+            return [];
+        },
+
+        parsePlaylists: function (playerId) {
+            var raw = vis.binds.sonos.state(playerId, 'playlist_list_array') || vis.binds.sonos.state(playerId, 'playlist_list');
+            var list = [];
+            if (Array.isArray(raw)) {
+                list = raw;
+            } else if (typeof raw === 'string' && raw) {
+                try {
+                    var parsed = JSON.parse(raw);
+                    list = Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    list = vis.binds.sonos.parseList(raw);
+                }
+            }
+            return list.map(function (item) {
+                if (item && typeof item === 'object') {
+                    return {
+                        title: String(item.title || item.name || '').trim(),
+                        cover: String(item.cover || item.albumArtUri || '').trim(),
+                    };
+                }
+                return { title: String(item || '').trim(), cover: '' };
+            }).filter(function (item) {
+                return item.title;
+            });
+        },
+
+        state: function (playerId, name) {
+            return vis.binds.sonos.val(playerId + '.' + name);
+        },
+
+        write: function (id, value) {
+            if (!id) {
+                return;
+            }
+            vis.setValue(id, value);
+        },
+
+        mediaPlayerId: function (player) {
+            if (!vis.binds.sonos.isGroupMember(player)) {
+                return player.id;
+            }
+            var coord = String(vis.binds.sonos.state(player.id, 'coordinator') || '').trim();
+            return player.id.replace(/\.[^.]+$/, '.' + coord);
+        },
+
+        isGroupMember: function (player) {
+            var coord = String(vis.binds.sonos.state(player.id, 'coordinator') || '').trim();
+            return Boolean(coord && coord !== player.ip && coord !== 'null' && coord !== 'undefined');
+        },
+
+        findPlayers: function (instance, opts) {
+            var prefix = instance + '.root.';
+            var seen = {};
+            var players = [];
+            var includeHidden = opts && opts.includeHidden;
+
+            function add(id, name) {
+                if (!id || id.indexOf(prefix) !== 0) {
+                    return;
+                }
+                var rest = id.substring(prefix.length);
+                var ip = rest.split('.')[0];
+                if (!ip || seen[ip]) {
+                    return;
+                }
+                seen[ip] = true;
+                var obj = vis.objects && vis.objects[prefix + ip];
+                var label = name;
+                if (!label && obj && obj.common && obj.common.name) {
+                    label = obj.common.name;
+                    if (label && typeof label === 'object') {
+                        label = label[vis.language] || label.de || label.en || ip;
+                    }
+                }
+                players.push({
+                    ip: ip,
+                    id: prefix + ip,
+                    name: label || vis.binds.sonos.t('unknown'),
+                });
+            }
+
+            if (vis.objects) {
+                Object.keys(vis.objects).forEach(function (id) {
+                    var obj = vis.objects[id];
+                    if (!obj || id.indexOf(prefix) !== 0) {
+                        return;
+                    }
+                    var rest = id.substring(prefix.length);
+                    if (rest.indexOf('.') === -1 && (obj.type === 'channel' || (obj.common && obj.common.role === 'media.music'))) {
+                        add(id);
+                    }
+                });
+            }
+
+            var states = vis.states || {};
+            Object.keys(states).forEach(function (key) {
+                if (key.indexOf(prefix) !== 0) {
+                    return;
+                }
+                var id = key.replace(/\.(val|ts|ack|lc|q|from|user|expire)$/, '');
+                var parts = id.split('.');
+                if (parts.length >= 4) {
+                    add(parts.slice(0, 4).join('.'));
+                }
+            });
+
+            players.sort(function (a, b) {
+                return String(a.name).localeCompare(String(b.name), vis.language || undefined);
+            });
+            if (includeHidden) {
+                return players;
+            }
+            var hidden = vis.binds.sonos.htSatelliteIps(instance);
+            return players.filter(function (player) {
+                return !hidden[player.ip];
+            });
+        },
+
+        htBonds: function (instance) {
+            var raw = vis.binds.sonos.val(instance + '.home_theater');
+            if (!raw) {
+                return [];
+            }
+            try {
+                var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                return data && data.bonds ? data.bonds : [];
+            } catch (e) {
+                return [];
+            }
+        },
+
+        htSatelliteIps: function (instance) {
+            var map = {};
+            vis.binds.sonos.htBonds(instance).forEach(function (bond) {
+                var primary = String(bond && bond.primaryIp || '').replace(/[.\s]+/g, '_');
+                (bond && bond.satellites ? bond.satellites : []).forEach(function (sat) {
+                    var ip = String(sat && sat.ip || '').replace(/[.\s]+/g, '_');
+                    if (ip && ip !== primary) {
+                        map[ip] = primary;
+                    }
+                });
+            });
+            return map;
+        },
+
+        applyStates: function (data) {
+            if (!data || !vis.states) {
+                return;
+            }
+            Object.keys(data).forEach(function (id) {
+                var state = data[id];
+                if (!state || id.indexOf('.') === -1) {
+                    return;
+                }
+                try {
+                    if (vis.states.attr) {
+                        vis.states.attr(id + '.val', state.val);
+                        vis.states.attr(id + '.ack', state.ack);
+                        vis.states.attr(id + '.ts', state.ts);
+                    } else {
+                        vis.states[id + '.val'] = state.val;
+                    }
+                } catch (e) {
+                    vis.states[id + '.val'] = state.val;
+                }
+            });
+        },
+
+        rememberChannel: function (id, obj) {
+            if (!id) {
+                return;
+            }
+            vis.objects = vis.objects || {};
+            if (!vis.objects[id]) {
+                vis.objects[id] = obj || { type: 'channel', common: { name: id.split('.').pop() } };
+            }
+        },
+
+        loadStates: function (instance, done) {
+            var prefix = instance + '.root.';
+            var finished = false;
+            var finish = function () {
+                if (finished) {
+                    return;
+                }
+                finished = true;
+                if (typeof done === 'function') {
+                    done();
+                }
+            };
+
+            setTimeout(finish, 600);
+
+            var afterChannels = function () {
+                var players = vis.binds.sonos.findPlayers(instance);
+                var ids = [];
+                players.forEach(function (player) {
+                    [
+                        'alive',
+                        'state',
+                        'volume',
+                        'muted',
+                        'night_mode',
+                        'speech_enhancement',
+                        'current_title',
+                        'current_artist',
+                        'current_album',
+                        'current_station',
+                        'current_type',
+                        'current_cover',
+                        'current_art',
+                        'current_elapsed_s',
+                        'current_duration_s',
+                        'current_track_number',
+                        'next_title',
+                        'next_artist',
+                        'next_album',
+                        'next_art',
+                        'playing_queue',
+                        'seek',
+                        'shuffle',
+                        'repeat',
+                        'coordinator',
+                        'membersChannels',
+                        'group_volume',
+                        'favorites_list_array',
+                        'favorites_list',
+                        'favorites_list_html',
+                        'playlist_list_array',
+                        'playlist_list',
+                        'queue',
+                        'queue_html',
+                        'recent_tracks',
+                        'media_browse_result',
+                        'current_uri',
+                        'current_metadata',
+                    ].forEach(function (name) {
+                        ids.push(player.id + '.' + name);
+                    });
+                });
+                ids.push(instance + '.quickstarts');
+                ids.push(instance + '.home_theater');
+
+                if (!vis.conn || typeof vis.conn.getStates !== 'function') {
+                    finish();
+                    return;
+                }
+
+                var onStates = function (error, data) {
+                    vis.binds.sonos.applyStates(data);
+                    if (typeof vis.conn.subscribe === 'function' && ids.length) {
+                        try {
+                            vis.conn.subscribe(ids);
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+                    finish();
+                };
+
+                try {
+                    if (ids.length) {
+                        vis.conn.getStates(ids, onStates);
+                    } else {
+                        vis.conn.getStates(onStates);
+                    }
+                } catch (e) {
+                    finish();
+                }
+            };
+
+            var onChannels = function (error, result) {
+                var rows = (result && result.rows) || [];
+                rows.forEach(function (row) {
+                    var id = row.id || row._id;
+                    if (!id || id.indexOf(prefix) !== 0) {
+                        return;
+                    }
+                    if (id.substring(prefix.length).indexOf('.') !== -1) {
+                        return;
+                    }
+                    vis.binds.sonos.rememberChannel(id, row.value);
+                });
+                afterChannels();
+            };
+
+            try {
+                if (vis.conn && typeof vis.conn.getObjectView === 'function') {
+                    vis.conn.getObjectView('system', 'channel', { startkey: prefix, endkey: prefix + '\u9999' }, onChannels);
+                    return;
+                }
+                var socket = vis.conn && (vis.conn._socket || vis.conn.socket);
+                if (socket && typeof socket.emit === 'function') {
+                    socket.emit('getObjectView', 'system', 'channel', { startkey: prefix, endkey: prefix + '\u9999' }, onChannels);
+                    return;
+                }
+            } catch (e) {
+                // fall through
+            }
+
+            afterChannels();
+        },
+
+        parseTime: function (value) {
+            var parts = String(value == null ? '' : value).split(':');
+            var sec = 0;
+            if (parts.length === 3) {
+                sec = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]);
+            } else if (parts.length === 2) {
+                sec = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+            } else {
+                sec = parseFloat(parts[0]);
+            }
+            return isNaN(sec) ? 0 : sec;
+        },
+
+        formatTime: function (sec) {
+            sec = Math.max(0, Math.floor(sec || 0));
+            var hours = Math.floor(sec / 3600);
+            var min = Math.floor((sec % 3600) / 60);
+            var rest = sec % 60;
+            var mm = (min < 10 ? '0' : '') + min;
+            var ss = (rest < 10 ? '0' : '') + rest;
+            return hours ? hours + ':' + mm + ':' + ss : mm + ':' + ss;
+        },
+
+        stopTicker: function (widgetID) {
+            if (vis.binds.sonos._tickers[widgetID]) {
+                clearInterval(vis.binds.sonos._tickers[widgetID]);
+                vis.binds.sonos._tickers[widgetID] = null;
+            }
+            if (vis.binds.sonos._renderTimers[widgetID]) {
+                clearTimeout(vis.binds.sonos._renderTimers[widgetID]);
+                vis.binds.sonos._renderTimers[widgetID] = null;
+            }
+        },
+
+        queueRender: function (widgetID, instance) {
+            if (vis.binds.sonos._renderTimers[widgetID]) {
+                clearTimeout(vis.binds.sonos._renderTimers[widgetID]);
+            }
+            vis.binds.sonos._renderTimers[widgetID] = setTimeout(function () {
+                vis.binds.sonos._renderTimers[widgetID] = null;
+                vis.binds.sonos.draw(widgetID, instance);
+            }, 80);
+        },
+
+        startTicker: function (widgetID, instance) {
+            vis.binds.sonos.stopTicker(widgetID);
+            vis.binds.sonos._tickers[widgetID] = setInterval(function () {
+                var $div = $('#' + widgetID);
+                if (!$div.length) {
+                    vis.binds.sonos.stopTicker(widgetID);
+                    return;
+                }
+                vis.binds.sonos.patchLive($div, instance);
+            }, 500);
+        },
+
+        unbind: function (widgetID) {
+            var bound = vis.binds.sonos._bound[widgetID] || [];
+            bound.forEach(function (item) {
+                try {
+                    vis.states.unbind(item.id, item.handler);
+                } catch (e) {
+                    // ignore
+                }
+            });
+            vis.binds.sonos._bound[widgetID] = [];
+            $(document).off('mousedown.sonosSheet' + widgetID);
+            $(document).off('mousedown.sonosQuick' + widgetID);
+        },
+
+        bindStates: function (widgetID, instance) {
+            var players = vis.binds.sonos.findPlayers(instance);
+            var ids = [];
+            players.forEach(function (player) {
+                [
+                    'alive',
+                    'state',
+                    'volume',
+                    'muted',
+                    'night_mode',
+                    'speech_enhancement',
+                    'current_title',
+                    'current_artist',
+                    'current_album',
+                    'current_station',
+                    'current_type',
+                    'current_cover',
+                    'current_art',
+                    'current_elapsed_s',
+                    'current_duration_s',
+                    'current_track_number',
+                    'next_title',
+                    'next_artist',
+                    'next_album',
+                    'next_art',
+                    'playing_queue',
+                    'seek',
+                    'shuffle',
+                    'repeat',
+                    'coordinator',
+                    'membersChannels',
+                    'group_volume',
+                    'favorites_list_array',
+                    'favorites_list',
+                    'favorites_list_html',
+                    'playlist_list_array',
+                    'playlist_list',
+                    'queue',
+                    'queue_html',
+                    'recent_tracks',
+                    'media_browse_result',
+                    'current_uri',
+                    'current_metadata',
+                ].forEach(function (name) {
+                    ids.push(player.id + '.' + name);
+                });
+            });
+            ids.push(instance + '.quickstarts');
+            ids.push(instance + '.home_theater');
+
+            vis.binds.sonos.unbind(widgetID);
+            ids.forEach(function (id) {
+                var isLight = /\.(current_elapsed_s|seek|volume|group_volume)$/.test(id);
+                var handler = function () {
+                    if (isLight) {
+                        vis.binds.sonos.patchLive($('#' + widgetID), instance);
+                    } else {
+                        vis.binds.sonos.queueRender(widgetID, instance);
+                    }
+                };
+                try {
+                    vis.states.bind(id + '.val', handler);
+                    vis.binds.sonos._bound[widgetID].push({ id: id + '.val', handler: handler });
+                } catch (e) {
+                    // ignore missing canJS keys
+                }
+            });
+        },
+
+        patchLive: function ($div, instance) {
+            if (!$div || !$div.length) {
+                return;
+            }
+            var selectedIp = $div.data('sonos-player');
+            if (!selectedIp) {
+                return;
+            }
+            var selectedId = instance + '.root.' + selectedIp;
+            var playerId = vis.binds.sonos.mediaPlayerId({
+                id: selectedId,
+                ip: selectedIp,
+            });
+            var playing = vis.binds.sonos.state(playerId, 'state') === 'play';
+            var now = vis.binds.sonos.nowPlaying(playerId);
+            var hint = vis.binds.sonos.readNowHint($div);
+            if (now.isTv || (now.isRadio && !hint)) {
+                return;
+            }
+            var durationS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_duration_s'));
+            var elapsedS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_elapsed_s'));
+            if (hint && hint.duration > 0 && durationS <= 0) {
+                durationS = hint.duration;
+                elapsedS = Math.min(hint.duration, (Date.now() - hint.ts) / 1000);
+            }
+            var seek = parseFloat(vis.binds.sonos.state(playerId, 'seek'));
+            if (isNaN(seek)) {
+                seek = durationS > 0 ? (elapsedS / durationS) * 100 : 0;
+            }
+
+            var stamp = playerId + '|' + playing + '|' + durationS + '|' + elapsedS.toFixed(1);
+            var snap = $div.data('sonos-progress') || {};
+            if (snap.stamp !== stamp) {
+                snap = {
+                    stamp: stamp,
+                    elapsed: elapsedS,
+                    duration: durationS,
+                    playing: playing,
+                    at: Date.now(),
+                };
+                $div.data('sonos-progress', snap);
+            }
+
+            var elapsed = snap.elapsed;
+            if (snap.playing && snap.duration > 0) {
+                elapsed = Math.min(snap.duration, snap.elapsed + (Date.now() - snap.at) / 1000);
+            }
+            var percent = snap.duration > 0 ? (elapsed / snap.duration) * 100 : seek;
+
+            if (!$div.find('.sonos-ctrl-seek-input:focus').length) {
+                $div.find('.sonos-ctrl-seek-input').val(percent);
+                $div.find('.sonos-ctrl-seek .sonos-ctrl-time').first().text(vis.binds.sonos.formatTime(elapsed));
+                $div.find('.sonos-ctrl-seek .sonos-ctrl-time').last().text(
+                    vis.binds.sonos.state(playerId, 'current_duration_s') || vis.binds.sonos.formatTime(snap.duration)
+                );
+            }
+            if (!$div.find('.sonos-ctrl-volume-input:focus').length) {
+                var volume = parseInt(vis.binds.sonos.state(selectedId, 'volume'), 10);
+                if (!isNaN(volume)) {
+                    $div.find('.sonos-ctrl-volume-input').val(volume);
+                    $div.find('.sonos-ctrl-volume .sonos-ctrl-time').text(volume);
+                }
+            }
+        },
+
+        parseHtmlRoot: function (html) {
+            if (!html || typeof DOMParser !== 'function') {
+                return null;
+            }
+            try {
+                return new DOMParser().parseFromString(String(html), 'text/html');
+            } catch (e) {
+                return null;
+            }
+        },
+
+        coversFromQueueHtml: function (html) {
+            var map = {};
+            var re = /sonosQueueTrackCover"><img src="([^"]*)"[\s\S]*?sonosQueueTrackTitle">([^<]*)<\/td>/g;
+            var m;
+            while ((m = re.exec(String(html || '')))) {
+                var cover = m[1] || '';
+                var title = String(m[2] || '').trim();
+                if (title && cover) {
+                    map[title] = cover;
+                }
+            }
+            return map;
+        },
+
+        parseQueue: function (playerId) {
+            var html = String(vis.binds.sonos.state(playerId, 'queue_html') || '');
+            var items = [];
+            var doc = vis.binds.sonos.parseHtmlRoot(html);
+            var rows = doc ? doc.querySelectorAll('.sonosQueueRow') : [];
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                var titleEl = row.querySelector('.sonosQueueTrackTitle');
+                var artistEl = row.querySelector('.sonosQueueTrackArtist');
+                var albumEl = row.querySelector('.sonosQueueTrackAlbum');
+                var img = row.querySelector('img');
+                var numEl = row.querySelector('.sonosQueueTrackNumber');
+                var no = parseInt(numEl && numEl.textContent, 10);
+                items.push({
+                    no: no > 0 ? no : i + 1,
+                    title: titleEl ? String(titleEl.textContent || '').trim() : '',
+                    artist: artistEl ? String(artistEl.textContent || '').trim() : '',
+                    album: albumEl ? String(albumEl.textContent || '').trim() : '',
+                    cover: img ? img.getAttribute('src') || '' : '',
+                    current: row.classList.contains('currentTrack') || row.id === 'currentTrack',
+                });
+            }
+            if (items.length) {
+                return items;
+            }
+            vis.binds.sonos.parseList(vis.binds.sonos.state(playerId, 'queue')).forEach(function (entry, index) {
+                var parts = String(entry).split(' - ');
+                items.push({
+                    no: index + 1,
+                    artist: parts.length > 1 ? parts.shift() : '',
+                    title: parts.join(' - ') || entry,
+                    album: '',
+                    cover: '',
+                    current: false,
+                });
+            });
+            return items;
+        },
+
+        playerNext: function (playerId) {
+            var title = String(vis.binds.sonos.state(playerId, 'next_title') || '').trim();
+            if (!title) {
+                return null;
+            }
+            return {
+                title: title,
+                artist: String(vis.binds.sonos.state(playerId, 'next_artist') || '').trim(),
+                album: String(vis.binds.sonos.state(playerId, 'next_album') || '').trim(),
+                cover: String(vis.binds.sonos.state(playerId, 'next_art') || '').trim(),
+            };
+        },
+
+        sameTrack: function (item, next) {
+            if (!item || !next || !next.title) {
+                return false;
+            }
+            var norm = function (value) {
+                return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            };
+            if (norm(item.title) !== norm(next.title)) {
+                return false;
+            }
+            var itemArtist = norm(item.artist);
+            var nextArtist = norm(next.artist);
+            return !itemArtist || !nextArtist || itemArtist === nextArtist;
+        },
+
+        upcomingQueue: function (items, currentNo) {
+            if (!items || !items.length) {
+                return [];
+            }
+            var idx = -1;
+            var i;
+            for (i = 0; i < items.length; i++) {
+                if (items[i].current || (currentNo > 0 && items[i].no === currentNo)) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx < 0 && currentNo > 0 && currentNo <= items.length) {
+                idx = currentNo - 1;
+            }
+            return idx > 0 ? items.slice(idx) : items;
+        },
+
+        parseFavorites: function (playerId) {
+            var html = String(vis.binds.sonos.state(playerId, 'favorites_list_html') || '');
+            var items = [];
+            var doc = vis.binds.sonos.parseHtmlRoot(html);
+            var rows = doc ? doc.querySelectorAll('.sonosFavoriteRow') : [];
+            for (var f = 0; f < rows.length; f++) {
+                var fav = rows[f];
+                var titleNode = fav.querySelector('.sonosFavoriteTitle');
+                var favImg = fav.querySelector('img');
+                items.push({
+                    title: titleNode ? String(titleNode.textContent || '').trim() : '',
+                    cover: favImg ? favImg.getAttribute('src') || '' : '',
+                });
+            }
+            if (items.length) {
+                return items;
+            }
+            return vis.binds.sonos.parseList(vis.binds.sonos.state(playerId, 'favorites_list_array') || vis.binds.sonos.state(playerId, 'favorites_list')).map(function (title) {
+                return { title: title, cover: '' };
+            });
+        },
+
+        parseRecent: function (playerId) {
+            var raw = vis.binds.sonos.state(playerId, 'recent_tracks');
+            var list = [];
+            if (Array.isArray(raw)) {
+                list = raw;
+            } else if (typeof raw === 'string' && raw) {
+                try {
+                    var parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        list = parsed;
+                    }
+                } catch (e) {
+                    list = [];
+                }
+            }
+            var coversByTitle = vis.binds.sonos.coversFromQueueHtml(
+                vis.binds.sonos.state(vis.binds.sonos.mediaPlayerId({
+                    id: playerId,
+                    ip: playerId.split('.').pop(),
+                }), 'queue_html')
+            );
+            var nowTitle = String(vis.binds.sonos.state(playerId, 'current_title') || '').trim();
+            var nowArt = String(vis.binds.sonos.state(playerId, 'current_art') || '').trim();
+            return list.filter(function (item) {
+                return item && item.title;
+            }).map(function (item) {
+                var cover = String(item.cover || '');
+                if (cover && vis.binds.sonos.isLiveCover(cover)) {
+                    cover = '';
+                }
+                if (!cover) {
+                    cover = vis.binds.sonos.artFromMeta(item.metadata) ||
+                        vis.binds.sonos.favoriteCover(playerId, item.station || item.title);
+                }
+                if (!cover && item.title && coversByTitle[item.title]) {
+                    cover = coversByTitle[item.title];
+                }
+                if (!cover && nowArt && !vis.binds.sonos.isLiveCover(nowArt) && item.title === nowTitle) {
+                    cover = nowArt;
+                }
+                return Object.assign({}, item, { cover: cover });
+            });
+        },
+
+        recentNowHint: function ($div, item) {
+            if (!$div || !item) {
+                return;
+            }
+            $div.data('sonos-now', {
+                title: String(item.title || '').trim(),
+                artist: String(item.artist || '').trim(),
+                album: String(item.album || '').trim(),
+                cover: String(item.cover || '').trim(),
+                duration: parseInt(item.duration, 10) || 0,
+                ts: Date.now(),
+            });
+        },
+
+        readNowHint: function ($div) {
+            var hint = $div && $div.data('sonos-now');
+            if (!hint || Date.now() - hint.ts > 20000) {
+                return null;
+            }
+            return hint;
+        },
+
+        playRecentItem: function (mediaId, item) {
+            if (!item) {
+                return;
+            }
+            if (item.uri || item.metadata) {
+                vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({
+                    uri: item.uri || '',
+                    metadata: item.metadata || '',
+                    title: item.title || '',
+                    artist: item.artist || '',
+                    album: item.album || '',
+                    cover: item.cover || '',
+                    duration: item.duration || 0,
+                }));
+                return;
+            }
+            if (item.station || item.title) {
+                vis.binds.sonos.write(mediaId + '.favorites_set', item.station || item.title);
+            }
+        },
+
+        nowPlaying: function (playerId) {
+            var title = String(vis.binds.sonos.state(playerId, 'current_title') || '').trim();
+            var station = String(vis.binds.sonos.state(playerId, 'current_station') || '').trim();
+            var artist = String(vis.binds.sonos.state(playerId, 'current_artist') || '').trim();
+            var album = String(vis.binds.sonos.state(playerId, 'current_album') || '').trim();
+            var type = parseInt(vis.binds.sonos.state(playerId, 'current_type'), 10);
+            var uri = String(vis.binds.sonos.state(playerId, 'current_uri') || '').trim();
+            var durationS = vis.binds.sonos.parseTime(vis.binds.sonos.state(playerId, 'current_duration_s'));
+            var durationN = parseFloat(vis.binds.sonos.state(playerId, 'current_duration'));
+            var tvLabel = vis.binds.sonos.t('tv');
+            var hasDuration = durationS > 0 || durationN > 0;
+            var onDemand = /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-sonos-mms:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:|spotify:|file:)/i.test(uri);
+            var radioUri = /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|pndrradio:|aac:)/i.test(uri);
+            var tvUri = /^x-sonos-htastream:/i.test(uri);
+            // Leftover HDMI URI / station "TV" after a playlist start must not keep TV chrome.
+            var isTv = false;
+            if (!onDemand && !radioUri && type !== 0) {
+                if (tvUri) {
+                    isTv = true;
+                } else if (type === 2 && !uri) {
+                    isTv = title === 'TV' || title === tvLabel;
+                }
+            }
+            if (!title) {
+                if (isTv) {
+                    title = tvLabel;
+                } else if (station && station !== 'TV' && station !== tvLabel) {
+                    title = station;
+                } else {
+                    title = vis.binds.sonos.t('nothing');
+                }
+            }
+            return {
+                title: title,
+                artist: artist,
+                album: album,
+                station: station,
+                type: type,
+                isTv: isTv,
+                isRadio: !isTv && !hasDuration && !onDemand && (type === 1 || radioUri),
+            };
+        },
+
+        emptyQuickstart: function () {
+            return { title: '', artist: '', album: '', station: '', cover: '', uri: '', metadata: '', favorite: '', tv: false };
+        },
+
+        parseQuickstarts: function (instance) {
+            var raw = vis.binds.sonos.val(instance + '.quickstarts');
+            var list = [];
+            if (Array.isArray(raw)) {
+                list = raw;
+            } else if (typeof raw === 'string' && raw.trim()) {
+                try {
+                    var parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        list = parsed;
+                    }
+                } catch (e) {
+                    list = [];
+                }
+            }
+            var slots = [];
+            var i;
+            for (i = 0; i < 8; i++) {
+                var item = list[i] && typeof list[i] === 'object' ? list[i] : {};
+                slots.push({
+                    title: String(item.title || '').trim(),
+                    artist: String(item.artist || '').trim(),
+                    album: String(item.album || '').trim(),
+                    station: String(item.station || '').trim(),
+                    cover: String(item.cover || '').trim(),
+                    uri: String(item.uri || '').trim(),
+                    metadata: String(item.metadata || ''),
+                    favorite: String(item.favorite || '').trim(),
+                    tv: item.tv === true || item.tv === 'true',
+                });
+            }
+            return slots;
+        },
+
+        writeQuickstarts: function (instance, slots) {
+            vis.binds.sonos.write(instance + '.quickstarts', JSON.stringify(slots));
+        },
+
+        quickstartFilled: function (slot) {
+            return !!(slot && (slot.tv || slot.uri || slot.favorite));
+        },
+
+        isLiveCover: function (cover) {
+            return /(?:^|\/)coverImage\/(?!art\/)[^/?#]+\.png(?:\?|#|$)/i.test(String(cover || ''));
+        },
+
+        artFromMeta: function (xml) {
+            var match = String(xml || '').match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i);
+            if (!match) {
+                return '';
+            }
+            return String(match[1] || '').trim();
+        },
+
+        favoriteCover: function (mediaId, title) {
+            var want = String(title || '').trim().toLowerCase();
+            if (!want) {
+                return '';
+            }
+            var cover = '';
+            vis.binds.sonos.parseFavorites(mediaId).forEach(function (item) {
+                var name = String(item.title || '').trim().toLowerCase();
+                if (name && item.cover && name === want) {
+                    cover = item.cover;
+                }
+            });
+            return cover;
+        },
+
+        quickstartCover: function (slot, mediaId) {
+            var cover = slot && slot.cover ? String(slot.cover) : '';
+            if (cover && vis.binds.sonos.isLiveCover(cover)) {
+                cover = '';
+            }
+            if (!cover && slot) {
+                cover = vis.binds.sonos.favoriteCover(mediaId, slot.favorite || slot.station || slot.title);
+            }
+            return cover;
+        },
+
+        tvArtSvg: function (size) {
+            size = size || 36;
+            return '<svg viewBox="0 0 80 80" width="' + size + '" height="' + size + '">' +
+                '<rect x="12" y="16" width="56" height="38" rx="4" fill="#2a2a2a" stroke="#8a8a8a" stroke-width="2.4"/>' +
+                '<rect x="17" y="21" width="46" height="28" rx="2" fill="#111"/>' +
+                '<path d="M34 58 L40 52 L46 58" fill="none" stroke="#8a8a8a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<line x1="28" y1="64" x2="52" y2="64" stroke="#8a8a8a" stroke-width="2.4" stroke-linecap="round"/>' +
+                '<circle cx="19.5" cy="50.5" r="1.6" fill="#e31c23"/>' +
+                '</svg>';
+        },
+
+        quickstartArtHtml: function (slot, mediaId) {
+            if (slot.tv) {
+                return '<span class="sonos-ctrl-quick-art is-tv" aria-hidden="true">' + vis.binds.sonos.tvArtSvg(36) + '</span>';
+            }
+            var cover = vis.binds.sonos.quickstartCover(slot, mediaId);
+            if (cover) {
+                return '<span class="sonos-ctrl-quick-art" style="background-image:url(\'' + vis.binds.sonos.esc(cover) + '\')"></span>';
+            }
+            return '<span class="sonos-ctrl-quick-art is-blank"></span>';
+        },
+
+        snapshotQuickstart: function (selected, mediaId) {
+            var now = vis.binds.sonos.nowPlaying(mediaId);
+            var nothing = vis.binds.sonos.t('nothing');
+            var uri = String(vis.binds.sonos.state(mediaId, 'current_uri') || '').trim();
+            if (!uri) {
+                uri = String(vis.binds.sonos.state(selected.id, 'current_uri') || '').trim();
+            }
+            var metadata = String(vis.binds.sonos.state(mediaId, 'current_metadata') || vis.binds.sonos.state(selected.id, 'current_metadata') || '');
+            var cover = String(vis.binds.sonos.state(mediaId, 'current_art') || vis.binds.sonos.state(selected.id, 'current_art') || '');
+            if (!cover || vis.binds.sonos.isLiveCover(cover)) {
+                cover = String(vis.binds.sonos.state(mediaId, 'current_cover') || vis.binds.sonos.state(selected.id, 'current_cover') || '');
+            }
+            if (vis.binds.sonos.isLiveCover(cover)) {
+                cover = '';
+            }
+            var favorite = '';
+            vis.binds.sonos.parseFavorites(mediaId).forEach(function (item) {
+                if (item.title && (item.title === now.title || item.title === now.station)) {
+                    favorite = item.title;
+                    if (!cover && item.cover) {
+                        cover = item.cover;
+                    }
+                }
+            });
+            if (now.isTv) {
+                return {
+                    title: vis.binds.sonos.t('tv'),
+                    artist: now.artist,
+                    album: '',
+                    station: now.station,
+                    cover: cover,
+                    uri: '',
+                    metadata: '',
+                    favorite: '',
+                    tv: true,
+                };
+            }
+            if ((!uri && !favorite) || now.title === nothing) {
+                return null;
+            }
+            return {
+                title: now.station || now.title,
+                artist: now.artist,
+                album: now.album,
+                station: now.station,
+                cover: cover,
+                uri: uri,
+                metadata: metadata,
+                favorite: favorite,
+                tv: false,
+            };
+        },
+
+        playQuickstart: function (slot, selected, mediaId) {
+            if (!vis.binds.sonos.quickstartFilled(slot)) {
+                return;
+            }
+            if (slot.tv) {
+                vis.binds.sonos.write(selected.id + '.media_play', JSON.stringify({ tv: true }));
+                return;
+            }
+            if (slot.favorite) {
+                vis.binds.sonos.write(mediaId + '.favorites_set', slot.favorite);
+                return;
+            }
+            vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ uri: slot.uri, metadata: slot.metadata || '' }));
+        },
+
+        parseBrowse: function (playerId) {
+            var raw = vis.binds.sonos.state(playerId, 'media_browse_result');
+            if (!raw) {
+                return { id: '', title: '', items: [] };
+            }
+            if (typeof raw === 'object' && !Array.isArray(raw)) {
+                if (raw.val != null && raw.items == null) {
+                    raw = raw.val;
+                } else if (Array.isArray(raw.items) || raw.id) {
+                    return {
+                        id: raw.id || '',
+                        title: raw.title || '',
+                        items: Array.isArray(raw.items) ? raw.items : [],
+                        serviceName: raw.serviceName,
+                        loginUrl: raw.loginUrl,
+                        loginHint: raw.loginHint,
+                        searchable: raw.searchable,
+                    };
+                }
+            }
+            try {
+                var parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (parsed && typeof parsed === 'object') {
+                    return {
+                        id: parsed.id || '',
+                        title: parsed.title || '',
+                        items: Array.isArray(parsed.items) ? parsed.items : [],
+                        serviceName: parsed.serviceName,
+                        loginUrl: parsed.loginUrl,
+                        loginHint: parsed.loginHint,
+                        searchable: parsed.searchable,
+                    };
+                }
+            } catch (e) {
+                // ignore
+            }
+            return { id: '', title: '', items: [] };
+        },
+
+        defaultRootItems: function () {
+            return [
+                { id: 'tv', title: vis.binds.sonos.t('tv'), artist: vis.binds.sonos.t('tvHdmi') },
+                { id: 'R:0', title: vis.binds.sonos.t('radio'), folder: true },
+                { id: 'service:Spotify', title: 'Spotify', folder: true, service: true },
+                { id: 'service:YouTube Music', title: 'YouTube Music', folder: true, service: true },
+                { id: 'A:', title: vis.binds.sonos.t('library'), folder: true },
+                { id: 'S:', title: vis.binds.sonos.t('shares'), folder: true },
+                { id: 'AI:', title: vis.binds.sonos.t('lineIn'), folder: true },
+            ];
+        },
+
+        filterQuery: function (items, query, textFn) {
+            var q = String(query || '').trim().toLowerCase();
+            if (!q) {
+                return items;
+            }
+            return items.filter(function (item) {
+                return String(textFn(item) || '').toLowerCase().indexOf(q) !== -1;
+            });
+        },
+
+        applySheetFilter: function ($div) {
+            var q = String($div.data('sonos-sheet-query') || '').trim().toLowerCase();
+            var visible = 0;
+            $div.find('.sonos-ctrl-sheet .sonos-ctrl-item').each(function () {
+                var ok = !q || ($(this).text() || '').toLowerCase().indexOf(q) !== -1;
+                $(this).toggle(ok);
+                if (ok) {
+                    visible += 1;
+                }
+            });
+            var $empty = $div.find('.sonos-ctrl-sheet-filter-empty');
+            if ($empty.length) {
+                $empty.toggle(Boolean(q && !visible));
+            }
+        },
+
+        closeLibrary: function ($div, instance) {
+            $div.data('sonos-sheet', false);
+            $div.data('sonos-sheet-query', '');
+            vis.binds.sonos.render($div.attr('id'), instance);
+        },
+
+        browseItemButton: function (item) {
+            var payload = encodeURIComponent(JSON.stringify({
+                id: item.id || '',
+                uri: item.uri || '',
+                metadata: item.metadata || '',
+                folder: !!item.folder,
+                service: !!item.service,
+                favorite: item.favorite || '',
+                playlist: item.playlist || '',
+                title: item.title || '',
+            }));
+            return '<button type="button" class="sonos-ctrl-item" data-media-item="' + vis.binds.sonos.esc(payload) + '">' +
+                (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
+                '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
+                '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || (item.folder ? '…' : '') || (item.service ? 'Service' : '')) + '</div></div></button>';
+        },
+
+        serviceNameFromBrowse: function ($div, browse) {
+            if (browse && browse.serviceName) {
+                return String(browse.serviceName);
+            }
+            var ids = (($div.data('sonos-browse-path') || []).map(function (item) { return item.id; })).concat([browse && browse.id]);
+            var i;
+            for (i = 0; i < ids.length; i++) {
+                var id = String(ids[i] || '');
+                if (id.indexOf('service:') === 0) {
+                    return id.slice('service:'.length);
+                }
+                if (id.indexOf('smapi:') === 0) {
+                    var rest = id.slice('smapi:'.length);
+                    var colon = rest.indexOf(':');
+                    try {
+                        return decodeURIComponent(colon === -1 ? rest : rest.slice(0, colon));
+                    } catch (e) {
+                        return colon === -1 ? rest : rest.slice(0, colon);
+                    }
+                }
+            }
+            return '';
+        },
+
+        isGroupedWith: function (player, other) {
+            if (!player || !other) {
+                return false;
+            }
+            if (vis.binds.sonos.normIp(player.ip) === vis.binds.sonos.normIp(other.ip)) {
+                return true;
+            }
+            var coordA = vis.binds.sonos.coordinatorOf(player);
+            var coordB = vis.binds.sonos.coordinatorOf(other);
+            if (coordA && coordA === coordB) {
+                return true;
+            }
+            var listed = vis.binds.sonos.membersChannelsOf(player);
+            if (listed.length < 2) {
+                return false;
+            }
+            return listed.indexOf(vis.binds.sonos.normIp(other.ip)) !== -1;
+        },
+
+        normIp: function (value) {
+            return String(value || '').trim().replace(/[.\s]+/g, '_');
+        },
+
+        coordinatorOf: function (player) {
+            var raw = String(vis.binds.sonos.state(player.id, 'coordinator') || '').trim();
+            if (!raw || raw === 'null' || raw === 'undefined') {
+                return vis.binds.sonos.normIp(player.ip);
+            }
+            return vis.binds.sonos.normIp(raw);
+        },
+
+        membersChannelsOf: function (player) {
+            var coord = vis.binds.sonos.coordinatorOf(player);
+            var coordId = String(player.id || '').replace(/\.[^.]+$/, '.' + coord);
+            var raw = vis.binds.sonos.state(coordId, 'membersChannels') || vis.binds.sonos.state(player.id, 'membersChannels');
+            return String(raw || '').split(',').map(function (item) {
+                return vis.binds.sonos.normIp(item.trim());
+            }).filter(Boolean);
+        },
+
+        groupMembers: function (player, players) {
+            return players.filter(function (other) {
+                return vis.binds.sonos.isGroupedWith(player, other);
+            });
+        },
+
+        groupAccent: function (player, players) {
+            var visible = vis.binds.sonos.groupMembers(player, players).length;
+            var listed = vis.binds.sonos.membersChannelsOf(player).length;
+            if (visible < 2 && listed < 2) {
+                return '';
+            }
+            var palette = ['#7dd3fc', '#86efac', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fb7185', '#a3e635', '#818cf8'];
+            var key = vis.binds.sonos.coordinatorOf(player);
+            var hash = 0;
+            var i;
+            for (i = 0; i < key.length; i++) {
+                hash = ((hash << 5) - hash) + key.charCodeAt(i);
+                hash |= 0;
+            }
+            return palette[Math.abs(hash) % palette.length];
+        },
+
+        hexRgba: function (hex, alpha) {
+            hex = String(hex || '').replace('#', '');
+            if (hex.length !== 6) {
+                return 'transparent';
+            }
+            var r = parseInt(hex.substring(0, 2), 16);
+            var g = parseInt(hex.substring(2, 4), 16);
+            var b = parseInt(hex.substring(4, 6), 16);
+            return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+        },
+
+        groupStyle: function (color) {
+            if (!color) {
+                return '';
+            }
+            return '--sonos-group:' + color + ';--sonos-group-bg:' + vis.binds.sonos.hexRgba(color, 0.32);
+        },
+
+        clusterStyle: function (color) {
+            if (!color) {
+                return '';
+            }
+            return vis.binds.sonos.groupStyle(color) +
+                ';display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;padding:3px 4px;border-radius:16px;background:' +
+                vis.binds.sonos.hexRgba(color, 0.32) +
+                ';box-shadow:inset 0 0 0 2px ' + color;
+        },
+
+        chipGroupStyle: function (color, isMaster, isActive) {
+            var style = vis.binds.sonos.groupStyle(color);
+            if (!color) {
+                return style;
+            }
+            if (isMaster && !isActive) {
+                return style + ';background:' + color + ';color:#102018;font-weight:800;box-shadow:inset 0 0 0 2px ' + color;
+            }
+            if (isActive) {
+                return style + ';box-shadow:inset 0 0 0 2px #fff,0 0 0 2px ' + color;
+            }
+            return style + ';background:' + vis.binds.sonos.hexRgba(color, 0.32) + ';box-shadow:inset 0 0 0 2px ' + color;
+        },
+
+        roomChipHtml: function (player, selectedIp, groupColor, satPrimary) {
+            var isSat = Boolean(satPrimary);
+            var isActive = !isSat && player.ip === selectedIp;
+            var isPlaying = vis.binds.sonos.state(vis.binds.sonos.mediaPlayerId(player), 'state') === 'play';
+            var alive = vis.binds.sonos.state(player.id, 'alive') !== false;
+            var isMaster = Boolean(groupColor && vis.binds.sonos.coordinatorOf(player) === vis.binds.sonos.normIp(player.ip));
+            var title = isMaster
+                ? vis.binds.sonos.esc(player.name + ' · ' + vis.binds.sonos.t('groupMasterHint'))
+                : vis.binds.sonos.esc(player.name);
+            var chipStyle = groupColor ? vis.binds.sonos.chipGroupStyle(groupColor, isMaster, isActive) : '';
+            return '<button type="button" class="sonos-ctrl-chip' +
+                (isActive ? ' is-active' : '') +
+                (isPlaying ? ' is-playing' : '') +
+                (isMaster ? ' is-master' : '') +
+                (groupColor ? ' is-grouped' : '') +
+                (isSat ? ' is-sat' : '') +
+                (alive ? '' : ' is-offline') +
+                '" data-ip="' + vis.binds.sonos.esc(isSat ? satPrimary : player.ip) + '"' +
+                (chipStyle ? ' style="' + chipStyle + '"' : '') +
+                ' title="' + title + '"' +
+                (isMaster ? ' aria-label="' + title + '"' : '') + '>' +
+                '<span class="sonos-ctrl-chip-name">' + vis.binds.sonos.esc(player.name) + '</span>' +
+                (isMaster ? '<span class="sonos-ctrl-chip-crown">★ ' + vis.binds.sonos.esc(vis.binds.sonos.t('groupMaster')) + '</span>' : '') +
+                '</button>';
+        },
+
+        roomsHtml: function (players, selectedIp, allPlayers, satMap) {
+            vis.binds.sonos.injectGroupCss();
+            allPlayers = allPlayers || players;
+            satMap = satMap || {};
+            var seen = {};
+            return players.map(function (player) {
+                var accent = vis.binds.sonos.groupAccent(player, allPlayers);
+                if (!accent) {
+                    return vis.binds.sonos.roomChipHtml(player, selectedIp, '');
+                }
+                var coord = vis.binds.sonos.coordinatorOf(player);
+                if (seen[coord]) {
+                    return '';
+                }
+                seen[coord] = true;
+                var members = vis.binds.sonos.groupMembers(player, allPlayers).slice().sort(function (a, b) {
+                    var aMaster = vis.binds.sonos.coordinatorOf(a) === vis.binds.sonos.normIp(a.ip) ? 0 : 1;
+                    var bMaster = vis.binds.sonos.coordinatorOf(b) === vis.binds.sonos.normIp(b.ip) ? 0 : 1;
+                    if (aMaster !== bMaster) {
+                        return aMaster - bMaster;
+                    }
+                    return String(a.name).localeCompare(String(b.name), vis.language || undefined);
+                });
+                var isCurrent = members.some(function (member) { return member.ip === selectedIp; });
+                return '<div class="sonos-ctrl-cluster' + (isCurrent ? ' is-current' : '') +
+                    '" role="group" aria-label="' + vis.binds.sonos.esc(vis.binds.sonos.t('group')) + '"' +
+                    ' style="' + vis.binds.sonos.clusterStyle(accent) + '">' +
+                    members.map(function (member) {
+                        return vis.binds.sonos.roomChipHtml(member, selectedIp, accent, satMap[member.ip] || '');
+                    }).join('') +
+                    '</div>';
+            }).join('');
+        },
+
+        render: function (widgetID, instance) {
+            vis.binds.sonos.draw(widgetID, instance);
+        },
+
+        draw: function (widgetID, instance) {
+            var $div = $('#' + widgetID);
+            if (!$div.length) {
+                return;
+            }
+            if ($div.data('sonos-drawing')) {
+                vis.binds.sonos.queueRender(widgetID, instance);
+                return;
+            }
+            $div.data('sonos-drawing', true);
+            try {
+                vis.binds.sonos.drawNow(widgetID, instance);
+            } finally {
+                $div.data('sonos-drawing', false);
+            }
+        },
+
+        drawNow: function (widgetID, instance) {
+            var $div = $('#' + widgetID);
+            if (!$div.length) {
+                return;
+            }
+
+            var t = vis.binds.sonos.t;
+            var allPlayers = vis.binds.sonos.findPlayers(instance, { includeHidden: true });
+            var players = vis.binds.sonos.findPlayers(instance);
+            if (!players.length) {
+                $div.html('<div class="' + vis.binds.sonos.themeClass($div) + '"><div class="sonos-ctrl-hint">' + vis.binds.sonos.esc(t('noPlayers')) + '</div></div>');
+                return;
+            }
+
+            var selectedIp = $div.data('sonos-player') || vis.binds.sonos.loadRoom(widgetID, instance);
+            var satMap = vis.binds.sonos.htSatelliteIps(instance);
+            if (satMap[selectedIp]) {
+                selectedIp = satMap[selectedIp];
+            }
+            var selected = players.filter(function (player) { return player.ip === selectedIp; })[0] || players[0];
+            $div.data('sonos-player', selected.ip);
+            vis.binds.sonos.saveRoom(widgetID, instance, selected.ip);
+            var tab = $div.data('sonos-tab') || 'favorites';
+            var sheetOpen = !!$div.data('sonos-sheet');
+            var query = String($div.data('sonos-sheet-query') || '');
+            var searchHadFocus = $div.find('.sonos-ctrl-search-input').is(':focus');
+            var mediaId = vis.binds.sonos.mediaPlayerId(selected);
+            var playing = vis.binds.sonos.state(mediaId, 'state') === 'play';
+            var now = vis.binds.sonos.nowPlaying(mediaId);
+            var hint = vis.binds.sonos.readNowHint($div);
+            var nothing = vis.binds.sonos.t('nothing');
+            if (hint && !/^x-sonos-htastream:/i.test(hint.uri || '')) {
+                if (now.title === nothing || !String(vis.binds.sonos.state(mediaId, 'current_title') || '').trim() || now.isTv) {
+                    now.title = hint.title || now.title;
+                    now.artist = hint.artist || now.artist;
+                    now.album = hint.album || now.album;
+                }
+                now.isTv = false;
+                now.isRadio = false;
+            }
+            var title = now.title;
+            var artist = now.artist;
+            var album = now.album;
+            var station = now.station;
+            var cover = vis.binds.sonos.state(mediaId, 'current_art') || vis.binds.sonos.state(mediaId, 'current_cover');
+            if (hint && hint.cover && (!cover || vis.binds.sonos.isLiveCover(cover))) {
+                cover = hint.cover;
+            }
+            var volume = parseInt(vis.binds.sonos.state(selected.id, 'volume'), 10);
+            if (isNaN(volume)) {
+                volume = 0;
+            }
+            var seek = parseFloat(vis.binds.sonos.state(mediaId, 'seek'));
+            if (isNaN(seek)) {
+                seek = 0;
+            }
+            var muted = !!vis.binds.sonos.state(selected.id, 'muted');
+            var nightMode = !!vis.binds.sonos.state(selected.id, 'night_mode');
+            var speechOn = !!vis.binds.sonos.state(selected.id, 'speech_enhancement');
+            var shuffle = !!vis.binds.sonos.state(mediaId, 'shuffle');
+            var repeat = parseInt(vis.binds.sonos.state(mediaId, 'repeat'), 10) || 0;
+            var elapsed = vis.binds.sonos.state(mediaId, 'current_elapsed_s') || '00:00';
+            var duration = vis.binds.sonos.state(mediaId, 'current_duration_s') || '00:00';
+            if (hint && hint.duration > 0 && !(vis.binds.sonos.parseTime(duration) > 0)) {
+                now.isRadio = false;
+                duration = vis.binds.sonos.formatTime(hint.duration);
+                var hintedElapsed = Math.min(hint.duration, (Date.now() - hint.ts) / 1000);
+                elapsed = vis.binds.sonos.formatTime(hintedElapsed);
+                seek = (hintedElapsed / hint.duration) * 100;
+            }
+            var coordinator = String(vis.binds.sonos.state(selected.id, 'coordinator') || selected.ip);
+            var groupVolume = parseInt(vis.binds.sonos.state(mediaId, 'group_volume'), 10);
+            var grouped = allPlayers.filter(function (player) {
+                return vis.binds.sonos.isGroupedWith(selected, player);
+            });
+
+            var roomsHtml = vis.binds.sonos.roomsHtml(players, selected.ip, allPlayers, satMap);
+            var selectedGroupColor = vis.binds.sonos.groupAccent(selected, allPlayers);
+            var masterPlayer = players.filter(function (player) {
+                return vis.binds.sonos.normIp(player.ip) === vis.binds.sonos.normIp(coordinator);
+            })[0];
+
+            var groupHtml = players.filter(function (player) { return player.ip !== selected.ip; }).map(function (player) {
+                var checked = vis.binds.sonos.isGroupedWith(selected, player);
+                var accent = vis.binds.sonos.groupAccent(player, allPlayers);
+                var isMaster = Boolean(accent && vis.binds.sonos.coordinatorOf(player) === vis.binds.sonos.normIp(player.ip));
+                var labelStyle = accent
+                    ? (isMaster
+                        ? vis.binds.sonos.chipGroupStyle(accent, true, false)
+                        : vis.binds.sonos.groupStyle(accent) + ';background:' + vis.binds.sonos.hexRgba(accent, 0.32) + ';box-shadow:inset 0 0 0 2px ' + accent)
+                    : '';
+                return '<label class="' +
+                    (checked ? 'is-grouped' : (accent ? 'is-other-group' : '')) +
+                    (isMaster ? ' is-master' : '') + '"' +
+                    (labelStyle ? ' style="' + labelStyle + '"' : '') +
+                    (isMaster ? ' title="' + vis.binds.sonos.esc(vis.binds.sonos.t('groupMasterHint')) + '"' : '') +
+                    '><input type="checkbox" data-group-ip="' + vis.binds.sonos.esc(player.ip) + '"' + (checked ? ' checked' : '') + '>' +
+                    vis.binds.sonos.esc(player.name) +
+                    (isMaster ? ' <span class="sonos-ctrl-chip-crown">★ ' + vis.binds.sonos.esc(vis.binds.sonos.t('groupMaster')) + '</span>' : '') +
+                    '</label>';
+            }).join('');
+
+            if (groupHtml) {
+                groupHtml = '<span>' + vis.binds.sonos.esc(t('group')) + '</span>' +
+                    (grouped.length > 1 && masterPlayer
+                        ? '<span class="sonos-ctrl-group-lead"' +
+                            (selectedGroupColor ? ' style="' + vis.binds.sonos.chipGroupStyle(selectedGroupColor, true, false) + '"' : '') +
+                            ' title="' + vis.binds.sonos.esc(t('groupMasterHint')) + '">' +
+                            '★ ' + vis.binds.sonos.esc(t('groupMaster')) + ': ' + vis.binds.sonos.esc(masterPlayer.name) +
+                            '</span>'
+                        : '') +
+                    groupHtml +
+                    '<button type="button" class="sonos-ctrl-ungroup">' + vis.binds.sonos.esc(t('dissolve')) + '</button>';
+                if (grouped.length > 1 && !isNaN(groupVolume)) {
+                    groupHtml += '<div class="sonos-ctrl-group-vol"><span>Grp</span><input type="range" min="0" max="100" class="sonos-ctrl-slider sonos-ctrl-group-volume" value="' + groupVolume + '"></div>';
+                }
+            }
+
+            var listHtml = '';
+            var serviceName = '';
+            var queueItems = vis.binds.sonos.parseQueue(mediaId);
+            var currentTrackNo = parseInt(vis.binds.sonos.state(mediaId, 'current_track_number'), 10) || 0;
+            var upcomingQueue = vis.binds.sonos.upcomingQueue(queueItems, currentTrackNo);
+            var nextTrack = upcomingQueue.length > 1
+                ? upcomingQueue[1]
+                : vis.binds.sonos.playerNext(mediaId);
+            if (sheetOpen && tab === 'favorites') {
+                var favorites = vis.binds.sonos.filterQuery(vis.binds.sonos.parseFavorites(mediaId), query, function (item) {
+                    return item.title;
+                });
+                listHtml = favorites.length
+                    ? favorites.map(function (item) {
+                        return '<button type="button" class="sonos-ctrl-item" data-favorite="' + vis.binds.sonos.esc(item.title) + '">' +
+                            (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
+                            '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div></div></button>';
+                    }).join('')
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyFavorites')) + '</div>';
+            } else if (sheetOpen && tab === 'playlists') {
+                var playlists = vis.binds.sonos.filterQuery(vis.binds.sonos.parsePlaylists(mediaId), query, function (item) {
+                    return item.title;
+                });
+                listHtml = playlists.length
+                    ? playlists.map(function (item) {
+                        return '<button type="button" class="sonos-ctrl-item" data-playlist="' + vis.binds.sonos.esc(item.title) + '">' +
+                            (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
+                            '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div></div></button>';
+                    }).join('')
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyPlaylists')) + '</div>';
+            } else if (sheetOpen && tab === 'recent') {
+                var recent = vis.binds.sonos.filterQuery(vis.binds.sonos.parseRecent(selected.id), query, function (item) {
+                    return [item.title, item.artist, item.album, item.station].join(' ');
+                });
+                listHtml = recent.length
+                    ? recent.map(function (item, index) {
+                        return '<button type="button" class="sonos-ctrl-item" data-recent-i="' + index + '">' +
+                            (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
+                            '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
+                            '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || item.station || '') + '</div></div></button>';
+                    }).join('')
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : 'emptyRecent')) + '</div>';
+            } else if (sheetOpen && tab === 'sources') {
+                var browse = vis.binds.sonos.parseBrowse(mediaId);
+                var path = $div.data('sonos-browse-path') || [];
+                var atRoot = !path.length;
+                var items = browse.items || [];
+                if (atRoot && browse.id !== 'root') {
+                    var requestKey = mediaId + ':root';
+                    if ($div.data('sonos-browse-req') !== requestKey) {
+                        $div.data('sonos-browse-req', requestKey);
+                        vis.binds.sonos.write(mediaId + '.media_browse', 'root');
+                    }
+                } else if (browse.id === 'root') {
+                    $div.data('sonos-browse-req', '');
+                }
+                if (atRoot && (browse.id !== 'root' || !items.length)) {
+                    items = vis.binds.sonos.defaultRootItems();
+                }
+                serviceName = (!atRoot || browse.id === 'root')
+                    ? vis.binds.sonos.serviceNameFromBrowse($div, browse)
+                    : '';
+                items = vis.binds.sonos.filterQuery(items, query, function (item) {
+                    return [item.title, item.artist, item.album].join(' ');
+                });
+                var backHtml = path.length
+                    ? '<button type="button" class="sonos-ctrl-item" data-browse-back="1">' +
+                        '<div class="sonos-ctrl-thumb"></div>' +
+                        '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(t('back')) + '</div></div></button>'
+                    : '';
+                var extraHtml = '';
+                if (serviceName && (browse.loginUrl || browse.loginHint)) {
+                    extraHtml += '<div class="sonos-ctrl-login">' +
+                        '<div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(browse.loginHint || t('loginOpen')) + '</div>' +
+                        (browse.loginUrl ? '<div class="sonos-ctrl-login-url">' + vis.binds.sonos.esc(browse.loginUrl) + '</div>' : '') +
+                        (browse.loginUrl
+                            ? '<button type="button" class="sonos-ctrl-login-btn" data-smapi-auth="' + vis.binds.sonos.esc(serviceName) + '">' + vis.binds.sonos.esc(t('signedIn')) + '</button>'
+                            : '') +
+                        '</div>';
+                }
+                listHtml = extraHtml + backHtml + (items.length
+                    ? items.map(vis.binds.sonos.browseItemButton).join('')
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(path.length || query ? t('noSearchHits') : t('emptySources')) + '</div>');
+            } else if (sheetOpen) {
+                var queueSource = !query ? upcomingQueue : queueItems;
+                var queue = vis.binds.sonos.filterQuery(queueSource, query, function (item) {
+                    return [item.title, item.artist, item.album].join(' ');
+                });
+                var fromCurrent = !query && upcomingQueue.length && upcomingQueue[0] &&
+                    (upcomingQueue[0].current || upcomingQueue[0].no === currentTrackNo);
+                listHtml = queue.length
+                    ? queue.map(function (item, index) {
+                        var current = item.current || item.no === currentTrackNo;
+                        var isNext = !current && fromCurrent && index === 1;
+                        var badge = current ? t('nowTrack') : (isNext ? t('upNext') : String(item.no));
+                        return '<button type="button" class="sonos-ctrl-item' + (current ? ' is-current' : '') + '" data-track="' + item.no + '">' +
+                            (item.cover ? '<img src="' + vis.binds.sonos.esc(item.cover) + '" alt="">' : '<div class="sonos-ctrl-thumb"></div>') +
+                            '<div><div class="sonos-ctrl-item-title">' + vis.binds.sonos.esc(item.title) + '</div>' +
+                            '<div class="sonos-ctrl-item-sub">' + vis.binds.sonos.esc(item.artist || item.album || '') + '</div></div>' +
+                            '<div class="sonos-ctrl-item-badge">' + vis.binds.sonos.esc(badge) + '</div></button>';
+                    }).join('')
+                    : '<div class="sonos-ctrl-empty">' + vis.binds.sonos.esc(t(query ? 'noSearchHits' : (queueItems.length ? 'emptyQueueNext' : 'emptyQueue'))) + '</div>';
+            }
+
+            var sub = [artist, album].filter(Boolean).join(' — ');
+            if (!album && station && station !== title) {
+                sub = [sub, station].filter(Boolean).join(' — ');
+            }
+            var coverHtml = now.isTv
+                ? '<div class="sonos-ctrl-cover is-tv" aria-hidden="true">' +
+                    '<svg viewBox="0 0 80 80" width="92" height="92">' +
+                    '<rect x="12" y="16" width="56" height="38" rx="4" fill="#2a2a2a" stroke="#8a8a8a" stroke-width="2.4"/>' +
+                    '<rect x="17" y="21" width="46" height="28" rx="2" fill="#111"/>' +
+                    '<path d="M34 58 L40 52 L46 58" fill="none" stroke="#8a8a8a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<line x1="28" y1="64" x2="52" y2="64" stroke="#8a8a8a" stroke-width="2.4" stroke-linecap="round"/>' +
+                    '<circle cx="19.5" cy="50.5" r="1.6" fill="#e31c23"/>' +
+                    '</svg></div>'
+                : '<div class="sonos-ctrl-cover"' + (cover ? ' style="background-image:url(\'' + vis.binds.sonos.esc(cover) + '\')"' : '') + '>' +
+                    (cover ? '' : 'SONOS') + '</div>';
+            var buttonsHtml = now.isTv
+                ? '<button type="button" class="sonos-ctrl-btn' + (muted ? ' is-on' : '') + '" data-cmd="mute" title="Mute">' + (muted ? '&#128263;' : '&#128266;') + '</button>'
+                : '<button type="button" class="sonos-ctrl-btn" data-cmd="prev" title="Prev">&#9198;</button>' +
+                    '<button type="button" class="sonos-ctrl-btn sonos-ctrl-btn-play" data-cmd="' + (playing ? 'pause' : 'play') + '" title="Play/Pause">' + (playing ? '&#10073;&#10073;' : '&#9654;') + '</button>' +
+                    '<button type="button" class="sonos-ctrl-btn" data-cmd="next" title="Next">&#9197;</button>' +
+                    '<button type="button" class="sonos-ctrl-btn' + (muted ? ' is-on' : '') + '" data-cmd="mute" title="Mute">' + (muted ? '&#128263;' : '&#128266;') + '</button>' +
+                    '<button type="button" class="sonos-ctrl-btn' + (shuffle ? ' is-on' : '') + '" data-cmd="shuffle" title="Shuffle">&#128256;</button>' +
+                    '<button type="button" class="sonos-ctrl-btn' + (repeat ? ' is-on' : '') + '" data-cmd="repeat" title="Repeat">' + (repeat === 2 ? '1' : '&#128257;') + '</button>';
+            var htHtml = now.isTv
+                ? '<div class="sonos-ctrl-ht">' +
+                    '<button type="button" class="sonos-ctrl-ht-btn' + (nightMode ? ' is-on' : '') + '" data-ht="night_mode">' + vis.binds.sonos.esc(t('nightSound')) + '</button>' +
+                    '<button type="button" class="sonos-ctrl-ht-btn' + (speechOn ? ' is-on' : '') + '" data-ht="speech_enhancement">' + vis.binds.sonos.esc(t('speechEnhance')) + '</button>' +
+                '</div>'
+                : '';
+            var seekHtml = now.isTv || now.isRadio
+                ? ''
+                : '<div class="sonos-ctrl-seek">' +
+                    '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(elapsed) + '</span>' +
+                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-slider sonos-ctrl-seek-input" value="' + seek + '">' +
+                    '<span class="sonos-ctrl-time">' + vis.binds.sonos.esc(duration) + '</span>' +
+                '</div>';
+
+            var tabsHtml =
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'favorites' ? ' is-active' : '') + '" data-tab="favorites">' + vis.binds.sonos.esc(t('favorites')) + '</button>' +
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'playlists' ? ' is-active' : '') + '" data-tab="playlists">' + vis.binds.sonos.esc(t('playlists')) + '</button>' +
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'queue' ? ' is-active' : '') + '" data-tab="queue">' + vis.binds.sonos.esc(t('queue')) + '</button>' +
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'recent' ? ' is-active' : '') + '" data-tab="recent">' + vis.binds.sonos.esc(t('recent')) + '</button>' +
+                '<button type="button" class="sonos-ctrl-tab' + (sheetOpen && tab === 'sources' ? ' is-active' : '') + '" data-tab="sources">' + vis.binds.sonos.esc(t('sources')) + '</button>';
+            var searchHtml = '<form class="sonos-ctrl-search"' +
+                (serviceName ? ' data-smapi-search="' + vis.binds.sonos.esc(serviceName) + '"' : '') + '>' +
+                '<input type="text" class="sonos-ctrl-search-input" value="' + vis.binds.sonos.esc(query) + '" placeholder="' + vis.binds.sonos.esc(t('search')) + '" enterkeyhint="search" autocomplete="off">' +
+                (serviceName ? '<button type="submit" class="sonos-ctrl-search-btn">' + vis.binds.sonos.esc(t('searchGo')) + '</button>' : '') +
+                '</form>';
+            var sheetHtml = sheetOpen
+                ? '<button type="button" class="sonos-ctrl-sheet-dismiss" aria-label="Close"></button>' +
+                    '<div class="sonos-ctrl-sheet">' +
+                        searchHtml +
+                        '<div class="sonos-ctrl-list">' +
+                            listHtml +
+                            '<div class="sonos-ctrl-empty sonos-ctrl-sheet-filter-empty" style="display:none">' + vis.binds.sonos.esc(t('noSearchHits')) + '</div>' +
+                        '</div>' +
+                    '</div>'
+                : '';
+            var slots = vis.binds.sonos.parseQuickstarts(instance);
+            var editIndex = parseInt($div.data('sonos-quick-edit'), 10);
+            var quickHtml = '<div class="sonos-ctrl-quick">' + slots.map(function (slot, index) {
+                var filled = vis.binds.sonos.quickstartFilled(slot);
+                var label = filled ? (slot.title || slot.station || slot.favorite || t('tv')) : (index + 1) + ' · +';
+                var sub = filled ? (slot.artist || slot.station || slot.favorite || '') : t('quickEmpty');
+                return '<button type="button" class="sonos-ctrl-quick-btn' +
+                    (filled ? '' : ' is-empty') +
+                    (editIndex === index ? ' is-edit' : '') +
+                    '" data-quick="' + index + '" title="' + vis.binds.sonos.esc(filled ? t('quickPlay') + ' / ' + t('quickEdit') : t('quickSave')) + '">' +
+                    (filled ? vis.binds.sonos.quickstartArtHtml(slot, mediaId) : '') +
+                    '<span class="sonos-ctrl-quick-text">' +
+                    '<span class="sonos-ctrl-quick-no">' + (index + 1) + '</span>' +
+                    '<span class="sonos-ctrl-quick-title">' + vis.binds.sonos.esc(label) + '</span>' +
+                    '<span class="sonos-ctrl-quick-sub">' + vis.binds.sonos.esc(sub) + '</span>' +
+                    '</span></button>';
+            }).join('') + '</div>';
+            var editSlot = editIndex >= 0 && editIndex < 8 ? slots[editIndex] : null;
+            var menuHtml = editSlot
+                ? '<div class="sonos-ctrl-quick-menu" data-quick-menu="' + editIndex + '">' +
+                    '<div class="sonos-ctrl-quick-menu-title">' + vis.binds.sonos.esc(t('quickEdit')) + ' ' + (editIndex + 1) + '</div>' +
+                    '<input type="text" class="sonos-ctrl-quick-name" value="' + vis.binds.sonos.esc(editSlot.title || '') + '" placeholder="' + vis.binds.sonos.esc(t('quickRename')) + '">' +
+                    '<div class="sonos-ctrl-quick-menu-actions">' +
+                        '<button type="button" class="is-primary" data-quick-act="replace">' + vis.binds.sonos.esc(t('quickReplace')) + '</button>' +
+                        '<button type="button" data-quick-act="rename">' + vis.binds.sonos.esc(t('quickRename')) + '</button>' +
+                        (vis.binds.sonos.quickstartFilled(editSlot) ? '<button type="button" data-quick-act="clear">' + vis.binds.sonos.esc(t('quickClear')) + '</button>' : '') +
+                    '</div>' +
+                    '</div>'
+                : '';
+
+            $div.html(
+                '<div class="' + vis.binds.sonos.themeClass($div) + '">' +
+                    '<div class="sonos-ctrl-header">' +
+                        '<div class="sonos-ctrl-brand">SONOS</div>' +
+                        '<span class="sonos-ctrl-ver">' + vis.binds.sonos.esc(vis.binds.sonos.version) + '</span>' +
+                        '<div class="sonos-ctrl-rooms">' + roomsHtml + '</div>' +
+                    '</div>' +
+                    (grouped.length > 1 || vis.binds.sonos.membersChannelsOf(selected).length > 1
+                        ? '<div class="sonos-ctrl-group-banner" style="' + vis.binds.sonos.clusterStyle(selectedGroupColor || '#7dd3fc') + ';align-self:flex-start;font-weight:700">' +
+                            vis.binds.sonos.esc(t('group')) + ': ' + grouped.map(function (player) { return vis.binds.sonos.esc(player.name); }).join(' · ') +
+                            (masterPlayer ? ' — ★ ' + vis.binds.sonos.esc(t('groupMaster')) + ' ' + vis.binds.sonos.esc(masterPlayer.name) : '') +
+                            '</div>'
+                        : '') +
+                    '<div class="sonos-ctrl-tabs">' + tabsHtml + '</div>' +
+                    '<div class="sonos-ctrl-body">' +
+                        '<div class="sonos-ctrl-main">' +
+                            coverHtml +
+                            '<div class="sonos-ctrl-meta">' +
+                                '<div class="sonos-ctrl-title">' + vis.binds.sonos.esc(title) + '</div>' +
+                                '<div class="sonos-ctrl-sub">' + vis.binds.sonos.esc(sub) + '</div>' +
+                                (nextTrack && nextTrack.title
+                                    ? '<div class="sonos-ctrl-next">' + vis.binds.sonos.esc(t('upNext')) + ': ' +
+                                        vis.binds.sonos.esc([nextTrack.title, nextTrack.artist].filter(Boolean).join(' — ')) +
+                                        '</div>'
+                                    : '') +
+                                '<div class="sonos-ctrl-buttons">' + buttonsHtml + '</div>' +
+                                seekHtml +
+                                '<div class="sonos-ctrl-volume">' +
+                                    '<span>Vol</span>' +
+                                    '<input type="range" min="0" max="100" step="1" class="sonos-ctrl-slider sonos-ctrl-volume-input" value="' + volume + '">' +
+                                    '<span class="sonos-ctrl-time">' + volume + '</span>' +
+                                '</div>' +
+                                htHtml +
+                                '<div class="sonos-ctrl-groups">' + groupHtml + '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        sheetHtml +
+                    '</div>' +
+                    quickHtml +
+                    menuHtml +
+                '</div>'
+            );
+
+            vis.binds.sonos.bindUi($div, selected, players, coordinator, mediaId);
+            vis.binds.sonos.startTicker(widgetID, instance);
+            if (sheetOpen && searchHadFocus) {
+                $div.find('.sonos-ctrl-search-input').trigger('focus');
+            }
+        },
+
+        bindUi: function ($div, selected, players, coordinator, mediaId) {
+            mediaId = mediaId || selected.id;
+            var instance = vis.binds.sonos.resolveInstance(selected.id);
+            var widgetID = $div.attr('id');
+            $div.find('.sonos-ctrl-chip').on('click', function () {
+                var ip = String($(this).data('ip') || '');
+                $div.data('sonos-player', ip);
+                $div.data('sonos-browse-path', []);
+                $div.data('sonos-sheet', false);
+                $div.data('sonos-sheet-query', '');
+                vis.binds.sonos.saveRoom(widgetID, instance, ip);
+                vis.binds.sonos.render(widgetID, instance);
+            });
+
+            $div.find('[data-cmd]').on('click', function () {
+                var cmd = $(this).data('cmd');
+                if (cmd === 'play' || cmd === 'pause' || cmd === 'next' || cmd === 'prev') {
+                    vis.binds.sonos.write(mediaId + '.' + cmd, true);
+                } else if (cmd === 'mute') {
+                    vis.binds.sonos.write(selected.id + '.muted', !vis.binds.sonos.state(selected.id, 'muted'));
+                } else if (cmd === 'shuffle') {
+                    vis.binds.sonos.write(mediaId + '.shuffle', !vis.binds.sonos.state(mediaId, 'shuffle'));
+                } else if (cmd === 'repeat') {
+                    var next = (parseInt(vis.binds.sonos.state(mediaId, 'repeat'), 10) || 0) + 1;
+                    vis.binds.sonos.write(mediaId + '.repeat', next > 2 ? 0 : next);
+                }
+            });
+            $div.find('[data-ht]').on('click', function () {
+                var ht = String($(this).attr('data-ht') || '');
+                if (ht !== 'night_mode' && ht !== 'speech_enhancement') {
+                    return;
+                }
+                vis.binds.sonos.write(selected.id + '.' + ht, !vis.binds.sonos.state(selected.id, ht));
+            });
+
+            $div.find('.sonos-ctrl-volume-input').on('change input', function () {
+                vis.binds.sonos.write(selected.id + '.volume', parseInt(this.value, 10));
+            });
+            $div.find('.sonos-ctrl-seek-input').on('change', function () {
+                vis.binds.sonos.write(mediaId + '.seek', parseFloat(this.value));
+            });
+            $div.find('.sonos-ctrl-group-volume').on('change input', function () {
+                vis.binds.sonos.write(mediaId + '.group_volume', parseInt(this.value, 10));
+            });
+
+            $div.find('[data-group-ip]').on('change', function () {
+                var otherIp = String($(this).data('group-ip'));
+                if (this.checked) {
+                    vis.binds.sonos.write(mediaId + '.add_to_group', otherIp);
+                } else {
+                    vis.binds.sonos.write(mediaId + '.remove_from_group', otherIp);
+                }
+            });
+
+            $div.find('.sonos-ctrl-ungroup').on('click', function () {
+                players.forEach(function (player) {
+                    if (player.ip !== selected.ip && vis.binds.sonos.isGroupedWith(selected, player)) {
+                        vis.binds.sonos.write(selected.id + '.remove_from_group', player.ip);
+                    }
+                });
+                if (String(coordinator) !== selected.ip) {
+                    vis.binds.sonos.write(selected.id + '.coordinator', selected.ip);
+                }
+            });
+
+            $div.find('[data-tab]').on('click', function (ev) {
+                ev.stopPropagation();
+                var next = String($(this).data('tab') || '');
+                if ($div.data('sonos-sheet') && $div.data('sonos-tab') === next) {
+                    vis.binds.sonos.closeLibrary($div, instance);
+                    return;
+                }
+                $div.data('sonos-tab', next);
+                $div.data('sonos-sheet', true);
+                $div.data('sonos-sheet-query', '');
+                if (next !== 'sources') {
+                    $div.data('sonos-browse-path', []);
+                }
+                vis.binds.sonos.render(widgetID, instance);
+            });
+            $div.find('.sonos-ctrl-sheet-dismiss').on('click', function () {
+                vis.binds.sonos.closeLibrary($div, instance);
+            });
+            $(document).off('mousedown.sonosSheet' + widgetID).on('mousedown.sonosSheet' + widgetID, function (ev) {
+                if (!$div.data('sonos-sheet')) {
+                    return;
+                }
+                var $t = $(ev.target);
+                if (
+                    $t.closest('.sonos-ctrl-sheet').length ||
+                    $t.closest('[data-tab]').length ||
+                    $t.closest('.sonos-ctrl-chip').length ||
+                    $t.closest('.sonos-ctrl-cluster').length ||
+                    $t.closest('.sonos-ctrl-quick').length ||
+                    $t.closest('.sonos-ctrl-quick-menu').length
+                ) {
+                    return;
+                }
+                vis.binds.sonos.closeLibrary($div, instance);
+            });
+            $div.find('.sonos-ctrl-search-input').on('input', function () {
+                $div.data('sonos-sheet-query', this.value);
+                vis.binds.sonos.applySheetFilter($div);
+            });
+
+            $div.find('[data-favorite]').on('click', function () {
+                vis.binds.sonos.write(mediaId + '.favorites_set', String($(this).attr('data-favorite')));
+                vis.binds.sonos.closeLibrary($div, instance);
+            });
+            $div.find('[data-playlist]').on('click', function () {
+                vis.binds.sonos.write(mediaId + '.playlist_set', String($(this).attr('data-playlist')));
+                vis.binds.sonos.closeLibrary($div, instance);
+            });
+            $div.find('[data-track]').on('click', function () {
+                vis.binds.sonos.write(mediaId + '.current_track_number', parseInt($(this).data('track'), 10));
+                vis.binds.sonos.closeLibrary($div, instance);
+            });
+            $div.find('[data-recent-i]').on('click', function () {
+                var index = parseInt(String($(this).attr('data-recent-i') || ''), 10);
+                var query = String($div.data('sonos-sheet-query') || '');
+                var items = vis.binds.sonos.filterQuery(vis.binds.sonos.parseRecent(selected.id), query, function (item) {
+                    return [item.title, item.artist, item.album, item.station].join(' ');
+                });
+                var item = items[index];
+                if (!item) {
+                    return;
+                }
+                vis.binds.sonos.recentNowHint($div, item);
+                vis.binds.sonos.playRecentItem(mediaId, item);
+                vis.binds.sonos.closeLibrary($div, instance);
+            });
+            $div.find('[data-browse-back]').on('click', function () {
+                var path = ($div.data('sonos-browse-path') || []).slice();
+                path.pop();
+                $div.data('sonos-browse-path', path);
+                $div.data('sonos-sheet-query', '');
+                vis.binds.sonos.write(mediaId + '.media_browse', path.length ? path[path.length - 1].id : 'root');
+            });
+            $div.find('[data-smapi-auth]').on('click', function () {
+                vis.binds.sonos.write(mediaId + '.media_browse', 'smapi-auth:' + encodeURIComponent(String($(this).attr('data-smapi-auth') || '')));
+            });
+            $div.find('.sonos-ctrl-search').on('submit', function (ev) {
+                ev.preventDefault();
+                var name = String($(this).attr('data-smapi-search') || '');
+                var term = String($(this).find('.sonos-ctrl-search-input').val() || '').trim();
+                $div.data('sonos-sheet-query', term);
+                if (!name || !term) {
+                    vis.binds.sonos.applySheetFilter($div);
+                    return;
+                }
+                var path = ($div.data('sonos-browse-path') || []).slice();
+                var searchId = 'smapi-search:' + encodeURIComponent(name) + ':' + encodeURIComponent(term);
+                path.push({ id: searchId, title: term });
+                $div.data('sonos-browse-path', path);
+                vis.binds.sonos.write(mediaId + '.media_browse', searchId);
+            });
+            $div.find('.sonos-ctrl-search-input').on('keydown', function (ev) {
+                if (ev.key === 'Enter' || ev.which === 13) {
+                    ev.preventDefault();
+                    $(this).closest('form').trigger('submit');
+                }
+            });
+            $div.find('[data-media-item]').on('click', function () {
+                var item = {};
+                try {
+                    item = JSON.parse(decodeURIComponent(String($(this).attr('data-media-item') || '')));
+                } catch (e) {
+                    return;
+                }
+                if (item.favorite) {
+                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ favorite: item.favorite }));
+                    vis.binds.sonos.closeLibrary($div, instance);
+                    return;
+                }
+                if (item.playlist) {
+                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ playlist: item.playlist }));
+                    vis.binds.sonos.closeLibrary($div, instance);
+                    return;
+                }
+                if (item.folder || item.service) {
+                    var path = ($div.data('sonos-browse-path') || []).slice();
+                    path.push({ id: item.id, title: item.title });
+                    $div.data('sonos-browse-path', path);
+                    $div.data('sonos-sheet-query', '');
+                    vis.binds.sonos.write(mediaId + '.media_browse', item.id);
+                    return;
+                }
+                if (item.id === 'tv' || /^x-sonos-htastream:/i.test(item.uri || '')) {
+                    vis.binds.sonos.write(selected.id + '.media_play', JSON.stringify({ tv: true }));
+                    vis.binds.sonos.closeLibrary($div, instance);
+                    return;
+                }
+                if (item.uri) {
+                    vis.binds.sonos.write(mediaId + '.media_play', JSON.stringify({ uri: item.uri, metadata: item.metadata || '' }));
+                    vis.binds.sonos.closeLibrary($div, instance);
+                }
+            });
+
+            var longTimer = null;
+            var longFired = false;
+            var saveCurrentTo = function (index) {
+                var snap = vis.binds.sonos.snapshotQuickstart(selected, mediaId);
+                if (!snap) {
+                    return false;
+                }
+                var next = vis.binds.sonos.parseQuickstarts(instance);
+                next[index] = snap;
+                vis.binds.sonos.writeQuickstarts(instance, next);
+                return true;
+            };
+            $div.find('[data-quick]').on('mousedown touchstart', function (ev) {
+                if (ev.type === 'mousedown' && ev.which !== 1) {
+                    return;
+                }
+                var index = parseInt($(this).attr('data-quick'), 10);
+                longFired = false;
+                clearTimeout(longTimer);
+                longTimer = setTimeout(function () {
+                    longFired = true;
+                    $div.data('sonos-quick-edit', index);
+                    vis.binds.sonos.render(widgetID, instance);
+                }, 550);
+            });
+            $div.find('[data-quick]').on('mouseup mouseleave touchend touchcancel', function () {
+                clearTimeout(longTimer);
+            });
+            $div.find('[data-quick]').on('contextmenu', function (ev) {
+                ev.preventDefault();
+                clearTimeout(longTimer);
+                $div.data('sonos-quick-edit', parseInt($(this).attr('data-quick'), 10));
+                vis.binds.sonos.render(widgetID, instance);
+            });
+            $div.find('[data-quick]').on('click', function (ev) {
+                ev.preventDefault();
+                if (longFired) {
+                    return;
+                }
+                var index = parseInt($(this).attr('data-quick'), 10);
+                var slot = vis.binds.sonos.parseQuickstarts(instance)[index];
+                if (vis.binds.sonos.quickstartFilled(slot)) {
+                    vis.binds.sonos.playQuickstart(slot, selected, mediaId);
+                    return;
+                }
+                saveCurrentTo(index);
+            });
+            $div.find('[data-quick-act]').on('click', function () {
+                var act = String($(this).attr('data-quick-act') || '');
+                var index = parseInt($div.find('[data-quick-menu]').attr('data-quick-menu'), 10);
+                var next = vis.binds.sonos.parseQuickstarts(instance);
+                if (act === 'replace') {
+                    if (!saveCurrentTo(index)) {
+                        return;
+                    }
+                } else if (act === 'rename') {
+                    next[index].title = String($div.find('.sonos-ctrl-quick-name').val() || '').trim() || next[index].title;
+                    vis.binds.sonos.writeQuickstarts(instance, next);
+                } else if (act === 'clear') {
+                    next[index] = vis.binds.sonos.emptyQuickstart();
+                    vis.binds.sonos.writeQuickstarts(instance, next);
+                }
+                $div.data('sonos-quick-edit', '');
+                vis.binds.sonos.render(widgetID, instance);
+            });
+            $div.find('.sonos-ctrl-quick-name').on('keydown', function (ev) {
+                if (ev.key === 'Enter' || ev.which === 13) {
+                    ev.preventDefault();
+                    $div.find('[data-quick-act="rename"]').trigger('click');
+                }
+            });
+            $(document).off('mousedown.sonosQuick' + widgetID).on('mousedown.sonosQuick' + widgetID, function (ev) {
+                if ($div.data('sonos-quick-edit') === '' || $div.data('sonos-quick-edit') == null) {
+                    return;
+                }
+                var $t = $(ev.target);
+                if ($t.closest('.sonos-ctrl-quick-menu').length || $t.closest('[data-quick]').length) {
+                    return;
+                }
+                $div.data('sonos-quick-edit', '');
+                vis.binds.sonos.render(widgetID, instance);
+            });
+        },
+    };
+})(window.jQuery || window.$);
