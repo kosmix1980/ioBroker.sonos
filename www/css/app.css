@@ -212,9 +212,18 @@ body {
 @media (max-width: 640px) {
     .sonos-www-bar {
         flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .sonos-www-ver {
+        display: none;
     }
 
     .sonos-www-themes {
-        margin-left: 0;
+        margin-left: auto;
+    }
+
+    .sonos-www-themes button {
+        padding: 4px 8px;
     }
 }

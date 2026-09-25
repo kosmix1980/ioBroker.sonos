@@ -121,8 +121,8 @@ admin shows it as the instance link (the link icon next to `sonos.0`).
 
 It is the same player as the vis-1 widget: rooms, groups, transport, volume, favorites, playlists,
 queue, recent tracks, sources, TV HDMI and the quick-start buttons. After a GitHub install,
-restart `sonos.0` and `web.0`, then open the instance link. `?theme=midnight` and `?kiosk=1`
-change the look; `?kiosk=1` hides the thin top bar.
+restart `sonos.0` and `web.0`, then open the instance link. `?theme=midnight`, `?kiosk=1`
+(hides the thin top bar) and `?room=192_168_0_10` (speaker channel id) change the start view.
 
 ## Handling of groups
 * States for handling SONOS groups:

@@ -196,6 +196,14 @@
         };
     }
 
+    function readRoom() {
+        var raw = String(query().get('room') || '').trim();
+        if (!raw) {
+            return '';
+        }
+        return raw.replace(/[.\s]+/g, '_');
+    }
+
     function mountWidget(instance, theme) {
         if (!instance || !window.jQuery || !vis.binds || !vis.binds.sonos) {
             return;
@@ -210,6 +218,10 @@
         $div.removeData();
         $div.off();
         $div.empty();
+        var room = readRoom();
+        if (room && vis.binds.sonos.saveRoom) {
+            vis.binds.sonos.saveRoom(WIDGET, instance, room);
+        }
         vis.binds.sonos.createWidget(WIDGET, 'www', { oid: instance, theme: theme });
         $('sonos-www-ver').textContent = vis.binds.sonos.version || '';
     }

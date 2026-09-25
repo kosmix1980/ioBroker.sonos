@@ -29,6 +29,7 @@ describe('www instance-link GUI', () => {
         });
         expect(read('www/js/jquery.min.js')).to.match(/jQuery v3/);
         expect(read('www/js/sonos-widget.js')).to.include('vis.binds.sonos');
+        expect(read('www/js/app.js')).to.include('readRoom');
     });
 
     it('registers an instance link to /sonos/', () => {
