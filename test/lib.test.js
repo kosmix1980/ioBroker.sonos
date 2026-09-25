@@ -1,0 +1,575 @@
+'use strict';
+
+/*
+ * Unit tests for the pure helpers in build/lib.
+ * They run against the compiled output, so `npm run build` must have run before.
+ */
+const { expect } = require('chai');
+
+const {
+    getMediaRoot,
+    htAudioInLabel,
+    isDirectPlayUri,
+    isHtAudioSilent,
+    isCpContainerUri,
+    isLineInStreamUri,
+    isQueueUri,
+    isSeekableListUri,
+    isRinconPlaylistUri,
+    isStreamUri,
+    parseCpContainerUri,
+    cpContainerBrowseIds,
+    parseCurrentUri,
+    didlParentId,
+    playContextKey,
+    queueCoverUrl,
+    isTvStreamUri,
+    isPlayingTv,
+    matchesMusicService,
+    mediaItem,
+    nowPlayingLabels,
+    parseHtAudioIn,
+    streamContentFromDidl,
+    tvAudioFormat,
+    tvStreamUri,
+} = require('../build/lib/content-directory');
+
+const { encodeSmapiId, parseSmapiId } = require('../build/lib/smapi');
+const {
+    isSameQueueTrack,
+    nextTrackFields,
+    normalizeTrackText,
+    nowPlayingQueueEntries,
+    queueSkipTarget,
+    queueContainsTrack,
+} = require('../build/lib/next-track');
+
+const LABELS = {
+    radio: 'TuneIn Radio',
+    library: 'Music library',
+    shares: 'Network shares',
+    lineIn: 'Line-In',
+    tv: 'TV',
+    tvHdmi: 'HDMI',
+};
+
+const UUID = 'RINCON_347E5C9E3A4801400';
+
+describe('content-directory: URI helpers', () => {
+    it('builds and recognizes the TV stream URI', () => {
+        expect(tvStreamUri(UUID)).to.equal(`x-sonos-htastream:${UUID}:spdif`);
+        expect(isTvStreamUri(tvStreamUri(UUID))).to.be.true;
+    });
+
+    it('does not treat other URIs as TV', () => {
+        expect(isTvStreamUri('x-rincon-stream:RINCON_1')).to.be.false;
+        expect(isTvStreamUri('x-rincon:RINCON_1')).to.be.false;
+        expect(isTvStreamUri(undefined)).to.be.false;
+        expect(isTvStreamUri('')).to.be.false;
+    });
+
+    it('drops HDMI as soon as AVTransport or the track is a playlist or song', () => {
+        const hdmi = tvStreamUri(UUID);
+        const playlist = 'x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9';
+        const queue = `x-rincon-queue:${UUID}#0`;
+        const song = 'x-sonos-spotify:spotify%3atrack%3aabc';
+        const follow = `x-rincon:${UUID}`;
+
+        expect(isPlayingTv(hdmi, hdmi)).to.be.true;
+        expect(isPlayingTv(hdmi, '')).to.be.true;
+        expect(isPlayingTv('', hdmi)).to.be.true;
+        expect(isPlayingTv(playlist, hdmi)).to.be.false;
+        expect(isPlayingTv(queue, hdmi)).to.be.false;
+        expect(isPlayingTv(hdmi, song)).to.be.false;
+        expect(isPlayingTv(follow, hdmi)).to.be.true;
+        expect(isPlayingTv(follow, song)).to.be.false;
+    });
+
+    it('recognizes line-in', () => {
+        expect(isLineInStreamUri('x-rincon-stream:RINCON_1')).to.be.true;
+        expect(isLineInStreamUri('x-sonos-htastream:RINCON_1:spdif')).to.be.false;
+    });
+
+    it('routes streams past the queue', () => {
+        expect(isStreamUri('x-sonosapi-stream:s25111?sid=254')).to.be.true;
+        expect(isDirectPlayUri('x-rincon-cpcontainer:1006206ccatalog')).to.be.true;
+        // a plain library track has to go through the queue
+        expect(isDirectPlayUri('x-file-cifs://nas/music/track.mp3')).to.be.false;
+    });
+});
+
+describe('content-directory: HDMI audio format', () => {
+    it('reads HTAudioIn out of a GetZoneInfo response', () => {
+        expect(parseHtAudioIn('<u:GetZoneInfoResponse><HTAudioIn>18</HTAudioIn></u:GetZoneInfoResponse>')).to.equal(18);
+    });
+
+    it('returns null when the speaker has no TV input', () => {
+        expect(parseHtAudioIn('<u:GetZoneInfoResponse><MACAddress>00:11</MACAddress></u:GetZoneInfoResponse>')).to.be
+            .null;
+        expect(parseHtAudioIn('')).to.be.null;
+    });
+
+    it('maps silence codes to an empty label', () => {
+        expect(isHtAudioSilent(0)).to.be.true;
+        expect(htAudioInLabel(0)).to.equal('');
+    });
+
+    it('labels a real audio format', () => {
+        expect(htAudioInLabel(2)).to.equal('Stereo PCM');
+        expect(htAudioInLabel(18)).to.equal('Dolby Digital 5.1');
+        expect(htAudioInLabel(84934721)).to.equal('DTS 5.1');
+    });
+
+    it('returns an empty label for an unknown code', () => {
+        expect(htAudioInLabel(999999)).to.equal('');
+    });
+
+    it('extracts the stream content from DIDL metadata', () => {
+        const didl = '<DIDL-Lite><item><r:streamContent>Stereo PCM</r:streamContent></item></DIDL-Lite>';
+        expect(streamContentFromDidl(didl)).to.equal('Stereo PCM');
+        expect(streamContentFromDidl(undefined)).to.equal('');
+    });
+
+    it('picks an audio format out of free text', () => {
+        expect(tvAudioFormat('Dolby Digital 5.1')).to.contain('Dolby');
+        expect(tvAudioFormat('')).to.equal('');
+    });
+});
+
+describe('content-directory: nowPlayingLabels', () => {
+    it('shows TV as title and the format as artist', () => {
+        const labels = nowPlayingLabels(
+            { uri: tvStreamUri(UUID), title: '', artist: '' },
+            LABELS,
+            { metadata: '<DIDL-Lite><item><r:streamContent>Stereo PCM</r:streamContent></item></DIDL-Lite>' },
+        );
+        expect(labels.title).to.equal('TV');
+        expect(labels.station).to.equal('TV');
+        expect(labels.artist).to.contain('PCM');
+    });
+
+    it('falls back to the Line-In label for an empty line-in title', () => {
+        const labels = nowPlayingLabels({ uri: 'x-rincon-stream:RINCON_1', title: '' }, LABELS);
+        expect(labels.title).to.equal('Line-In');
+    });
+
+    it('leaves a normal track untouched', () => {
+        const labels = nowPlayingLabels(
+            { uri: 'x-file-cifs://nas/a.mp3', title: 'Song', artist: 'Band', album: 'Disc' },
+            LABELS,
+        );
+        expect(labels).to.deep.equal({ title: 'Song', artist: 'Band', album: 'Disc', station: '' });
+    });
+});
+
+describe('content-directory: getMediaRoot', () => {
+    const ids = result => result.items.map(item => item.id);
+
+    it('offers TV only on a home theater device', () => {
+        expect(ids(getMediaRoot({}, LABELS, UUID, { homeTheater: true }))).to.include('tv');
+        expect(ids(getMediaRoot({}, LABELS, UUID, { homeTheater: false }))).to.not.include('tv');
+        // no options at all means no TV either
+        expect(ids(getMediaRoot({}, LABELS, UUID))).to.not.include('tv');
+    });
+
+    it('puts TV first when it is available', () => {
+        expect(ids(getMediaRoot({}, LABELS, UUID, { homeTheater: true }))[0]).to.equal('tv');
+    });
+
+    it('never invents a music service the household does not have', () => {
+        const listed = ids(getMediaRoot({}, LABELS, UUID, { homeTheater: true }));
+        expect(listed).to.not.include('service:Spotify');
+        expect(listed).to.not.include('service:YouTube Music');
+    });
+
+    it('lists a reported service and keeps the featured ones in front', () => {
+        const result = getMediaRoot({ Deezer: { id: 2 }, Spotify: { id: 9 } }, LABELS, UUID, { homeTheater: false });
+        const listed = ids(result);
+        expect(listed).to.include('service:Spotify');
+        expect(listed).to.include('service:Deezer');
+        expect(listed.indexOf('service:Spotify')).to.be.below(listed.indexOf('service:Deezer'));
+    });
+
+    it('always offers the local containers', () => {
+        const listed = ids(getMediaRoot(undefined, LABELS, UUID));
+        expect(listed).to.include.members(['R:0', 'A:', 'S:', 'AI:']);
+    });
+
+    it('lists every service only once', () => {
+        const listed = ids(getMediaRoot({ Spotify: { id: 9 } }, LABELS, UUID));
+        expect(listed.length).to.equal(new Set(listed).size);
+    });
+});
+
+describe('content-directory: matchesMusicService', () => {
+    it('matches by the sid of the reported service', () => {
+        expect(matchesMusicService('x-sonos-http:track%3a1?sid=2311&flags=8224', 'Whatever', { id: 2311 })).to.be.true;
+    });
+
+    it('matches Spotify by its well known markers', () => {
+        expect(matchesMusicService('x-sonos-spotify:spotify%3atrack%3a4uLU6', 'Spotify')).to.be.true;
+        expect(matchesMusicService('x-file-cifs://nas/track.mp3', 'Spotify')).to.be.false;
+    });
+});
+
+describe('content-directory: mediaItem', () => {
+    it('fills the optional fields', () => {
+        expect(mediaItem({ id: 'R:0', title: 'Radio' })).to.deep.equal({
+            id: 'R:0',
+            title: 'Radio',
+            uri: '',
+            metadata: '',
+            artist: '',
+            album: '',
+            cover: '',
+            folder: false,
+        });
+    });
+});
+
+describe('smapi: object ids', () => {
+    it('round-trips a service name and item id', () => {
+        const encoded = encodeSmapiId('YouTube Music', 'search:track:live @ home');
+        expect(parseSmapiId(encoded)).to.deep.equal({
+            serviceName: 'YouTube Music',
+            itemId: 'search:track:live @ home',
+        });
+    });
+
+    it('rejects ids that are not smapi ids', () => {
+        expect(parseSmapiId('R:0')).to.be.undefined;
+        expect(parseSmapiId('')).to.be.undefined;
+    });
+});
+
+const {
+    fromPlayMode,
+    toFormatted,
+    toPlayMode,
+    toSeconds,
+    toTrack,
+} = require('../build/lib/backend/svrooij-backend');
+
+describe('svrooij backend: play mode', () => {
+    // shuffle and repeat are two independent ioBroker states but one enum in the library,
+    // so the folding has to survive a round trip in both directions
+    const COMBINATIONS = [
+        [false, 'none'],
+        [false, 'all'],
+        [false, 'one'],
+        [true, 'none'],
+        [true, 'all'],
+        [true, 'one'],
+    ];
+
+    it('round-trips every shuffle/repeat combination', () => {
+        COMBINATIONS.forEach(([shuffle, repeat]) => {
+            const folded = toPlayMode(shuffle, repeat);
+            expect(fromPlayMode(folded), `${shuffle}/${repeat} via ${folded}`).to.deep.equal({ shuffle, repeat });
+        });
+    });
+
+    it('maps the library enum to the documented strings', () => {
+        expect(fromPlayMode('NORMAL')).to.deep.equal({ shuffle: false, repeat: 'none' });
+        expect(fromPlayMode('REPEAT_ALL')).to.deep.equal({ shuffle: false, repeat: 'all' });
+        expect(fromPlayMode('REPEAT_ONE')).to.deep.equal({ shuffle: false, repeat: 'one' });
+        expect(fromPlayMode('SHUFFLE')).to.deep.equal({ shuffle: true, repeat: 'all' });
+        expect(fromPlayMode('SHUFFLE_NOREPEAT')).to.deep.equal({ shuffle: true, repeat: 'none' });
+        expect(fromPlayMode('SHUFFLE_REPEAT_ONE')).to.deep.equal({ shuffle: true, repeat: 'one' });
+    });
+
+    it('falls back to no shuffle and no repeat for an unknown mode', () => {
+        expect(fromPlayMode(undefined)).to.deep.equal({ shuffle: false, repeat: 'none' });
+        expect(fromPlayMode('SOMETHING_ELSE')).to.deep.equal({ shuffle: false, repeat: 'none' });
+    });
+});
+
+describe('svrooij backend: time conversion', () => {
+    it('reads the h:mm:ss the speakers answer with', () => {
+        expect(toSeconds('0:00:00')).to.equal(0);
+        expect(toSeconds('0:03:25')).to.equal(205);
+        expect(toSeconds('1:02:03')).to.equal(3723);
+        expect(toSeconds(undefined)).to.equal(0);
+        expect(toSeconds('NOT_IMPLEMENTED')).to.equal(0);
+    });
+
+    it('writes the shape the adapter puts into current_elapsed_s', () => {
+        expect(toFormatted(0)).to.equal('0:00');
+        expect(toFormatted(65)).to.equal('1:05');
+        expect(toFormatted(205)).to.equal('3:25');
+        expect(toFormatted(3723)).to.equal('1:02:03');
+    });
+
+    it('round-trips a duration', () => {
+        [0, 7, 65, 205, 3599, 3723, 7322].forEach(seconds => {
+            expect(toSeconds(toFormatted(seconds)), `${seconds}s`).to.equal(seconds);
+        });
+    });
+});
+
+describe('svrooij backend: track mapping', () => {
+    it('recognises a radio stream by its upnp class', () => {
+        const track = toTrack({
+            Title: 'Some Station',
+            UpnpClass: 'object.item.audioItem.audioBroadcast',
+            TrackUri: 'x-sonosapi-stream:s25111?sid=254',
+        });
+        expect(track.type).to.equal('radio');
+        expect(track.title).to.equal('Some Station');
+    });
+
+    it('recognises the TV input as line_in', () => {
+        expect(toTrack({ TrackUri: 'x-sonos-htastream:RINCON_1:spdif' }).type).to.equal('line_in');
+        expect(toTrack({ TrackUri: 'x-rincon-stream:RINCON_1' }).type).to.equal('line_in');
+    });
+
+    it('treats everything else as a track and converts the duration', () => {
+        const track = toTrack({
+            Title: 'Song',
+            Artist: 'Band',
+            Album: 'Disc',
+            Duration: '0:03:25',
+            TrackUri: 'x-file-cifs://nas/a.mp3',
+        });
+        expect(track.type).to.equal('track');
+        expect(track.duration).to.equal(205);
+        expect(track.artist).to.equal('Band');
+    });
+
+    it('survives a missing or unparsed track', () => {
+        expect(toTrack(undefined)).to.deep.equal({ uri: '', duration: 0 });
+        expect(toTrack('<DIDL-Lite/>', 'x-rincon:RINCON_1')).to.deep.equal({
+            uri: 'x-rincon:RINCON_1',
+            duration: 0,
+        });
+    });
+});
+
+const { SvrooijDevice } = require('../build/lib/backend/svrooij-backend');
+
+describe('svrooij backend: partial events', () => {
+    // UPnP LastChange events carry only what changed. Folding one must never reset a field the
+    // event does not mention, otherwise the ioBroker states flap - back to STOPPED while
+    // playback continues, or shuffle off because the event was about something else.
+    const stubDevice = () => ({ Uuid: 'RINCON_1', Host: '192.168.1.50', Port: 1400, Name: 'Kitchen' });
+    const stubBackend = { devices: [], getDeviceByUuid: () => undefined };
+    const device = () => new SvrooijDevice(stubDevice(), stubBackend);
+
+    it('keeps the transport state when a later event does not mention it', () => {
+        const d = device();
+        d.applyTransportEvent({ TransportState: 'PLAYING', CurrentTrack: 2 });
+        d.applyTransportEvent({ CurrentTrack: 3 });
+        expect(d.state.playbackState).to.equal('PLAYING');
+        expect(d.state.trackNo).to.equal(3);
+    });
+
+    it('keeps shuffle and repeat when the event is about something else', () => {
+        const d = device();
+        d.applyTransportEvent({ CurrentPlayMode: 'SHUFFLE_REPEAT_ONE' });
+        expect(d.state.playMode).to.deep.include({ shuffle: true, repeat: 'one' });
+
+        d.applyTransportEvent({ TransportState: 'PAUSED_PLAYBACK' });
+        expect(d.state.playMode).to.deep.include({ shuffle: true, repeat: 'one' });
+        expect(d.state.playbackState).to.equal('PAUSED_PLAYBACK');
+    });
+
+    it('keeps crossfade when only the play mode changed', () => {
+        const d = device();
+        d.applyTransportEvent({ CurrentPlayMode: 'NORMAL', CurrentCrossfadeMode: true });
+        expect(d.state.playMode.crossfade).to.be.true;
+
+        d.applyTransportEvent({ CurrentPlayMode: 'REPEAT_ALL' });
+        expect(d.state.playMode.crossfade).to.be.true;
+        expect(d.state.playMode.repeat).to.equal('all');
+    });
+
+    it('keeps the current track when the event carries no track', () => {
+        const d = device();
+        d.applyTransportEvent({
+            CurrentTrackURI: 'x-file-cifs://nas/a.mp3',
+            CurrentTrackMetaData: { Title: 'Song', Duration: '0:03:25' },
+        });
+        expect(d.state.currentTrack.title).to.equal('Song');
+
+        d.applyTransportEvent({ TransportState: 'PLAYING' });
+        expect(d.state.currentTrack.title).to.equal('Song');
+        expect(d.state.currentTrack.duration).to.equal(205);
+    });
+
+    it('keeps volume and mute when the rendering event is about the equalizer', () => {
+        const d = device();
+        d.applyRenderingEvent({ Volume: { Master: 42 }, Mute: { Master: false } });
+        expect(d.state.volume).to.equal(42);
+        expect(d.volume).to.equal(42);
+
+        d.applyRenderingEvent({ NightMode: true });
+        expect(d.state.volume).to.equal(42);
+        expect(d.state.mute).to.be.false;
+        expect(d.state.equalizer.nightMode).to.be.true;
+    });
+
+    it('reads speech enhancement out of DialogLevel', () => {
+        const d = device();
+        d.applyRenderingEvent({ DialogLevel: '1' });
+        expect(d.state.equalizer.speechEnhancement).to.be.true;
+
+        d.applyRenderingEvent({ DialogLevel: '0' });
+        expect(d.state.equalizer.speechEnhancement).to.be.false;
+    });
+
+    it('turns a parsed transport metadata back into DIDL, which TTS needs to restore radio', () => {
+        const d = device();
+        d.applyTransportEvent({
+            AVTransportURI: 'x-sonosapi-stream:s25111?sid=254',
+            AVTransportURIMetaData: { Title: 'Some Station', UpnpClass: 'object.item.audioItem.audioBroadcast' },
+        });
+        expect(d.transportUri).to.equal('x-sonosapi-stream:s25111?sid=254');
+        expect(d.transportUriMetadata).to.be.a('string').and.to.contain('Some Station');
+    });
+});
+
+describe('next-track: Sonos next is not queue[n+1]', () => {
+    it('copies NextTrackMetaData fields', () => {
+        expect(
+            nextTrackFields({
+                title: ' Here To Mars ',
+                artist: 'Coheed and Cambria',
+                album: 'The Color Before The Sun',
+                albumArtUri: '/getaa?u=x',
+            }),
+        ).to.deep.equal({
+            title: 'Here To Mars',
+            artist: 'Coheed and Cambria',
+            album: 'The Color Before The Sun',
+            art: '/getaa?u=x',
+        });
+    });
+
+    it('clears next when Sonos has no upcoming track (radio)', () => {
+        expect(nextTrackFields({ title: '', artist: 'Station' })).to.deep.equal({
+            title: '',
+            artist: '',
+            album: '',
+            art: '',
+        });
+        expect(nextTrackFields(undefined)).to.deep.equal({ title: '', artist: '', album: '', art: '' });
+    });
+
+    it('matches the shuffled next row, not the sequential neighbor', () => {
+        const sequential = { title: 'Track B', artist: 'Artist' };
+        const shuffled = { title: 'Here To Mars', artist: 'Coheed and Cambria' };
+        const next = { title: 'Here To Mars', artist: 'Coheed and Cambria' };
+
+        expect(isSameQueueTrack(sequential, next)).to.be.false;
+        expect(isSameQueueTrack(shuffled, next)).to.be.true;
+        expect(isSameQueueTrack({ title: 'here to mars', artist: '' }, next)).to.be.true;
+    });
+
+    it('normalizes whitespace before comparing', () => {
+        expect(normalizeTrackText('  Here   To Mars ')).to.equal('here to mars');
+    });
+
+    it('seeks to the next queue row instead of AVTransport Next', () => {
+        expect(queueSkipTarget(3, 10, 1, false)).to.equal(4);
+        expect(queueSkipTarget(1, 10, -1, false)).to.equal(null);
+        expect(queueSkipTarget(10, 10, 1, false)).to.equal(null);
+        expect(queueSkipTarget(10, 10, 1, true)).to.equal(1);
+        expect(queueSkipTarget(1, 10, -1, true)).to.equal(10);
+        expect(queueSkipTarget(0, 10, 1, false)).to.equal(null);
+    });
+
+    it('recognizes the Sonos queue URI', () => {
+        expect(isQueueUri('x-rincon-queue:RINCON_347E5C9E3A4801400#0')).to.be.true;
+        expect(isQueueUri('x-rincon-cpcontainer:1006206ccatalog')).to.be.false;
+        expect(isQueueUri('x-sonosapi-stream:s25111?sid=254')).to.be.false;
+    });
+
+    it('parses a Spotify playlist container URI', () => {
+        const parsed = parseCpContainerUri(
+            'x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI?sid=9&flags=8300&sn=1',
+        );
+        expect(parsed).to.deep.equal({
+            sid: 9,
+            objectId: 'spotify:playlist:37i9dQZF1DX0XUsMxB6UJI',
+            browseId: '1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI',
+        });
+        expect(
+            parseCpContainerUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI'),
+        ).to.include({ sid: 9, objectId: 'spotify:playlist:37i9dQZF1DX0XUsMxB6UJI' });
+        expect(isCpContainerUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9')).to.be.true;
+        expect(isSeekableListUri('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9')).to.be.true;
+        expect(isSeekableListUri('x-rincon-playlist:RINCON_1#Share/Rock.m3u')).to.be.true;
+        expect(isSeekableListUri('x-sonosapi-stream:s25111?sid=254')).to.be.false;
+        expect(cpContainerBrowseIds(parsed)).to.include('1006206cspotify%3aplaylist%3a37i9dQZF1DX0XUsMxB6UJI');
+        expect(cpContainerBrowseIds(parsed)).to.include('spotify:playlist:37i9dQZF1DX0XUsMxB6UJI');
+    });
+
+    it('keeps https covers and prefixes speaker-relative ones', () => {
+        expect(queueCoverUrl('http://192.168.1.10:1400', 'https://i.scdn.co/art.jpg')).to.equal(
+            'https://i.scdn.co/art.jpg',
+        );
+        expect(queueCoverUrl('http://192.168.1.10:1400', '/getaa?u=x')).to.equal('http://192.168.1.10:1400/getaa?u=x');
+    });
+
+    it('reads CurrentURI from GetMediaInfo', () => {
+        expect(
+            parseCurrentUri(
+                '<u:GetMediaInfoResponse><CurrentURI>x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9</CurrentURI></u:GetMediaInfoResponse>',
+            ),
+        ).to.equal('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9');
+        expect(parseCurrentUri('<CurrentURI>x-rincon-queue:RINCON_1#0</CurrentURI>')).to.equal(
+            'x-rincon-queue:RINCON_1#0',
+        );
+    });
+
+    it('reads the playlist parent from DIDL and ignores query noise in cache keys', () => {
+        expect(
+            didlParentId(
+                '<item id="00032020spotify%3atrack%3aabc" parentID="1006206cspotify%3aplaylist%3aXYZ">',
+            ),
+        ).to.equal('1006206cspotify:playlist:XYZ');
+        expect(
+            playContextKey('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9&flags=8300&sn=1'),
+        ).to.equal(playContextKey('x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9'));
+        expect(isRinconPlaylistUri('x-rincon-playlist:RINCON_1#Share/Rock.m3u')).to.be.true;
+    });
+
+    it('builds a fallback list from current and next metadata', () => {
+        expect(
+            nowPlayingQueueEntries(
+                { title: 'Now', artist: 'A', albumArtUri: '/a' },
+                { title: 'Later', artist: 'B', albumArtUri: '/b' },
+            ),
+        ).to.deep.equal([
+            { title: 'Now', artist: 'A', album: '', albumArtUri: '/a' },
+            { title: 'Later', artist: 'B', album: '', albumArtUri: '/b' },
+        ]);
+        expect(nowPlayingQueueEntries({ title: 'Only' }, { title: 'Only' })).to.have.length(1);
+        expect(queueContainsTrack([{ title: 'Now', artist: 'A' }], { title: 'Now', artist: 'A' })).to.be.true;
+        expect(queueContainsTrack([{ title: 'Now', artist: 'A' }], { title: 'Other', artist: 'A' })).to.be.false;
+    });
+});
+
+const { resumeFromPlayer } = require('../build/lib/quickstart');
+
+describe('quickstart: resumeFromPlayer', () => {
+    it('does not keep HDMI as the resume URI after a playlist or song starts', () => {
+        const hdmi = `x-sonos-htastream:${UUID}:spdif`;
+        const playlist = 'x-rincon-cpcontainer:1006206cspotify%3aplaylist%3ax?sid=9';
+        const song = 'x-sonos-spotify:spotify%3atrack%3aabc';
+
+        expect(resumeFromPlayer({ transportUri: hdmi, state: { currentTrack: { uri: hdmi } } })).to.deep.equal({
+            uri: '',
+            metadata: '',
+            tv: true,
+        });
+        expect(resumeFromPlayer({ transportUri: playlist, state: { currentTrack: { uri: hdmi } } })).to.deep.include({
+            uri: playlist,
+            tv: false,
+        });
+        expect(resumeFromPlayer({ transportUri: hdmi, state: { currentTrack: { uri: song } } })).to.deep.include({
+            uri: song,
+            tv: false,
+        });
+    });
+});

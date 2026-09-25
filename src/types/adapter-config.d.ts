@@ -12,6 +12,13 @@ declare namespace ioBroker {
     }
 
     interface AdapterConfig {
+        /**
+         * Which client library talks to the speakers.
+         *
+         * `discovery` is the long-standing one, `svrooij` the maintained replacement. The
+         * setting exists so that a tester can switch back without downgrading the adapter.
+         */
+        backend?: 'discovery' | 'svrooij';
         /** Interval in ms, how often the elapsed time will be updated while playing */
         elapsedInterval: number;
         /** Fade in time in ms. The values are read from the admin as string */
@@ -24,5 +31,17 @@ declare namespace ioBroker {
         webserverPort?: number;
         /** Configured sonos devices */
         devices: SonosDeviceConfig[];
+        /** Eight VIS widget shortcuts (also stored in the instance state `quickstarts`) */
+        quickstarts?: Array<{
+            title?: string;
+            artist?: string;
+            album?: string;
+            station?: string;
+            cover?: string;
+            uri?: string;
+            metadata?: string;
+            favorite?: string;
+            tv?: boolean;
+        }>;
     }
 }

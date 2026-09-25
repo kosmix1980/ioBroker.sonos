@@ -22,6 +22,17 @@ export default [
         },
     },
     {
-        ignores: ['build/**/*', 'admin/**/*', 'test/**/*', 'widgets/**/*', '**/*.mjs'],
+        ignores: [
+            'build/**/*',
+            'admin/**/*',
+            'test/**/*',
+            'widgets/**/*',
+            'www/**/*',
+            // the three front-ends are built separately and have their own tsconfig
+            'src-widgets/**/*',
+            'src-admin/**/*',
+            'src-devices/**/*',
+            '**/*.mjs',
+        ],
     },
 ];
