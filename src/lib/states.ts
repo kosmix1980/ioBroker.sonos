@@ -277,6 +277,15 @@ export function getChannelStates(): Record<string, StateDefinition> {
             desc: 'Cover image of current played song',
             name: 'Current cover URL',
         },
+        current_art: {
+            def: '',
+            type: 'string',
+            read: true,
+            write: false,
+            role: 'media.cover',
+            desc: 'Stable cover file for shortcuts and recent (not the live now-playing image)',
+            name: 'Current art URL',
+        },
         current_duration: {
             // media.current.duration - duration as HH:MM:SS (read only)
             def: 0,
@@ -319,6 +328,24 @@ export function getChannelStates(): Record<string, StateDefinition> {
             role: 'media.station',
             desc: 'Radio station currently played',
             name: 'Current radio station',
+        },
+        current_uri: {
+            def: '',
+            type: 'string',
+            read: true,
+            write: false,
+            role: 'media.uri',
+            desc: 'URI that restores the current source (station, track or line-in)',
+            name: 'Current URI',
+        },
+        current_metadata: {
+            def: '',
+            type: 'string',
+            read: true,
+            write: false,
+            role: 'media',
+            desc: 'DIDL metadata for the current URI (SMAPI / radio)',
+            name: 'Current metadata',
         },
         current_track_number: {
             // media.trackNo -   current track number

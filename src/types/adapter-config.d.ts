@@ -24,5 +24,17 @@ declare namespace ioBroker {
         webserverPort?: number;
         /** Configured sonos devices */
         devices: SonosDeviceConfig[];
+        /** Eight VIS quick-start slots (edited in Admin; runtime lives in sonos.x.quickstarts) */
+        quickstarts?: Array<{
+            title?: string;
+            artist?: string;
+            album?: string;
+            station?: string;
+            cover?: string;
+            uri?: string;
+            metadata?: string;
+            favorite?: string;
+            tv?: boolean | string;
+        }>;
     }
 }

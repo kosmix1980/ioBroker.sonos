@@ -82,6 +82,10 @@ function tagRe(tag: string): string {
     return `(?:[\\w.-]+:)?${tag}`;
 }
 
+function hasTag(xml: string, tag: string): boolean {
+    return new RegExp(`<${tagRe(tag)}[\\s>/]`, 'i').test(xml);
+}
+
 function tagText(xml: string, tag: string): string {
     const name = tagRe(tag);
     const match = xml.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, 'i'));
@@ -295,7 +299,7 @@ function smapiEnvelope(
 }
 
 function extractFault(xml: string): { code: string; string: string; detail: string } | undefined {
-    if (!/<[\w.-:]*Fault[\s>/]/i.test(xml) && !/<[\w.-:]*faultcode[\s>/]/i.test(xml)) {
+    if (!hasTag(xml, 'Fault') && !hasTag(xml, 'faultcode')) {
         return undefined;
     }
     return {

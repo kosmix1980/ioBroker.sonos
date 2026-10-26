@@ -1,0 +1,2728 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ *      ioBroker Sonos Adapter
+ *      Copyright (c) 12'2013-2026 Bluefox <dogafox@gmail.com>
+ *      MIT License
+ *
+ *      derived from https://github.com/jishi/node-sonos-web-controller by Jimmy Shimizu
+ */
+const fs = __importStar(require("node:fs"));
+const http = __importStar(require("node:http"));
+const https = __importStar(require("node:https"));
+const crypto = __importStar(require("node:crypto"));
+const path = __importStar(require("node:path"));
+const utils = __importStar(require("@iobroker/adapter-core"));
+const sonos_discovery_1 = __importDefault(require("sonos-discovery"));
+const tts_1 = require("./lib/tts");
+const states_1 = require("./lib/states");
+const quickstart_1 = require("./lib/quickstart");
+const content_directory_1 = require("./lib/content-directory");
+const smapi_1 = require("./lib/smapi");
+const ytmusic_1 = require("./lib/ytmusic");
+const home_theater_1 = require("./lib/home-theater");
+const DEFAULT_IMAGE = `${__dirname}/../img/no-cover.png`;
+const TV_IMAGE = `${__dirname}/../img/tv-cover.png`;
+const RECENT_TRACKS_MAX = 25;
+/** Grouping URI used when a player is a slave (`x-rincon:RINCON_...`) */
+function isGroupingUri(uri) {
+    return /^x-rincon:RINCON_/i.test(String(uri || ''));
+}
+/** True if this player is in a group and is not the coordinator */
+function isGroupMember(player) {
+    return Boolean(player.coordinator && player.coordinator.uuid !== player.uuid);
+}
+function transportUri(player) {
+    return String(player.avTransportUri || player.state?.currentTrack?.uri || '');
+}
+/** HDMI / line-in start with SetAVTransportURI. Play/Pause/Seek return HTTP 500. */
+const TV_NO_TRANSPORT = new Set([
+    'play',
+    'pause',
+    'stop',
+    'next',
+    'prev',
+    'seek',
+    'current_elapsed',
+    'current_elapsed_s',
+    'current_track_number',
+    'shuffle',
+    'repeat',
+    'crossfade',
+    'state_simple',
+]);
+/**
+ * Convert seconds into "[h:]mm:ss"
+ *
+ * @param time time in seconds
+ */
+function toFormattedTime(time) {
+    const hours = Math.floor(time / 3600);
+    const min = Math.floor(time / 60) % 60;
+    const sec = time % 60;
+    return `${hours ? `${hours}:` : ''}${min < 10 ? `0${min}` : min}:${sec < 10 ? `0${sec}` : sec}`;
+}
+/**
+ * Find the ID of an enum (room) by its name
+ *
+ * @param enums rows of the enum object view
+ * @param name name of the room, reported by sonos
+ */
+function enumName2Id(enums, name) {
+    name = name.toLowerCase();
+    for (let e = 0; e < enums.length; e++) {
+        const common = enums[e]?.value?.common;
+        if (common?.name) {
+            if (typeof common.name === 'object') {
+                for (const lang in common.name) {
+                    if (common.name[lang]?.toLowerCase() === name) {
+                        return enums[e].id;
+                    }
+                }
+            }
+            else if (common.name.toLowerCase() === name) {
+                return enums[e].id;
+            }
+        }
+        // very old enums have the name directly in the object
+        const legacyName = enums[e]?.value?.name;
+        if (legacyName) {
+            if (typeof legacyName === 'object') {
+                for (const lang in legacyName) {
+                    if (legacyName[lang]?.toLowerCase() === name) {
+                        return enums[e].id;
+                    }
+                }
+            }
+            else if (legacyName.toLowerCase() === name) {
+                return enums[e].id;
+            }
+        }
+    }
+    return '';
+}
+/**
+ * Extract the IP address of a player out of its base URL
+ *
+ * @param player sonos player
+ * @param noReplace if true, the dots will not be replaced by underscores
+ */
+function getIp(player, noReplace) {
+    const m = player.baseUrl.match(/http:\/\/([.\d]+):?/);
+    if (m?.[1]) {
+        return noReplace ? m[1] : m[1].replace(/[.\s]+/g, '_');
+    }
+    return null;
+}
+/**
+ * Convert the sonos playback state into flags
+ *
+ * @param playbackState playback state, reported by sonos
+ */
+function getPlaybackState(playbackState) {
+    return {
+        playing: playbackState === 'PLAYING',
+        paused: playbackState === 'PAUSED_PLAYBACK',
+        transitioning: playbackState === 'TRANSITIONING',
+        stopped: playbackState === 'STOPPED',
+    };
+}
+class Sonos extends utils.Adapter {
+    /** IDs of all "alive" states, that must be set to false by unload */
+    aliveIds = [];
+    /** True after playlists were loaded at least once */
+    playlistsLoaded = false;
+    /** All known devices with the IP address (dots replaced by underscores) as key */
+    channels = {};
+    discovery = null;
+    smapi = null;
+    lastCover = {};
+    /** Per-image cover URL for recent/history (not the shared live current_cover path). */
+    lastStableCover = {};
+    lastTvFormat = {};
+    lastTvFormatFetch = {};
+    lastHistoryKey = {};
+    cacheDir = '';
+    currentFileNum = 0;
+    queues = {};
+    /** Last HTSatChanMapSet bonds (Arc + surrounds). Kept briefly if topology drops the map. */
+    htBonds = [];
+    htBondsSeenAt = 0;
+    htHealTimer = null;
+    htHealRetryTimer = null;
+    htRefreshTimer = null;
+    lastPositionInfo = {};
+    lastPlaybackHint = {};
+    /** Skip identical VIS-bound writes so the widget does not rebuild on every poll. */
+    lastWrittenVal = {};
+    writeCacheKey(id) {
+        if (typeof id === 'string') {
+            return id.startsWith(`${this.namespace}.`) ? id.slice(this.namespace.length + 1) : id;
+        }
+        return [id.device, id.channel, id.state].filter(Boolean).join('.');
+    }
+    async writeIfChanged(id, val, ack = true) {
+        const key = this.writeCacheKey(id);
+        const serialized = val === null || val === undefined ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        if (this.lastWrittenVal[key] === serialized) {
+            return;
+        }
+        this.lastWrittenVal[key] = serialized;
+        if (typeof id === 'string') {
+            await this.setState(id, { val, ack });
+            return;
+        }
+        await this.setState(id, { val, ack });
+    }
+    constructor(options = {}) {
+        super({
+            ...options,
+            name: 'sonos',
+            error: (err) => {
+                // Identify unhandled errors originating from callbacks in scripts
+                // These are not caught by wrapping the execution code in try-catch
+                if (err) {
+                    const errStr = err.toString();
+                    if (errStr.includes('EHOSTUNREACH') ||
+                        errStr.includes('ECONNRESET') ||
+                        errStr.includes('EAI_AGAIN')) {
+                        return true;
+                    }
+                }
+                return false;
+            },
+        });
+        this.on('ready', this.onReady.bind(this));
+        this.on('stateChange', this.onStateChange.bind(this));
+        this.on('message', this.onMessage.bind(this));
+        this.on('unload', this.onUnload.bind(this));
+    }
+    async onReady() {
+        try {
+            await this.clearLegacyBinaryStates();
+        }
+        catch (e) {
+            this.log.warn(`Could not clear legacy binary states: ${e.message}`);
+        }
+        // the "root" device object is created by js-controller from "instanceObjects" in io-package.json
+        await this.main();
+    }
+    onUnload(callback) {
+        try {
+            this.aliveIds.forEach(id => this.setState(id, false, true));
+            Object.keys(this.channels).forEach(ip => {
+                if (this.channels[ip]?.elapsedTimer) {
+                    clearInterval(this.channels[ip].elapsedTimer);
+                    this.channels[ip].elapsedTimer = null;
+                }
+                if (this.channels[ip]?.tvFormatTimer) {
+                    clearInterval(this.channels[ip].tvFormatTimer);
+                    this.channels[ip].tvFormatTimer = null;
+                }
+                if (this.channels[ip]?.timerVolume) {
+                    clearTimeout(this.channels[ip].timerVolume);
+                    this.channels[ip].timerVolume = null;
+                }
+                this.clearPlaybackRefresh(ip);
+            });
+            if (this.htHealTimer) {
+                clearTimeout(this.htHealTimer);
+                this.htHealTimer = null;
+            }
+            if (this.htHealRetryTimer) {
+                clearTimeout(this.htHealRetryTimer);
+                this.htHealRetryTimer = null;
+            }
+            if (this.htRefreshTimer) {
+                clearTimeout(this.htRefreshTimer);
+                this.htRefreshTimer = null;
+            }
+            this.log.info('terminating');
+            if (this.discovery) {
+                this.discovery.players?.forEach(player => {
+                    if (player.tts) {
+                        player.tts.destroy();
+                        player.tts = null;
+                    }
+                });
+                this.discovery.dispose();
+                this.discovery = null;
+            }
+            callback();
+        }
+        catch {
+            callback();
+        }
+    }
+    // id = sonos.0.192_168_1_55.state
+    onStateChange(_id, state) {
+        if (!state || state.ack) {
+            return;
+        }
+        if (_id === `${this.namespace}.quickstarts`) {
+            void this.stabilizeQuickstartCovers(String(state.val || ''));
+            return;
+        }
+        this.log.info(`try to control id ${_id} with ${JSON.stringify(state)}`);
+        // Try to find the object
+        const id = this.idToDCS(_id);
+        if (!id?.channel || !this.channels[id.channel]) {
+            return;
+        }
+        let value = state.val;
+        if (value === 'false') {
+            value = false;
+        }
+        if (value === 'true') {
+            value = true;
+        }
+        if (parseInt(value) === value) {
+            value = parseInt(value);
+        }
+        let player = this.channels[id.channel].player;
+        if (!player) {
+            player = this.discovery?.getPlayerByUUID(this.channels[id.channel].uuid) || null;
+            this.channels[id.channel].player = player;
+        }
+        if (!player) {
+            this.log.warn(`SONOS "${id.channel}"/"${this.channels[id.channel].uuid}" not found`);
+            this.discovery?.players.forEach(p => this.log.debug(`UUID: ${p.uuid} in ${p.roomName} / ${p.baseUrl}`));
+            return;
+        }
+        // Only grouped members send transport to the master. A standalone room
+        // (or the group coordinator itself) always controls its own playback.
+        const media = isGroupMember(player) && player.coordinator ? player.coordinator : player;
+        const mediaIp = getIp(media) || id.channel;
+        const onTv = (0, content_directory_1.isTvStreamUri)(transportUri(media)) || (0, content_directory_1.isTvStreamUri)(transportUri(player));
+        if (onTv && TV_NO_TRANSPORT.has(id.state)) {
+            this.log.debug(`Ignore ${id.state} on ${id.channel}: TV HDMI has no transport control`);
+            return;
+        }
+        if (onTv && id.state === 'state') {
+            const action = String(value || '').toLowerCase();
+            if (['play', 'pause', 'stop', 'next', 'previous'].includes(action)) {
+                this.log.debug(`Ignore state=${action} on ${id.channel}: TV HDMI has no transport control`);
+                return;
+            }
+        }
+        let promise;
+        if (id.state === 'state_simple') {
+            promise = value ? media.play() : media.pause();
+        }
+        else if (id.state === 'current_track_number') {
+            promise = media.trackSeek(value);
+        }
+        else if (id.state === 'shuffle') {
+            promise = media.shuffle(!!value);
+        }
+        else if (id.state === 'crossfade') {
+            promise = media.crossfade(!!value);
+        }
+        else if (id.state === 'repeat') {
+            if (value === 0 || value === '0') {
+                promise = media.repeat('none');
+            }
+            else if (value === 1 || value === '1') {
+                promise = media.repeat('all');
+            }
+            else if (value === 2 || value === '2') {
+                promise = media.repeat('one');
+            }
+            else {
+                promise = media.repeat(value);
+            }
+        }
+        else if (id.state === 'play') {
+            if (value) {
+                promise = media.play();
+            }
+        }
+        else if (id.state === 'stop') {
+            if (value) {
+                promise = media.pause();
+            }
+        }
+        else if (id.state === 'pause') {
+            if (value) {
+                promise = media.pause();
+            }
+        }
+        else if (id.state === 'next') {
+            if (value) {
+                promise = media.nextTrack();
+            }
+        }
+        else if (id.state === 'prev') {
+            if (value) {
+                promise = media.previousTrack();
+            }
+        }
+        else if (id.state === 'seek') {
+            let percent = parseFloat(value);
+            if (percent < 0) {
+                percent = 0;
+            }
+            if (percent > 100) {
+                percent = 100;
+            }
+            const duration = this.channels[mediaIp]?.duration || this.channels[id.channel].duration;
+            promise = media.timeSeek(Math.round((duration * percent) / 100));
+        }
+        else if (id.state === 'current_elapsed') {
+            promise = media.timeSeek(parseInt(value, 10));
+        }
+        else if (id.state === 'current_elapsed_s') {
+            const parts = value.toString().split(':');
+            let seconds;
+            if (parts.length === 3) {
+                seconds = parseInt(parts[0]) * 3600;
+                seconds += parseInt(parts[1]) * 60;
+                seconds = parseInt(parts[2]);
+            }
+            else if (parts.length === 2) {
+                seconds = parseInt(parts[0]) * 60;
+                seconds += parseInt(parts[1]);
+            }
+            else if (parts.length === 1) {
+                seconds = parseInt(parts[0]);
+            }
+            else {
+                this.log.error(`Invalid elapsed time: ${value}`);
+                return;
+            }
+            promise = media.timeSeek(seconds);
+        }
+        else if (id.state === 'muted') {
+            promise = value ? player.mute() : player.unMute();
+        }
+        else if (id.state === 'volume') {
+            promise = player.setVolume(value);
+        }
+        else if (id.state === 'treble') {
+            promise = player.setTreble(value);
+        }
+        else if (id.state === 'bass') {
+            promise = player.setBass(value);
+        }
+        else if (id.state === 'night_mode') {
+            promise = player.nightMode(!!value);
+        }
+        else if (id.state === 'speech_enhancement') {
+            promise = player.speechEnhancement(!!value);
+        }
+        else if (id.state === 'state') {
+            // stop, play, pause, next, previous, mute, unmute
+            if (value && typeof value === 'string') {
+                switch (value.toLowerCase()) {
+                    case 'stop':
+                        promise = media.pause();
+                        break;
+                    case 'play':
+                        promise = media.play();
+                        break;
+                    case 'pause':
+                        promise = media.pause();
+                        break;
+                    case 'next':
+                        promise = media.nextTrack();
+                        break;
+                    case 'previous':
+                        promise = media.previousTrack();
+                        break;
+                    case 'mute':
+                        promise = player.mute();
+                        break;
+                    case 'unmute':
+                        promise = player.unMute();
+                        break;
+                    default:
+                        this.log.warn(`Unknown state: ${value}`);
+                        break;
+                }
+            }
+            else {
+                this.log.warn(`Invalid state: ${value}`);
+            }
+        }
+        else if (id.state === 'favorites_set') {
+            const favorite = (value || '').toString().trim();
+            if (!favorite) {
+                this.log.warn('favorites_set called without valid favorite name - ignored');
+            }
+            else {
+                promise = media
+                    .replaceWithFavorite(favorite)
+                    .then(() => media.play())
+                    .then(async () => {
+                    await this.setState({ device: 'root', channel: mediaIp, state: 'current_album' }, { val: favorite, ack: true });
+                    await this.setState({ device: 'root', channel: mediaIp, state: 'current_artist' }, { val: favorite, ack: true });
+                })
+                    .catch(error => this.log.error(`Cannot replaceWithFavorite: ${error}`));
+            }
+        }
+        else if (id.state === 'playlist_set') {
+            const playlist = (value || '').toString().trim();
+            if (!playlist) {
+                this.log.warn('playlist_set called without valid playlist name - ignored');
+            }
+            else {
+                promise = media
+                    .replaceWithPlaylist(playlist)
+                    .then(() => media.play())
+                    .then(async () => {
+                    await this.setState({ device: 'root', channel: mediaIp, state: 'current_album' }, { val: playlist, ack: true });
+                    await this.setState({ device: 'root', channel: mediaIp, state: 'current_artist' }, { val: playlist, ack: true });
+                })
+                    .catch(error => this.log.error(`Cannot replaceWithPlaylist: ${error}`));
+            }
+        }
+        else if (id.state === 'tts') {
+            this.log.debug(`Play TTS file ${value} on ${id.channel}`);
+            void this.text2speech(value, id.channel);
+        }
+        else if (id.state === 'add_to_group') {
+            promise = this.addToGroup(value, media);
+        }
+        else if (id.state === 'remove_from_group') {
+            promise = this.removeFromGroup(value, media);
+        }
+        else if (id.state === 'coordinator') {
+            if (value === id.channel) {
+                promise = player.becomeCoordinatorOfStandaloneGroup().then(() => this.scheduleHomeTheaterHeal());
+            }
+            else {
+                const coordinator = this.resolveGroupPlayer(value);
+                promise = coordinator
+                    ? player.setAVTransport(`x-rincon:${coordinator.uuid}`).then(() => this.scheduleHomeTheaterHeal())
+                    : Promise.reject(new Error(`Player "${value}" not found`));
+            }
+        }
+        else if (id.state === 'group_volume') {
+            try {
+                promise = media.setGroupVolume(value);
+            }
+            catch (err) {
+                this.log.warn(`Cannot set group volume: ${err}`);
+            }
+        }
+        else if (id.state === 'group_muted') {
+            promise = value ? media.muteGroup() : media.unMuteGroup();
+        }
+        else if (id.state === 'play_uri') {
+            const raw = value && typeof value === 'object' ? JSON.stringify(value) : String(value || '').trim();
+            if (raw && !isGroupingUri(raw)) {
+                promise = this.handleMediaPlay(media, raw.startsWith('{') ? raw : JSON.stringify({ uri: raw }), player);
+            }
+        }
+        else if (id.state === 'media_browse') {
+            promise = this.handleMediaBrowse(media, mediaIp, String(value || ''));
+        }
+        else if (id.state === 'media_play') {
+            promise = this.handleMediaPlay(media, String(value || ''), player);
+        }
+        else {
+            this.log.warn(`try to control unknown id ${JSON.stringify(id)}`);
+        }
+        promise
+            ?.then(() => this.log.debug(`command done: ${id.state} on ${id.channel}`))
+            .catch(e => this.log.error(`Cannot execute command ${id.state} on ${id.channel}: ${e}`));
+    }
+    // New message arrived. obj is array with current messages
+    onMessage(obj) {
+        if (!obj) {
+            return;
+        }
+        let wait = false;
+        switch (obj.command) {
+            case 'send':
+                if (obj.message) {
+                    void this.text2speech(obj.message);
+                }
+                break;
+            case 'browse':
+                if (obj.callback) {
+                    wait = true;
+                    this.browseDevices(obj).catch(e => this.log.error(`Cannot browse: ${e}`));
+                }
+                break;
+            case 'quickstartGet':
+                if (obj.callback) {
+                    wait = true;
+                    this.sendQuickstarts(obj).catch(e => this.log.error(`Cannot load quick starts: ${e}`));
+                }
+                break;
+            default:
+                this.log.warn(`Unknown command: ${obj.command}`);
+                break;
+        }
+        if (!wait && obj.callback) {
+            this.sendTo(obj.from, obj.command, obj.message, obj.callback);
+        }
+    }
+    /** Merge the devices, found by the discovery, into the configured devices and answer the message */
+    async browseDevices(obj) {
+        const list = this.browse();
+        // get all rooms
+        const rooms = await this.getObjectViewAsync('system', 'enum', {
+            startkey: 'enum.rooms.',
+            endkey: 'enum.rooms.香',
+        });
+        // merge data together
+        let message = { devices: [] };
+        if (obj.message) {
+            if (typeof obj.message === 'object') {
+                message = obj.message;
+            }
+            else {
+                try {
+                    message = JSON.parse(obj.message);
+                }
+                catch {
+                    // ignore
+                    message = { devices: [] };
+                }
+            }
+        }
+        const devices = message.devices || [];
+        // merge devices
+        list.forEach(item => {
+            if (item.ip && !devices.find(it => it.ip === item.ip)) {
+                devices.push({
+                    name: item.roomName,
+                    room: enumName2Id(rooms.rows, item.roomName),
+                    ip: item.ip,
+                });
+            }
+        });
+        this.sendTo(obj.from, obj.command, { native: { devices } }, obj.callback);
+    }
+    async sendQuickstarts(obj) {
+        const current = await this.getStateAsync('quickstarts');
+        this.sendTo(obj.from, obj.command, { native: { quickstarts: (0, quickstart_1.parseQuickstarts)(current?.val) } }, obj.callback);
+    }
+    /** Instance state `quickstarts` is the runtime source. Non-empty Admin config overwrites it after save. */
+    async ensureQuickstarts() {
+        await this.setObjectNotExistsAsync('quickstarts', {
+            type: 'state',
+            common: {
+                name: 'Quick start buttons',
+                type: 'string',
+                role: 'json',
+                read: true,
+                write: true,
+                desc: 'JSON array of 8 VIS quick-start slots',
+            },
+            native: {},
+        });
+        const fromNative = (0, quickstart_1.parseQuickstarts)(this.config.quickstarts);
+        const current = await this.getStateAsync('quickstarts');
+        const fromState = (0, quickstart_1.parseQuickstarts)(current?.val);
+        const slots = (0, quickstart_1.anySlotFilled)(fromNative)
+            ? fromNative.map((slot, index) => {
+                const prev = fromState[index];
+                if (prev && slot.uri && slot.uri === prev.uri) {
+                    return {
+                        ...slot,
+                        metadata: slot.metadata || prev.metadata,
+                        cover: slot.cover || prev.cover,
+                        album: slot.album || prev.album,
+                        station: slot.station || prev.station,
+                    };
+                }
+                return slot;
+            })
+            : fromState;
+        await this.setStateAsync('quickstarts', JSON.stringify(slots), true);
+        await this.stabilizeQuickstartCovers();
+    }
+    /** Live now-playing covers would make every shortcut show the same image. */
+    async stabilizeQuickstartCovers(raw) {
+        const current = raw !== undefined ? raw : String((await this.getStateAsync('quickstarts'))?.val || '');
+        const slots = (0, quickstart_1.parseQuickstarts)(current);
+        let changed = false;
+        const next = slots.map(slot => {
+            if (!this.isSharedLiveCover(slot.cover)) {
+                return slot;
+            }
+            changed = true;
+            return { ...slot, cover: '' };
+        });
+        if (changed) {
+            await this.setStateAsync('quickstarts', JSON.stringify(next), true);
+        }
+    }
+    /** Get all devices, that are currently known by the discovery */
+    browse() {
+        const result = [];
+        this.discovery?.players.forEach(player => result.push({
+            roomName: player.roomName,
+            ip: getIp(player, true),
+        }));
+        return result;
+    }
+    /** Clear legacy binary states, as we migrated to files */
+    async clearLegacyBinaryStates() {
+        const coverStates = await this.getStatesAsync('*.cover_png');
+        const ttsStates = await this.getStatesAsync('TTS.tts*');
+        for (const id of [...Object.keys(coverStates), ...Object.keys(ttsStates)]) {
+            await this.delObjectAsync(id);
+        }
+    }
+    async createSonosChannel(name, ip, room) {
+        const states = (0, states_1.getChannelStates)();
+        const id = ip.replace(/[.\s]+/g, '_');
+        const obj = await this.createChannelAsync('root', id, {
+            role: 'media.music',
+            name: name || ip,
+        }, {
+            ip,
+        });
+        if (room) {
+            await this.addChannelToEnumAsync('room', room, 'root', id);
+        }
+        for (const state of Object.keys(states)) {
+            await this.createStateAsync('root', id, state, states[state]);
+        }
+        return obj;
+    }
+    /**
+     * Create the states of a channel, that do not exist: e.g. if they were deleted manually
+     * or if they were added in a newer version of the adapter
+     *
+     * @param id ID of the channel (IP address with underscores)
+     */
+    async checkChannelStates(id) {
+        let existingStates;
+        try {
+            existingStates = await this.getStatesOfAsync('root', id);
+        }
+        catch (err) {
+            this.log.error(`Cannot read states of root.${id}: ${err.message}`);
+            return;
+        }
+        const prefix = `${this.namespace}.root.${id}.`;
+        const existingIds = (existingStates || []).map(obj => obj._id.substring(prefix.length));
+        const states = (0, states_1.getChannelStates)();
+        const missingIds = Object.keys(states).filter(state => !existingIds.includes(state));
+        if (missingIds.length) {
+            this.log.info(`Create missing states of root.${id}: ${missingIds.join(', ')}`);
+            for (const state of missingIds) {
+                await this.createStateAsync('root', id, state, states[state]);
+            }
+        }
+    }
+    async syncConfig() {
+        this.channels = {};
+        const devices = await this.getDevicesAsync();
+        this.log.debug(`Initialize known devices: ${JSON.stringify(devices)}`);
+        if (!devices?.length) {
+            for (const device of this.config.devices || []) {
+                if (!device.ip) {
+                    continue;
+                }
+                const obj = await this.createSonosChannel(device.name, device.ip, device.room);
+                const _obj = await this.getObjectAsync(obj.id);
+                if (_obj) {
+                    this.channels[_obj.native.ip.replace(/[.\s]+/g, '_')] = {
+                        uuid: '',
+                        player: null,
+                        duration: 0,
+                        elapsed: 0,
+                        obj: _obj,
+                    };
+                }
+            }
+            return;
+        }
+        // Go through all devices
+        for (const device of devices) {
+            const _channels = await this.getChannelsOfAsync(device.common.name);
+            const configToDelete = [];
+            const configToAdd = (this.config.devices || []).map(item => item.ip);
+            if (_channels) {
+                this.log.debug(`Channels of ${device.common.name}: ${JSON.stringify(_channels)}`);
+                for (const channel of _channels) {
+                    this.log.debug(`Process channel: ${channel._id}`);
+                    const ip = channel.native.ip;
+                    const id = ip.replace(/[.\s]+/g, '_');
+                    const pos = configToAdd.indexOf(ip);
+                    if (pos === -1) {
+                        configToDelete.push(ip);
+                        continue;
+                    }
+                    // the channel exists, but some of its states could be missing
+                    await this.checkChannelStates(id);
+                    configToAdd.splice(pos, 1);
+                    // Check name and room
+                    for (const configDevice of this.config.devices || []) {
+                        if (configDevice.ip !== ip) {
+                            continue;
+                        }
+                        if (channel.common.name !== (configDevice.name || configDevice.ip)) {
+                            await this.extendObjectAsync(channel._id, {
+                                common: {
+                                    name: configDevice.name || configDevice.ip,
+                                },
+                                type: 'channel',
+                            });
+                        }
+                        if (configDevice.room) {
+                            // BF 2021.12.20: there is an error in js-controller 3.3
+                            this.addChannelToEnum('room', configDevice.room, 'root', id);
+                            // When js-controller 4.x will be common, replace it with
+                            // await this.addChannelToEnumAsync('room', configDevice.room, 'root', id);
+                        }
+                        else {
+                            try {
+                                await this.deleteChannelFromEnumAsync('room', 'root', id);
+                            }
+                            catch (err) {
+                                this.log.error(`Cannot delete channel from enum: ${err.message}`);
+                            }
+                        }
+                    }
+                    this.channels[id] = {
+                        uuid: '',
+                        player: null,
+                        duration: 0,
+                        elapsed: 0,
+                        obj: channel,
+                    };
+                    await this.setState(`root.${id}.alive`, false, true);
+                    this.aliveIds.push(`root.${id}.alive`);
+                }
+            }
+            for (const configDevice of this.config.devices || []) {
+                if (configDevice.ip && configToAdd.includes(configDevice.ip)) {
+                    const obj = await this.createSonosChannel(configDevice.name, configDevice.ip, configDevice.room);
+                    const _obj = await this.getObjectAsync(obj.id);
+                    if (_obj) {
+                        const sId = _obj.native.ip.replace(/[.\s]+/g, '_');
+                        this.aliveIds.push(`root.${sId}.alive`);
+                        this.channels[sId] = {
+                            uuid: '',
+                            player: null,
+                            duration: 0,
+                            elapsed: 0,
+                            obj: _obj,
+                        };
+                    }
+                }
+            }
+            for (const ip of configToDelete) {
+                if (ip) {
+                    const _id = ip.replace(/[.\s]+/g, '_');
+                    await this.deleteChannelFromEnumAsync('room', 'root', _id);
+                    await this.deleteChannelAsync('root', _id);
+                }
+            }
+        }
+    }
+    async text2speech(fileName, sonosIp) {
+        // Extract volume
+        let volume = null;
+        fileName = String(fileName ?? '');
+        const pos = fileName.indexOf(';');
+        if (pos !== -1) {
+            volume = fileName.substring(0, pos);
+            fileName = fileName.substring(pos + 1);
+        }
+        fileName = fileName.trim();
+        if (sonosIp) {
+            sonosIp = sonosIp.replace(/[.\s]+/g, '_');
+        }
+        if (!fileName) {
+            // an empty value stops the running announcement
+            this.log.debug('Stop TTS');
+            this.stopTTS(sonosIp);
+            return;
+        }
+        // play http/https urls directly on sonos device
+        if (fileName.match(/^https?:\/\//)) {
+            this.playOnAllPlayers(fileName, sonosIp, volume);
+            return;
+        }
+        if (!this.config.webServer) {
+            this.log.warn('Web server must be enabled to play local TTS files');
+            return;
+        }
+        const parts = fileName.split('.');
+        const dest = `tts${this.currentFileNum++}.${parts.pop()}`;
+        if (this.currentFileNum > 10) {
+            this.currentFileNum = 0;
+        }
+        const id = `/TTS/${this.namespace}/${dest}`;
+        // Upload this file to objects DB
+        try {
+            const data = fs.readFileSync(fileName);
+            await this.writeFileAsync(this.name, id, data);
+            const obj = await this.getForeignObjectAsync(this.config.webServer);
+            if (obj?.native && this.discovery) {
+                const url = `http${obj.native.secure ? 's' : ''}://${this.discovery.localEndpoint}:${obj.native.port}/files/${this.name}${id}`;
+                this.playOnAllPlayers(url, sonosIp, volume);
+            }
+        }
+        catch (e) {
+            this.log.error(`Cannot play ${fileName}: ${e.message || e}`);
+        }
+    }
+    /**
+     * Execute a callback for one specific player or for all players
+     *
+     * @param sonosIp IP address (with underscores) of one player or undefined for all players
+     * @param callback function, that will be called for every matching player
+     */
+    forEachPlayer(sonosIp, callback) {
+        if (!this.discovery) {
+            return;
+        }
+        for (const player of this.discovery.players) {
+            player._address = player._address || getIp(player);
+            if (sonosIp && player._address !== sonosIp) {
+                continue;
+            }
+            callback(player);
+        }
+    }
+    /**
+     * Play an URI on all players or on one specific player
+     *
+     * @param uri URI of the file to play
+     * @param sonosIp IP address (with underscores) of one player or undefined for all players
+     * @param volume volume to play with
+     */
+    playOnAllPlayers(uri, sonosIp, volume) {
+        this.forEachPlayer(sonosIp, player => setTimeout(() => this.playOnSonos(uri, player.uuid, volume), 100));
+    }
+    /**
+     * Stop the running announcement on all players or on one specific player
+     *
+     * @param sonosIp IP address (with underscores) of one player or undefined for all players
+     */
+    stopTTS(sonosIp) {
+        this.forEachPlayer(sonosIp, player => player.tts?.immediatelyStopTTS());
+    }
+    playOnSonos(uri, sonosUuid, volume) {
+        const player = this.discovery?.getPlayerByUUID(sonosUuid);
+        if (!player) {
+            return;
+        }
+        player.tts = player.tts || new tts_1.TTS(this, player);
+        player.tts.add(uri, volume);
+    }
+    //////////////////
+    // Group management
+    getPlayerByName(name) {
+        return this.discovery?.players.find(player => player.roomName === name || getIp(player) === name || player._address === name || player.uuid === name);
+    }
+    /** HT satellites are bonded to the soundbar; group the primary instead. */
+    resolveGroupPlayer(name) {
+        const player = typeof name === 'string' ? this.getPlayerByName(name) : name;
+        if (!player) {
+            return undefined;
+        }
+        const bond = (0, home_theater_1.findHomeTheaterBond)(this.htBonds, player.uuid) || (0, home_theater_1.findHomeTheaterBond)(this.htBonds, getIp(player) || '');
+        if (bond && (0, home_theater_1.isHomeTheaterSatellite)(this.htBonds, player.uuid)) {
+            return this.discovery?.getPlayerByUUID(bond.primaryUuid) || player;
+        }
+        return player;
+    }
+    async ensureHomeTheaterState() {
+        await this.setObjectNotExistsAsync('home_theater', {
+            type: 'state',
+            common: {
+                name: 'Home theater bonds',
+                type: 'string',
+                role: 'json',
+                read: true,
+                write: false,
+                desc: 'Soundbar and bonded surround IPs (HTSatChanMapSet)',
+            },
+            native: {},
+        });
+        await this.writeIfChanged('home_theater', (0, home_theater_1.homeTheaterStateJson)(this.htBonds), true);
+    }
+    scheduleHomeTheaterRefresh() {
+        if (this.htRefreshTimer) {
+            clearTimeout(this.htRefreshTimer);
+        }
+        this.htRefreshTimer = setTimeout(() => {
+            this.htRefreshTimer = null;
+            void this.refreshHomeTheaterBonds();
+        }, 400);
+    }
+    /** After grouping, topology settles late and satellites often stay muted. */
+    scheduleHomeTheaterHeal() {
+        this.scheduleHomeTheaterRefresh();
+        if (this.htHealTimer) {
+            clearTimeout(this.htHealTimer);
+        }
+        if (this.htHealRetryTimer) {
+            clearTimeout(this.htHealRetryTimer);
+        }
+        this.htHealTimer = setTimeout(() => {
+            this.htHealTimer = null;
+            void this.healHomeTheaterBonds();
+        }, 900);
+        this.htHealRetryTimer = setTimeout(() => {
+            this.htHealRetryTimer = null;
+            void this.healHomeTheaterBonds();
+        }, 2800);
+    }
+    async refreshHomeTheaterBonds() {
+        const player = this.discovery?.players?.find(item => item?.baseUrl);
+        if (!player) {
+            return;
+        }
+        try {
+            const xml = await (0, home_theater_1.soapGetZoneGroupState)(player.baseUrl);
+            const fresh = (0, home_theater_1.parseHomeTheaterBonds)(xml);
+            const next = (0, home_theater_1.rememberHomeTheaterBonds)(this.htBonds, fresh, this.htBondsSeenAt);
+            this.htBonds = next.bonds;
+            this.htBondsSeenAt = next.seenAt;
+            await this.writeIfChanged('home_theater', (0, home_theater_1.homeTheaterStateJson)(this.htBonds), true);
+        }
+        catch (err) {
+            this.log.debug(`Cannot read home theater topology: ${err}`);
+        }
+    }
+    async healHomeTheaterBonds() {
+        await this.refreshHomeTheaterBonds();
+        for (const bond of this.htBonds) {
+            try {
+                await (0, home_theater_1.unmuteHomeTheaterBond)(bond);
+                for (const sat of bond.satellites) {
+                    const satellite = this.discovery?.getPlayerByUUID(sat.uuid);
+                    if (satellite) {
+                        await satellite.unMute().catch(() => undefined);
+                    }
+                }
+                this.log.debug(`Restored home theater speakers for ${bond.primaryUuid}`);
+            }
+            catch (err) {
+                this.log.debug(`Cannot restore home theater speakers: ${err}`);
+            }
+        }
+    }
+    async addToGroup(playerNameToAdd, coordinator) {
+        const coordinatorPlayer = this.resolveGroupPlayer(coordinator);
+        const playerToAdd = this.resolveGroupPlayer(playerNameToAdd);
+        if (!coordinatorPlayer || !playerToAdd) {
+            return Promise.reject(new Error(`Cannot add "${playerNameToAdd}" to group: player not found`));
+        }
+        if (coordinatorPlayer.uuid === playerToAdd.uuid) {
+            this.scheduleHomeTheaterHeal();
+            return;
+        }
+        await playerToAdd.setAVTransport(`x-rincon:${coordinatorPlayer.uuid}`);
+        this.scheduleHomeTheaterHeal();
+    }
+    async removeFromGroup(leavingName, coordinator) {
+        const coordinatorPlayer = this.resolveGroupPlayer(coordinator);
+        const leavingPlayer = this.resolveGroupPlayer(leavingName);
+        if (!coordinatorPlayer || !leavingPlayer) {
+            return Promise.reject(new Error(`Cannot remove "${leavingName}" from group: player not found`));
+        }
+        if (leavingPlayer.uuid === coordinatorPlayer.uuid) {
+            this.scheduleHomeTheaterHeal();
+            return;
+        }
+        if (leavingPlayer.coordinator === coordinatorPlayer) {
+            await leavingPlayer.becomeCoordinatorOfStandaloneGroup();
+            this.scheduleHomeTheaterHeal();
+            return;
+        }
+        if (coordinatorPlayer.coordinator === leavingPlayer) {
+            await coordinatorPlayer.becomeCoordinatorOfStandaloneGroup();
+            this.scheduleHomeTheaterHeal();
+            return;
+        }
+        this.scheduleHomeTheaterHeal();
+    }
+    // State of sonos device was changed
+    async takeSonosState(ip, sonosState) {
+        await this.setState({ device: 'root', channel: ip, state: 'alive' }, { val: true, ack: true });
+        const player = this.discovery?.getPlayerByUUID(this.channels[ip].uuid);
+        if (!player) {
+            this.log.debug(`Cannot find player for ${ip}`);
+            return;
+        }
+        const ps = getPlaybackState(sonosState.playbackState);
+        const playMode = sonosState.playMode;
+        this.log.debug(`>  playbackState: ${sonosState.playbackState} - ${sonosState.currentTrack?.title || ''}`);
+        const stableState = !ps.transitioning;
+        // If some stable state
+        if (stableState) {
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'state_simple' }, ps.playing);
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'state' }, ps.paused ? 'pause' : ps.playing ? 'play' : 'stop');
+            // if duration is 0 (type is radio):
+            // - no changes expected and a state update is not necessary!
+            // - division by 0
+            const keepElapsed = this.channels[ip].duration > 0 ||
+                Boolean(this.lastPlaybackHint[ip] &&
+                    Date.now() - this.lastPlaybackHint[ip].at < 15000 &&
+                    this.lastPlaybackHint[ip].duration);
+            if (ps.playing && keepElapsed) {
+                if (!this.channels[ip].elapsedTimer) {
+                    this.channels[ip].elapsedTimer = setInterval(() => this.updateElapsed(ip), this.config.elapsedInterval || 5000);
+                }
+            }
+            else if (this.channels[ip].elapsedTimer) {
+                clearInterval(this.channels[ip].elapsedTimer);
+                this.channels[ip].elapsedTimer = null;
+            }
+        }
+        // [hraab]
+        // type: radio|track|line_in
+        // when radio:
+        //   radioShowMetaData (current show, contains an id separated by comma)
+        //   streamInfo (kind of currently played title and artist info)
+        //   title (== station)
+        //
+        // Still work to do:
+        // - Tracks w/o Album name keeps album name from previous track or some random album.
+        //   Don't know if this is already wrong from SONOS API.
+        const meta = typeof player.avTransportUriMetadata === 'string' ? player.avTransportUriMetadata : '';
+        let playing = this.playbackDisplay(sonosState, meta, transportUri(player));
+        const hint = this.lastPlaybackHint[ip];
+        const hintFresh = Boolean(hint && Date.now() - hint.at < 15000);
+        if (hintFresh && hint) {
+            if (!playing.title) {
+                playing = {
+                    type: 0,
+                    title: hint.title,
+                    artist: hint.artist || playing.artist,
+                    album: hint.album || playing.album,
+                    station: '',
+                };
+            }
+            else if (playing.type === 1 &&
+                (hint.duration > 0 || hint.artist || (0, content_directory_1.shouldPlayAsTrack)(hint.uri, hint.metadata, hint))) {
+                playing = {
+                    type: 0,
+                    title: hint.title || playing.title,
+                    artist: hint.artist || playing.artist,
+                    album: hint.album || playing.album,
+                    station: '',
+                };
+            }
+        }
+        if ((0, content_directory_1.isTvStreamUri)(sonosState.currentTrack.uri)) {
+            const format = await this.resolveTvFormat(player, sonosState.currentTrack, meta);
+            playing = { ...playing, artist: format };
+            this.startTvFormatWatch(ip);
+        }
+        else {
+            this.stopTvFormatWatch(ip);
+            delete this.lastTvFormat[player.uuid];
+            delete this.lastTvFormatFetch[player.uuid];
+        }
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_type' }, playing.type);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_station' }, playing.station);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_title' }, playing.title);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_album' }, playing.album);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_artist' }, playing.artist);
+        const resume = (0, quickstart_1.resumeFromPlayer)(player);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_uri' }, resume.uri);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_metadata' }, resume.metadata);
+        // elapsed time
+        let duration = Number(sonosState.currentTrack.duration) || 0;
+        if (!duration && hintFresh && hint?.duration) {
+            duration = hint.duration;
+        }
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_duration' }, duration);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_duration_s' }, toFormattedTime(duration));
+        // Track number
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_track_number' }, sonosState.trackNo);
+        // Update html-queue: highlight current track
+        if (player._address) {
+            await this.updateHtmlQueue(player._address, sonosState.trackNo);
+        }
+        const tvCover = (0, content_directory_1.isTvStreamUri)(sonosState.currentTrack.uri);
+        let albumArt = tvCover ? '' : await this.resolveAlbumArt(player, sonosState, meta);
+        if (!albumArt && hintFresh && hint?.cover && !this.isSharedLiveCover(hint.cover)) {
+            albumArt = hint.cover;
+        }
+        const coverKey = tvCover ? 'tv' : `${albumArt}|${playing.station}|${transportUri(player)}`;
+        if (this.lastCover[ip] !== coverKey) {
+            if (tvCover) {
+                await this.syncCoverFileToStorage(TV_IMAGE, ip);
+            }
+            else if (albumArt && /(?:^|\/)coverImage\/art\//i.test(albumArt)) {
+                this.lastStableCover[ip] = albumArt;
+                await this.setState({ device: 'root', channel: ip, state: 'current_art' }, { val: albumArt, ack: true });
+            }
+            else {
+                await this.updateCover(ip, albumArt);
+            }
+            this.lastCover[ip] = coverKey || null;
+            await this.repairRecentCovers(ip);
+            await this.stampRecentCover(ip, playing.title, playing.artist, this.lastStableCover[ip] || albumArt);
+        }
+        this.channels[ip].elapsed = sonosState.elapsedTime;
+        this.channels[ip].duration = duration;
+        // only if duration !== 0, see above
+        if (this.channels[ip].duration > 0) {
+            await this.setState({ device: 'root', channel: ip, state: 'current_elapsed' }, { val: sonosState.elapsedTime, ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'seek' }, {
+                val: Math.round((this.channels[ip].elapsed / this.channels[ip].duration) * 1000) / 10,
+                ack: true,
+            });
+            await this.setState({ device: 'root', channel: ip, state: 'current_elapsed_s' }, { val: sonosState.elapsedTimeFormatted, ack: true });
+        }
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'volume' }, sonosState.volume);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'night_mode' }, Boolean(sonosState.equalizer?.nightMode));
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'speech_enhancement' }, Boolean(sonosState.equalizer?.speechEnhancement));
+        if (sonosState.groupState) {
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'muted' }, sonosState.groupState.mute);
+        }
+        if (playMode) {
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'shuffle' }, playMode.shuffle);
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'repeat' }, playMode.repeat === 'all' ? 1 : playMode.repeat === 'one' ? 2 : 0);
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'crossfade' }, playMode.crossfade);
+        }
+        if (player.tts) {
+            if (stableState && (ps.paused || ps.stopped)) {
+                player.tts.playingEnded();
+            }
+            else if (ps.playing) {
+                player.tts.playingStarted();
+            }
+        }
+        const coverState = await this.getStateAsync(`root.${ip}.current_cover`);
+        const coverUrl = String(coverState?.val || '');
+        const isCoordinator = !player.coordinator || player.coordinator.uuid === player.uuid;
+        if (!player.tts && (isCoordinator || !isGroupingUri(sonosState.currentTrack.uri))) {
+            await this.appendRecentTrack(ip, sonosState, coverUrl);
+        }
+        if (isCoordinator && !player.tts) {
+            await this.copyPlaybackToGroupMembers(ip, sonosState, ps, coverUrl, playing);
+        }
+    }
+    playbackDisplay(sonosState, metadata, avUri) {
+        const track = sonosState.currentTrack;
+        const display = (0, content_directory_1.nowPlayingLabels)(track, { tv: 'TV', tvHdmi: 'HDMI', lineIn: 'Line-In' }, { metadata });
+        const uri = String(track.uri || '');
+        const transport = String(avUri || '');
+        const tv = (0, content_directory_1.isTvStreamUri)(uri) || (0, content_directory_1.isTvStreamUri)(transport);
+        const lineIn = (0, content_directory_1.isLineInStreamUri)(uri) || (0, content_directory_1.isLineInStreamUri)(transport) || track.type === 'line_in';
+        if (tv || lineIn) {
+            return { type: 2, ...display };
+        }
+        const onDemand = (0, content_directory_1.isOnDemandUri)(uri) || (0, content_directory_1.isOnDemandUri)(transport);
+        const radioUri = !onDemand &&
+            ((0, content_directory_1.isStreamUri)(uri) || (0, content_directory_1.isRadioLikeUri)(uri) || (0, content_directory_1.isStreamUri)(transport) || (0, content_directory_1.isRadioLikeUri)(transport));
+        const duration = Number(track.duration) || 0;
+        if (onDemand || (duration > 0 && track.type !== 'radio' && !radioUri)) {
+            return { type: 0, title: display.title, artist: display.artist, album: display.album, station: '' };
+        }
+        if (track.type === 'radio' || radioUri || (duration === 0 && Boolean(track.stationName) && !onDemand)) {
+            return {
+                type: 1,
+                title: display.title,
+                artist: display.artist,
+                album: display.album,
+                station: track.stationName || display.station,
+            };
+        }
+        return { type: 0, title: display.title, artist: display.artist, album: display.album, station: '' };
+    }
+    startTvFormatWatch(ip) {
+        const channel = this.channels[ip];
+        if (!channel || channel.tvFormatTimer) {
+            return;
+        }
+        channel.tvFormatTimer = setInterval(() => {
+            void this.refreshTvFormat(ip);
+        }, 2000);
+    }
+    stopTvFormatWatch(ip) {
+        const channel = this.channels[ip];
+        if (channel?.tvFormatTimer) {
+            clearInterval(channel.tvFormatTimer);
+            channel.tvFormatTimer = null;
+        }
+    }
+    async refreshTvFormat(ip) {
+        const channel = this.channels[ip];
+        const player = channel?.player || (channel?.uuid ? this.discovery?.getPlayerByUUID(channel.uuid) : undefined);
+        const uri = player ? transportUri(player) : '';
+        if (!player || !(0, content_directory_1.isTvStreamUri)(uri)) {
+            this.stopTvFormatWatch(ip);
+            return;
+        }
+        const meta = typeof player.avTransportUriMetadata === 'string' ? player.avTransportUriMetadata : '';
+        const format = await this.resolveTvFormat(player, player.state?.currentTrack || {}, meta);
+        const current = await this.getStateAsync(`root.${ip}.current_artist`);
+        if (String(current?.val || '') === format) {
+            return;
+        }
+        await this.setState({ device: 'root', channel: ip, state: 'current_artist' }, { val: format, ack: true });
+        for (const memberIp of this.getGroupMemberIps(ip)) {
+            if (memberIp === ip || !this.channels[memberIp]) {
+                continue;
+            }
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_artist' }, { val: format, ack: true });
+        }
+    }
+    async resolveTvFormat(player, track, metadata) {
+        const now = Date.now();
+        if ((this.lastTvFormatFetch[player.uuid] || 0) + 1500 > now &&
+            Object.prototype.hasOwnProperty.call(this.lastTvFormat, player.uuid)) {
+            return this.lastTvFormat[player.uuid];
+        }
+        this.lastTvFormatFetch[player.uuid] = now;
+        try {
+            const zoneXml = await (0, content_directory_1.soapGetZoneInfo)(player.baseUrl);
+            const code = (0, content_directory_1.parseHtAudioIn)(zoneXml);
+            if (code != null) {
+                if ((0, content_directory_1.isHtAudioSilent)(code)) {
+                    this.lastTvFormat[player.uuid] = '';
+                    return '';
+                }
+                const fromZone = (0, content_directory_1.htAudioInLabel)(code);
+                if (fromZone) {
+                    this.lastTvFormat[player.uuid] = fromZone;
+                    return fromZone;
+                }
+            }
+        }
+        catch (err) {
+            this.log.debug(`TV HTAudioIn: ${err}`);
+        }
+        const fromEvent = (0, content_directory_1.tvAudioFormat)(track.title) || (0, content_directory_1.tvAudioFormat)((0, content_directory_1.streamContentFromDidl)(metadata)) || (0, content_directory_1.tvAudioFormat)(track.artist);
+        try {
+            const xml = await (0, content_directory_1.soapGetPositionInfo)(player.baseUrl);
+            const format = (0, content_directory_1.tvAudioFormat)((0, content_directory_1.streamContentFromDidl)(xml)) || fromEvent;
+            this.lastTvFormat[player.uuid] = format || '';
+            return format || '';
+        }
+        catch (err) {
+            this.log.debug(`TV stream format: ${err}`);
+            return fromEvent || this.lastTvFormat[player.uuid] || '';
+        }
+    }
+    recentKey(sonosState, metadata, avUri) {
+        const playing = this.playbackDisplay(sonosState, metadata, avUri);
+        if (playing.type === 1) {
+            return `radio|${playing.station || playing.title}`;
+        }
+        return `${playing.title}|${playing.artist}|${playing.album}`;
+    }
+    /** Live now-playing file is overwritten; unique art lives under coverImage/art/. */
+    isSharedLiveCover(cover) {
+        return /(?:^|\/)coverImage\/(?!art\/)[^/?#]+\.png(?:\?|#|$)/i.test(String(cover || ''));
+    }
+    async favoriteArtMap() {
+        const arts = new Map();
+        if (!this.discovery) {
+            return arts;
+        }
+        try {
+            for (const fav of this.toFavoriteList(await this.discovery.getFavorites())) {
+                const title = String(fav.title || '')
+                    .trim()
+                    .toLowerCase();
+                if (title && fav.albumArtUri) {
+                    arts.set(title, fav.albumArtUri);
+                }
+            }
+        }
+        catch (err) {
+            this.log.debug(`Favorite art map: ${err}`);
+        }
+        return arts;
+    }
+    restoredRecentCover(item, arts) {
+        const cover = String(item.cover || '');
+        if (cover && !this.isSharedLiveCover(cover)) {
+            return cover;
+        }
+        const fromMeta = (0, content_directory_1.albumArtFromXml)(item.metadata);
+        if (fromMeta) {
+            return fromMeta;
+        }
+        const station = String(item.station || '')
+            .trim()
+            .toLowerCase();
+        const title = String(item.title || '')
+            .trim()
+            .toLowerCase();
+        return (station && arts.get(station)) || (title && arts.get(title)) || '';
+    }
+    async readRecentTracks(ip) {
+        const current = await this.getStateAsync(`root.${ip}.recent_tracks`);
+        if (Array.isArray(current?.val)) {
+            return current.val;
+        }
+        if (current?.val) {
+            try {
+                const parsed = JSON.parse(String(current.val));
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            }
+            catch {
+                return [];
+            }
+        }
+        return [];
+    }
+    async writeRecentTracks(ip, list) {
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'recent_tracks' }, JSON.stringify(list), true);
+    }
+    /**
+     * Old recent rows still point at the live now-playing file.
+     * Drop that path and restore station/track art from metadata or favorites.
+     */
+    async repairRecentCovers(ip, arts) {
+        const list = await this.readRecentTracks(ip);
+        const logos = arts || (await this.favoriteArtMap());
+        let changed = false;
+        const next = list.map(item => {
+            const cover = this.restoredRecentCover(item, logos);
+            if (cover === String(item.cover || '')) {
+                return item;
+            }
+            changed = true;
+            return { ...item, cover };
+        });
+        if (changed) {
+            await this.writeRecentTracks(ip, next);
+        }
+    }
+    async repairAllRecentCovers(arts) {
+        const logos = arts || (await this.favoriteArtMap());
+        for (const ip of Object.keys(this.channels)) {
+            await this.repairRecentCovers(ip, logos);
+        }
+    }
+    async appendRecentTrack(ip, sonosState, coverUrl) {
+        const player = this.channels[ip]?.player ||
+            (this.channels[ip]?.uuid ? this.discovery?.getPlayerByUUID(this.channels[ip].uuid) : undefined);
+        const meta = typeof player?.avTransportUriMetadata === 'string' ? player.avTransportUriMetadata : '';
+        const avUri = player ? transportUri(player) : '';
+        const playing = this.playbackDisplay(sonosState, meta, avUri);
+        const title = playing.title.trim();
+        const trackUri = String(sonosState.currentTrack.uri || '');
+        if (!title ||
+            !this.channels[ip] ||
+            isGroupingUri(trackUri) ||
+            (0, content_directory_1.isTvStreamUri)(trackUri) ||
+            (0, content_directory_1.isLineInStreamUri)(trackUri)) {
+            return;
+        }
+        const key = this.recentKey(sonosState, meta, avUri);
+        if (this.lastHistoryKey[ip] === key) {
+            return;
+        }
+        this.lastHistoryKey[ip] = key;
+        let list = await this.readRecentTracks(ip);
+        const resume = player ? (0, quickstart_1.resumeFromPlayer)(player) : { uri: trackUri, metadata: meta, tv: false };
+        const radio = playing.type === 1;
+        const position = player ? await this.peekPositionInfo(player) : undefined;
+        const rawArt = position?.cover || String(sonosState.currentTrack.albumArtUri || '');
+        const absoluteArt = rawArt && player && !/^https?:\/\//i.test(rawArt)
+            ? `${String(player.baseUrl || '').replace(/\/$/, '')}${rawArt.startsWith('/') ? '' : '/'}${rawArt}`
+            : rawArt;
+        const trackMeta = radio
+            ? resume.metadata || position?.metadata || ''
+            : (0, content_directory_1.trackDidl)({
+                title: playing.title,
+                artist: playing.artist,
+                album: playing.album,
+                uri: resume.uri || trackUri,
+                cover: absoluteArt,
+                durationSec: Number(sonosState.currentTrack.duration) || position?.duration || 0,
+                metadata: position?.metadata || resume.metadata || '',
+            });
+        const uniqueCover = this.lastStableCover[ip] ||
+            (this.isSharedLiveCover(coverUrl) ? '' : coverUrl) ||
+            absoluteArt ||
+            (0, content_directory_1.albumArtFromXml)(trackMeta);
+        const entry = {
+            title: radio ? playing.station || title : title,
+            artist: radio ? '' : playing.artist,
+            album: radio ? '' : playing.album,
+            station: playing.station,
+            cover: uniqueCover,
+            uri: resume.uri || trackUri,
+            metadata: trackMeta,
+            duration: radio ? 0 : Number(sonosState.currentTrack.duration) || position?.duration || 0,
+            ts: Date.now(),
+        };
+        list = [entry, ...list.filter(item => this.recentEntryKey(item) !== key)].slice(0, RECENT_TRACKS_MAX);
+        await this.writeRecentTracks(ip, list);
+    }
+    recentEntryKey(item) {
+        if (item.station && (!item.artist || (item.uri && (0, content_directory_1.isRadioLikeUri)(item.uri)))) {
+            return `radio|${item.station || item.title}`;
+        }
+        return `${item.title}|${item.artist}|${item.album}`;
+    }
+    async copyPlaybackToGroupMembers(coordinatorIp, sonosState, ps, coverUrl, display) {
+        const membersState = await this.getStateAsync(`root.${coordinatorIp}.membersChannels`);
+        const members = String(membersState?.val || '')
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean);
+        if (members.length < 2) {
+            return;
+        }
+        const queue = await this.getStateAsync(`root.${coordinatorIp}.queue`);
+        const queueHtml = await this.getStateAsync(`root.${coordinatorIp}.queue_html`);
+        const playMode = sonosState.playMode;
+        const coordinator = this.channels[coordinatorIp]?.player;
+        const playing = display || this.playbackDisplay(sonosState, undefined, coordinator ? transportUri(coordinator) : '');
+        const groupCover = this.lastStableCover[coordinatorIp] || '';
+        for (const memberIp of members) {
+            if (!memberIp || memberIp === coordinatorIp || !this.channels[memberIp]) {
+                continue;
+            }
+            if (!ps.transitioning) {
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'state_simple' }, ps.playing);
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'state' }, ps.paused ? 'pause' : ps.playing ? 'play' : 'stop');
+            }
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_type' }, playing.type);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_station' }, playing.station);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_title' }, playing.title);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_album' }, playing.album);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_artist' }, playing.artist);
+            const memberResume = coordinator
+                ? (0, quickstart_1.resumeFromPlayer)(coordinator)
+                : { uri: String(sonosState.currentTrack.uri || ''), metadata: '', tv: false };
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_uri' }, memberResume.uri);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_metadata' }, memberResume.metadata);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_duration' }, sonosState.currentTrack.duration);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_duration_s' }, toFormattedTime(sonosState.currentTrack.duration));
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_track_number' }, sonosState.trackNo);
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_cover' }, coverUrl);
+            if (groupCover) {
+                this.lastStableCover[memberIp] = groupCover;
+            }
+            await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'current_art' }, this.lastStableCover[memberIp] || groupCover || '');
+            this.channels[memberIp].elapsed = sonosState.elapsedTime;
+            this.channels[memberIp].duration = sonosState.currentTrack.duration;
+            if (sonosState.currentTrack.duration > 0) {
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed' }, { val: sonosState.elapsedTime, ack: true });
+                await this.setState({ device: 'root', channel: memberIp, state: 'seek' }, {
+                    val: Math.round((sonosState.elapsedTime / sonosState.currentTrack.duration) * 1000) / 10,
+                    ack: true,
+                });
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed_s' }, { val: sonosState.elapsedTimeFormatted, ack: true });
+            }
+            if (playMode) {
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'shuffle' }, playMode.shuffle);
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'repeat' }, playMode.repeat === 'all' ? 1 : playMode.repeat === 'one' ? 2 : 0);
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'crossfade' }, playMode.crossfade);
+            }
+            if (queue?.val !== undefined && queue.val !== null) {
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'queue' }, queue.val);
+            }
+            if (queueHtml?.val !== undefined && queueHtml.val !== null) {
+                await this.writeIfChanged({ device: 'root', channel: memberIp, state: 'queue_html' }, queueHtml.val);
+            }
+            await this.appendRecentTrack(memberIp, sonosState, coverUrl);
+        }
+    }
+    /** After grouping changes, copy the master's now-playing onto members */
+    async syncGroupPlayback(coordinatorIp) {
+        const uuid = this.channels[coordinatorIp]?.uuid;
+        const player = uuid ? this.discovery?.getPlayerByUUID(uuid) : undefined;
+        if (!player || player.tts || !player.state?.currentTrack) {
+            return;
+        }
+        const coverState = await this.getStateAsync(`root.${coordinatorIp}.current_cover`);
+        await this.copyPlaybackToGroupMembers(coordinatorIp, player.state, getPlaybackState(player.state.playbackState), String(coverState?.val || ''));
+    }
+    isGermanUi() {
+        const lang = this.language;
+        return String(lang || '')
+            .toLowerCase()
+            .startsWith('de');
+    }
+    musicServiceInfo(name) {
+        const services = this.discovery?.availableServices || {};
+        const key = Object.keys(services).find(item => item.toLowerCase() === name.toLowerCase());
+        if (key) {
+            return services[key];
+        }
+        if (name.toLowerCase() === 'spotify') {
+            return { id: 9, type: 2311 };
+        }
+        if (name.toLowerCase().includes('youtube')) {
+            return { id: 284, type: 72711 };
+        }
+        return undefined;
+    }
+    getSmapi() {
+        if (!this.smapi) {
+            let dir = path.join('/tmp', this.namespace);
+            try {
+                dir = utils.getAbsoluteInstanceDataDir(this);
+            }
+            catch {
+                // unit tests / missing controller paths
+            }
+            this.smapi = new smapi_1.SmapiHub(this.log, path.join(dir, 'smapi-tokens.json'));
+        }
+        return this.smapi;
+    }
+    /**
+     * Spotify catalog via SMAPI; YouTube Music and similar via saved Sonos
+     * favorites, playlists and recently played tracks (Google does not expose
+     * that catalog to third-party controllers).
+     */
+    async listServiceLibrary(player, serviceName, german, query = '') {
+        const items = [];
+        let loginUrl;
+        let loginHint;
+        const info = this.musicServiceInfo(serviceName);
+        const term = query.trim().toLowerCase();
+        const blobOf = (item) => [item.title, item.uri, item.albumArtUri, item.metadata].filter(Boolean).join('\n');
+        const matchesQuery = (item) => {
+            if (!term) {
+                return true;
+            }
+            return [item.title, item.artist, item.album].some(part => String(part || '')
+                .toLowerCase()
+                .includes(term));
+        };
+        try {
+            const smapi = await this.getSmapi().browse(player.baseUrl, serviceName, 'root', german);
+            items.push(...smapi.items.filter(matchesQuery));
+            loginUrl = smapi.loginUrl;
+            loginHint = smapi.loginHint;
+        }
+        catch (err) {
+            this.log.warn(`SMAPI browse ${serviceName}: ${err}`);
+        }
+        try {
+            const favorites = this.toFavoriteList(await this.discovery?.getFavorites());
+            for (const fav of favorites) {
+                if (!fav.title || !(0, content_directory_1.matchesMusicService)(blobOf(fav), serviceName, info) || !matchesQuery(fav)) {
+                    continue;
+                }
+                items.push({
+                    id: `favorite:${fav.title}`,
+                    title: fav.title,
+                    uri: fav.uri || '',
+                    metadata: fav.metadata || '',
+                    artist: german ? 'Favorit' : 'Favorite',
+                    album: serviceName,
+                    cover: fav.albumArtUri || '',
+                    folder: false,
+                    favorite: fav.title,
+                });
+            }
+        }
+        catch (err) {
+            this.log.warn(`Cannot list ${serviceName} favorites: ${err}`);
+        }
+        try {
+            if (this.discovery?.getPlaylists) {
+                const playlists = this.toFavoriteList(await this.discovery.getPlaylists());
+                for (const playlist of playlists) {
+                    if (!playlist.title ||
+                        !(0, content_directory_1.matchesMusicService)(blobOf(playlist), serviceName, info) ||
+                        !matchesQuery(playlist)) {
+                        continue;
+                    }
+                    items.push({
+                        id: `playlist:${playlist.title}`,
+                        title: playlist.title,
+                        uri: playlist.uri || '',
+                        metadata: playlist.metadata || '',
+                        artist: 'Playlist',
+                        album: serviceName,
+                        cover: playlist.albumArtUri || '',
+                        folder: false,
+                        playlist: playlist.title,
+                    });
+                }
+            }
+        }
+        catch (err) {
+            this.log.warn(`Cannot list ${serviceName} playlists: ${err}`);
+        }
+        try {
+            const recents = await this.loadRecentTracks(player._address || getIp(player));
+            for (const recent of recents) {
+                if (!recent.title || isGroupingUri(recent.uri)) {
+                    continue;
+                }
+                if (!(0, content_directory_1.matchesMusicService)(blobOf(recent), serviceName, info) || !matchesQuery(recent)) {
+                    continue;
+                }
+                items.push({
+                    id: `recent:${recent.uri || recent.title}`,
+                    title: recent.title,
+                    uri: recent.uri || '',
+                    metadata: recent.metadata || '',
+                    artist: recent.artist || (german ? 'Zuletzt' : 'Recent'),
+                    album: recent.album || serviceName,
+                    cover: recent.cover || '',
+                    folder: false,
+                });
+            }
+        }
+        catch (err) {
+            this.log.warn(`Cannot list ${serviceName} recent tracks: ${err}`);
+        }
+        if (term) {
+            loginUrl = undefined;
+            loginHint = undefined;
+        }
+        if (!items.length) {
+            const emptyTitle = term
+                ? german
+                    ? `Keine Treffer für „${query.trim()}“ in Favoriten, Playlists oder Zuletzt gehört.`
+                    : `No matches for “${query.trim()}” in favorites, playlists or recently played.`
+                : german
+                    ? `${serviceName} ist als Quelle verfügbar. In der Sonos-App suchen und Favoriten oder Playlists speichern.`
+                    : `${serviceName} is available as a source. Search in the Sonos app and save favorites or playlists.`;
+            items.push((0, content_directory_1.mediaItem)({ id: '', title: emptyTitle }));
+        }
+        return {
+            id: `service:${serviceName}`,
+            title: serviceName,
+            items,
+            serviceName,
+            searchable: true,
+            loginUrl,
+            loginHint,
+        };
+    }
+    async loadRecentTracks(ip) {
+        if (!ip) {
+            return [];
+        }
+        const current = await this.getStateAsync(`root.${ip}.recent_tracks`);
+        if (Array.isArray(current?.val)) {
+            return current.val;
+        }
+        if (current?.val) {
+            try {
+                const parsed = JSON.parse(String(current.val));
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            }
+            catch {
+                return [];
+            }
+        }
+        return [];
+    }
+    async handleMediaBrowse(player, ip, objectId) {
+        const id = objectId.trim() || 'root';
+        const german = this.isGermanUi();
+        const labels = {
+            radio: 'TuneIn Radio',
+            library: german ? 'Mediathek' : 'Music library',
+            shares: german ? 'Netzlaufwerke' : 'Network shares',
+            lineIn: 'Line-In',
+            tv: 'TV',
+            tvHdmi: 'HDMI',
+        };
+        let result;
+        if (id === 'root') {
+            result = (0, content_directory_1.getMediaRoot)(this.discovery?.availableServices, labels, player.uuid);
+            result.title = german ? 'Quellen' : 'Sources';
+        }
+        else if (id.startsWith('smapi-search:')) {
+            const rest = id.slice('smapi-search:'.length);
+            const colon = rest.indexOf(':');
+            const name = decodeURIComponent(colon === -1 ? rest : rest.slice(0, colon));
+            const term = decodeURIComponent(colon === -1 ? '' : rest.slice(colon + 1));
+            try {
+                if (await this.getSmapi().hasSoapCatalog(player.baseUrl, name)) {
+                    const smapi = await this.getSmapi().search(player.baseUrl, name, term, german);
+                    result = {
+                        id,
+                        title: term || name,
+                        items: smapi.items,
+                        serviceName: name,
+                        searchable: true,
+                        loginUrl: smapi.loginUrl,
+                        loginHint: smapi.loginHint,
+                    };
+                }
+                else if ((0, ytmusic_1.isYoutubeMusicName)(name)) {
+                    const sn = await this.getSmapi().accountSerial(player.baseUrl, 284);
+                    let catalog = [];
+                    let hint;
+                    try {
+                        const ytm = await (0, ytmusic_1.searchYoutubeMusic)(term, sn, german);
+                        catalog = ytm.items;
+                        hint = ytm.hint;
+                    }
+                    catch (err) {
+                        this.log.warn(`YouTube Music search: ${err}`);
+                    }
+                    const local = await this.listServiceLibrary(player, name, german, term);
+                    const localItems = (local.items || []).filter(item => item.favorite || item.playlist || item.uri);
+                    const items = [...catalog, ...localItems];
+                    result = {
+                        id,
+                        title: term || name,
+                        items: items.length
+                            ? items
+                            : [
+                                (0, content_directory_1.mediaItem)({
+                                    id: '',
+                                    title: german ? `Keine Treffer für „${term}“.` : `No matches for “${term}”.`,
+                                }),
+                            ],
+                        serviceName: name,
+                        searchable: true,
+                        loginHint: hint || local.loginHint,
+                    };
+                }
+                else {
+                    result = await this.listServiceLibrary(player, name, german, term);
+                    result.id = id;
+                    result.title = term || name;
+                }
+            }
+            catch (err) {
+                this.log.warn(`SMAPI search ${name}: ${err}`);
+                result = { id, title: name, items: [], serviceName: name, searchable: true };
+            }
+        }
+        else if (id.startsWith('smapi-auth:')) {
+            const name = decodeURIComponent(id.slice('smapi-auth:'.length));
+            const ok = await this.getSmapi().completeLogin(player.baseUrl, name);
+            if (ok) {
+                result = await this.listServiceLibrary(player, name, german);
+                result.id = (0, smapi_1.encodeSmapiId)(name, 'root');
+            }
+            else {
+                result = {
+                    id,
+                    title: name,
+                    items: [
+                        (0, content_directory_1.mediaItem)({
+                            id: '',
+                            title: german
+                                ? 'Anmeldung noch nicht fertig. Seite im Browser abschließen und erneut tippen.'
+                                : 'Sign-in is not finished yet. Complete it in the browser, then tap again.',
+                        }),
+                    ],
+                    serviceName: name,
+                    searchable: true,
+                };
+            }
+        }
+        else if (id.startsWith('smapi:')) {
+            const parsed = (0, smapi_1.parseSmapiId)(id);
+            if (!parsed) {
+                result = { id, title: id, items: [] };
+            }
+            else {
+                try {
+                    const smapi = await this.getSmapi().browse(player.baseUrl, parsed.serviceName, parsed.itemId, german);
+                    result = {
+                        id,
+                        title: parsed.serviceName,
+                        items: smapi.items,
+                        serviceName: parsed.serviceName,
+                        searchable: true,
+                        loginUrl: smapi.loginUrl,
+                        loginHint: smapi.loginHint,
+                    };
+                }
+                catch (err) {
+                    this.log.warn(`SMAPI browse ${parsed.serviceName}: ${err}`);
+                    result = {
+                        id,
+                        title: parsed.serviceName,
+                        items: [],
+                        serviceName: parsed.serviceName,
+                        searchable: true,
+                    };
+                }
+            }
+        }
+        else if (id.startsWith('service:')) {
+            const name = id.slice('service:'.length);
+            result = await this.listServiceLibrary(player, name, german);
+        }
+        else {
+            try {
+                result = { id, title: id, items: await (0, content_directory_1.browseMedia)(player.baseUrl, id) };
+            }
+            catch (err) {
+                this.log.warn(`Cannot browse media ${id}: ${err.message || err}`);
+                result = { id, title: id, items: [] };
+            }
+        }
+        await this.setState({ device: 'root', channel: ip, state: 'media_browse_result' }, { val: JSON.stringify(result), ack: true });
+    }
+    /** Radio/SMAPI need Play after SetAVTransportURI. HDMI and line-in start on set and reject Play with HTTP 500. */
+    async startAvTransport(player, uri, metadata = '') {
+        const playUri = (0, content_directory_1.wrapHttpRadioUri)(uri);
+        let meta = String(metadata || '');
+        if (((0, content_directory_1.isRadioLikeUri)(playUri) || (0, content_directory_1.isStreamUri)(playUri)) && !meta.includes('audioBroadcast')) {
+            meta = (0, content_directory_1.radioBroadcastDidl)('Radio');
+        }
+        try {
+            await player.setAVTransport(playUri, meta);
+        }
+        catch (err) {
+            if ((0, content_directory_1.isRadioLikeUri)(playUri) && !meta.includes('audioBroadcast')) {
+                this.log.debug(`Retry radio SetAVTransport with broadcast metadata: ${err}`);
+                await player.setAVTransport(playUri, (0, content_directory_1.radioBroadcastDidl)('Radio'));
+            }
+            else if (playUri !== uri) {
+                this.log.debug(`Retry radio SetAVTransport as mp3radio: ${err}`);
+                await player.setAVTransport(playUri, (0, content_directory_1.radioBroadcastDidl)('Radio'));
+            }
+            else {
+                throw err;
+            }
+        }
+        if ((0, content_directory_1.isTvStreamUri)(playUri) || (0, content_directory_1.isLineInStreamUri)(playUri)) {
+            return;
+        }
+        await player.play();
+    }
+    /** Switch the soundbar itself to HDMI. Play is not a valid AVTransport action for TV. */
+    async playTvInput(ht) {
+        const uri = (0, content_directory_1.tvStreamUri)(ht.uuid);
+        if (transportUri(ht) === uri) {
+            this.log.debug(`TV HDMI already selected on ${ht.roomName}`);
+            return;
+        }
+        if (isGroupMember(ht)) {
+            await ht.becomeCoordinatorOfStandaloneGroup();
+        }
+        await ht.setAVTransport(uri);
+        this.scheduleHomeTheaterHeal();
+    }
+    async handleMediaPlay(player, raw, sourcePlayer) {
+        let uri = '';
+        let metadata = '';
+        let hint = { title: '', artist: '', album: '', cover: '', duration: 0 };
+        const text = raw.trim();
+        if (!text) {
+            return;
+        }
+        if (text.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(text);
+                if (parsed.favorite) {
+                    await player.replaceWithFavorite(parsed.favorite);
+                    await player.play();
+                    return;
+                }
+                if (parsed.playlist) {
+                    await player.replaceWithPlaylist(parsed.playlist);
+                    await player.play();
+                    return;
+                }
+                if (parsed.tv) {
+                    await this.playTvInput(sourcePlayer || player);
+                    return;
+                }
+                uri = String(parsed.uri || '').trim();
+                metadata = String(parsed.metadata || '');
+                hint = {
+                    title: String(parsed.title || '').trim(),
+                    artist: String(parsed.artist || '').trim(),
+                    album: String(parsed.album || '').trim(),
+                    cover: String(parsed.cover || '').trim(),
+                    duration: Number(parsed.duration) || 0,
+                };
+            }
+            catch {
+                uri = text;
+            }
+        }
+        else {
+            uri = text;
+        }
+        if (!uri || isGroupingUri(uri)) {
+            return;
+        }
+        if ((0, content_directory_1.isTvStreamUri)(uri)) {
+            await this.playTvInput(sourcePlayer || player);
+            return;
+        }
+        const asTrack = (0, content_directory_1.shouldPlayAsTrack)(uri, metadata, hint);
+        const playUri = asTrack ? uri : (0, content_directory_1.wrapHttpRadioUri)(uri);
+        const asRadio = !asTrack &&
+            ((0, content_directory_1.isRadioLikeUri)(playUri) || (0, content_directory_1.isStreamUri)(playUri) || ((0, content_directory_1.isBroadcastDidl)(metadata) && !(0, content_directory_1.isOnDemandUri)(playUri)));
+        if (asRadio || (!asTrack && (0, content_directory_1.isDirectPlayUri)(playUri))) {
+            await this.startAvTransport(player, playUri, metadata);
+            return;
+        }
+        const trackMeta = (0, content_directory_1.trackDidl)({
+            title: hint.title,
+            artist: hint.artist,
+            album: hint.album,
+            uri: playUri,
+            cover: hint.cover,
+            durationSec: hint.duration,
+            metadata,
+        });
+        await player.clearQueue();
+        await player.addURIToQueue(playUri, trackMeta);
+        await player.setAVTransport(`x-rincon-queue:${player.uuid}#0`);
+        await player.play();
+        delete this.lastPositionInfo[player.uuid];
+        const ip = getIp(player);
+        if (ip) {
+            await this.applyPlaybackHint(ip, {
+                title: hint.title || '',
+                artist: hint.artist || '',
+                album: hint.album || '',
+                cover: hint.cover || '',
+                uri: playUri,
+                metadata: trackMeta,
+                duration: hint.duration || 0,
+            });
+        }
+        this.schedulePlaybackRefresh(player);
+    }
+    clearPlaybackRefresh(ip) {
+        const channel = this.channels[ip];
+        if (!channel?.playbackRefreshTimers?.length) {
+            return;
+        }
+        for (const timer of channel.playbackRefreshTimers) {
+            clearTimeout(timer);
+        }
+        channel.playbackRefreshTimers = [];
+    }
+    schedulePlaybackRefresh(player) {
+        const ip = getIp(player);
+        if (!ip || !this.channels[ip]) {
+            return;
+        }
+        this.clearPlaybackRefresh(ip);
+        const run = () => {
+            void this.refreshPlaybackFromDevice(player);
+        };
+        run();
+        this.channels[ip].playbackRefreshTimers = [setTimeout(run, 800), setTimeout(run, 2500)];
+    }
+    async peekPositionInfo(player) {
+        const cached = this.lastPositionInfo[player.uuid];
+        if (cached &&
+            Date.now() - cached.at < 1500 &&
+            (cached.info.title || cached.info.duration || cached.info.cover)) {
+            return cached.info;
+        }
+        try {
+            const info = (0, content_directory_1.parsePositionInfo)(await (0, content_directory_1.soapGetPositionInfo)(player.baseUrl));
+            if (info.title || info.duration || info.cover || info.uri) {
+                this.lastPositionInfo[player.uuid] = { at: Date.now(), info };
+            }
+            return info;
+        }
+        catch (err) {
+            this.log.debug(`GetPositionInfo: ${err}`);
+            return cached?.info;
+        }
+    }
+    playbackStateFromHint(player, hint, info) {
+        const current = player.state;
+        const uri = info?.uri || hint.uri || current.currentTrack.uri || '';
+        const duration = info?.duration || hint.duration || current.currentTrack.duration || 0;
+        return {
+            ...current,
+            currentTrack: {
+                ...current.currentTrack,
+                uri,
+                title: info?.title || hint.title || current.currentTrack.title || '',
+                artist: info?.artist || hint.artist || current.currentTrack.artist || '',
+                album: info?.album || hint.album || current.currentTrack.album || '',
+                albumArtUri: info?.cover || hint.cover || current.currentTrack.albumArtUri || '',
+                duration,
+                type: duration > 0 || (0, content_directory_1.isOnDemandUri)(uri) ? 'track' : current.currentTrack.type,
+                stationName: duration > 0 || (0, content_directory_1.isOnDemandUri)(uri) ? '' : current.currentTrack.stationName,
+            },
+            elapsedTime: info?.elapsed ?? current.elapsedTime,
+            elapsedTimeFormatted: current.elapsedTimeFormatted,
+        };
+    }
+    async applyPlaybackHint(ip, hint) {
+        if (!hint.title && !hint.uri) {
+            return;
+        }
+        this.lastPlaybackHint[ip] = { ...hint, at: Date.now() };
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_type' }, 0);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_station' }, '');
+        if (hint.title) {
+            await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_title' }, hint.title);
+        }
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_artist' }, hint.artist || '');
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_album' }, hint.album || '');
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_uri' }, hint.uri);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'current_metadata' }, hint.metadata);
+        if (hint.duration > 0) {
+            this.channels[ip].duration = hint.duration;
+            this.channels[ip].elapsed = 0;
+            await this.setState({ device: 'root', channel: ip, state: 'current_duration' }, { val: hint.duration, ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'current_duration_s' }, { val: toFormattedTime(hint.duration), ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'current_elapsed' }, { val: 0, ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'current_elapsed_s' }, { val: '00:00', ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'seek' }, { val: 0, ack: true });
+            if (!this.channels[ip].elapsedTimer) {
+                this.channels[ip].elapsedTimer = setInterval(() => this.updateElapsed(ip), this.config.elapsedInterval || 5000);
+            }
+        }
+        const cover = hint.cover && !this.isSharedLiveCover(hint.cover) ? hint.cover : '';
+        if (cover) {
+            this.lastStableCover[ip] = cover;
+            await this.setState({ device: 'root', channel: ip, state: 'current_art' }, { val: cover, ack: true });
+        }
+        await this.setState({ device: 'root', channel: ip, state: 'state' }, { val: 'play', ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'state_simple' }, { val: true, ack: true });
+        for (const memberIp of this.getGroupMemberIps(ip)) {
+            if (memberIp === ip || !this.channels[memberIp]) {
+                continue;
+            }
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_type' }, { val: 0, ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_station' }, { val: '', ack: true });
+            if (hint.title) {
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_title' }, { val: hint.title, ack: true });
+            }
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_artist' }, { val: hint.artist || '', ack: true });
+            await this.setState({ device: 'root', channel: memberIp, state: 'current_album' }, { val: hint.album || '', ack: true });
+            if (cover) {
+                this.lastStableCover[memberIp] = cover;
+                await this.setState({ device: 'root', channel: memberIp, state: 'current_art' }, { val: cover, ack: true });
+            }
+            await this.setState({ device: 'root', channel: memberIp, state: 'state' }, { val: 'play', ack: true });
+        }
+    }
+    async refreshPlaybackFromDevice(player) {
+        const ip = getIp(player);
+        if (!ip || !this.channels[ip]) {
+            return;
+        }
+        const info = await this.peekPositionInfo(player);
+        const hint = this.lastPlaybackHint[ip];
+        if (!info || (!info.title && !info.duration && !info.cover && !hint?.title)) {
+            return;
+        }
+        const merged = this.playbackStateFromHint(player, {
+            title: info.title || hint?.title || '',
+            artist: info.artist || hint?.artist || '',
+            album: info.album || hint?.album || '',
+            cover: info.cover || hint?.cover || '',
+            uri: info.uri || hint?.uri || '',
+            metadata: info.metadata || hint?.metadata || '',
+            duration: info.duration || hint?.duration || 0,
+        }, info);
+        await this.takeSonosState(ip, merged);
+    }
+    async stampRecentCover(ip, title, artist, cover) {
+        const art = String(cover || '').trim();
+        const name = String(title || '').trim();
+        if (!name || !art || this.isSharedLiveCover(art)) {
+            return;
+        }
+        const list = await this.readRecentTracks(ip);
+        let changed = false;
+        const next = list.map(item => {
+            const sameTitle = item.title === name;
+            const sameArtist = !artist || !item.artist || item.artist === artist;
+            if (!sameTitle || !sameArtist || item.cover === art) {
+                return item;
+            }
+            changed = true;
+            return { ...item, cover: art };
+        });
+        if (changed) {
+            await this.writeRecentTracks(ip, next);
+        }
+    }
+    /** Players that currently share playback with this coordinator (includes itself) */
+    getGroupMemberIps(coordinatorIp) {
+        const channel = this.channels[coordinatorIp];
+        const player = channel?.player || (channel?.uuid ? this.discovery?.getPlayerByUUID(channel.uuid) : undefined);
+        if (!player) {
+            return [coordinatorIp];
+        }
+        const master = isGroupMember(player) && player.coordinator ? player.coordinator : player;
+        const ips = [];
+        for (const item of this.discovery?.players || []) {
+            const itemMaster = isGroupMember(item) && item.coordinator ? item.coordinator : item;
+            if (itemMaster.uuid !== master.uuid) {
+                continue;
+            }
+            const ip = getIp(item);
+            if (ip && this.channels[ip]) {
+                ips.push(ip);
+            }
+        }
+        return ips.length ? ips : [coordinatorIp];
+    }
+    /** Update the elapsed time while playing */
+    updateElapsed(ip) {
+        const channel = this.channels[ip];
+        if (!channel || channel.duration <= 0) {
+            return;
+        }
+        channel.elapsed += (this.config.elapsedInterval || 5000) / 1000;
+        if (channel.elapsed > channel.duration) {
+            channel.elapsed = channel.duration;
+        }
+        const seek = Math.round((channel.elapsed / channel.duration) * 1000) / 10;
+        const elapsedS = toFormattedTime(channel.elapsed);
+        for (const memberIp of this.getGroupMemberIps(ip)) {
+            const member = this.channels[memberIp];
+            if (!member) {
+                continue;
+            }
+            member.elapsed = channel.elapsed;
+            member.duration = channel.duration;
+            void this.setState({ device: 'root', channel: memberIp, state: 'seek' }, { val: seek, ack: true });
+            void this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed' }, { val: channel.elapsed, ack: true });
+            void this.setState({ device: 'root', channel: memberIp, state: 'current_elapsed_s' }, { val: elapsedS, ack: true });
+        }
+    }
+    /** TuneIn often leaves currentTrack.albumArtUri empty; logo is in DIDL / GetPositionInfo. */
+    async resolveAlbumArt(player, sonosState, metadata) {
+        const direct = String(sonosState.currentTrack.albumArtUri || '').trim();
+        if (direct) {
+            return direct;
+        }
+        const fromMeta = (0, content_directory_1.albumArtFromXml)(metadata);
+        if (fromMeta) {
+            return fromMeta;
+        }
+        const position = await this.peekPositionInfo(player);
+        return position?.cover || '';
+    }
+    coverFetchUrl(player, albumArtUri) {
+        if (/^https?:\/\//i.test(albumArtUri)) {
+            return albumArtUri;
+        }
+        const base = String(player.baseUrl || '').replace(/\/$/, '');
+        return albumArtUri.startsWith('/') ? `${base}${albumArtUri}` : `${base}/${albumArtUri}`;
+    }
+    fetchUrlBuffer(url, hops = 0) {
+        return new Promise(resolve => {
+            if (hops > 4) {
+                resolve(null);
+                return;
+            }
+            let parsed;
+            try {
+                parsed = new URL(url);
+            }
+            catch {
+                resolve(null);
+                return;
+            }
+            const lib = parsed.protocol === 'https:' ? https : http;
+            const req = lib.get(parsed, { timeout: 8000 }, res => {
+                const location = res.headers.location;
+                if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && location) {
+                    res.resume();
+                    void this.fetchUrlBuffer(new URL(location, parsed).href, hops + 1).then(resolve);
+                    return;
+                }
+                if (res.statusCode !== 200) {
+                    this.log.debug(`Cover HTTP ${res.statusCode} for ${url}`);
+                    res.resume();
+                    resolve(null);
+                    return;
+                }
+                const chunks = [];
+                res.on('data', chunk => chunks.push(chunk));
+                res.on('end', () => resolve(Buffer.concat(chunks)));
+            });
+            req.on('error', err => {
+                this.log.debug(`Cover fetch: ${err.message}`);
+                resolve(null);
+            });
+            req.on('timeout', () => {
+                req.destroy();
+                resolve(null);
+            });
+        });
+    }
+    /**
+     * Read the cover of the current track and store it in the ioBroker storage
+     *
+     * @param ip IP address (with underscores) of the player
+     * @param albumArtUri URI of the cover on the sonos device or an https logo
+     */
+    async updateCover(ip, albumArtUri) {
+        const source = String(albumArtUri || '').trim();
+        if (!source) {
+            await this.syncCoverFileToStorage(DEFAULT_IMAGE, ip);
+            return;
+        }
+        const filePath = this.cacheDir + crypto.createHash('sha256').update(source).digest('hex');
+        if (fs.existsSync(filePath)) {
+            this.log.debug('Cover exists. Try reading from fs');
+            await this.syncCoverFileToStorage(filePath, ip);
+            return;
+        }
+        const player = this.discovery?.getPlayerByUUID(this.channels[ip].uuid);
+        if (!player) {
+            await this.syncCoverFileToStorage(DEFAULT_IMAGE, ip);
+            return;
+        }
+        this.log.debug(`Cover file does not exist. Fetching ${source}`);
+        const buffer = await this.fetchUrlBuffer(this.coverFetchUrl(player, source));
+        if (buffer?.length) {
+            try {
+                fs.writeFileSync(filePath, buffer);
+                await this.syncCoverFileToStorage(filePath, ip);
+                return;
+            }
+            catch (e) {
+                this.log.warn(`Cannot write cover cache: ${e.message}`);
+            }
+        }
+        await this.syncCoverFileToStorage(DEFAULT_IMAGE, ip);
+    }
+    /**
+     * Synchronize the cover file to ioBroker storage
+     *
+     * @param filePath path to read file from file system
+     * @param ip ip of the player
+     */
+    async syncCoverFileToStorage(filePath, ip) {
+        let fileData = null;
+        try {
+            fileData = fs.readFileSync(filePath);
+        }
+        catch (e) {
+            this.log.warn(`Cannot read file: ${e.message}`);
+        }
+        // If error or null length file, read standard cover file
+        if (!fileData) {
+            try {
+                fileData = fs.readFileSync(DEFAULT_IMAGE);
+            }
+            catch (e) {
+                this.log.warn(`Cannot read file: ${e.message}`);
+            }
+        }
+        if (fileData) {
+            const storagePath = `coverImage/${ip}.png`;
+            const stamp = crypto.createHash('sha256').update(fileData).digest('hex').slice(0, 12);
+            const uniquePath = `coverImage/art/${stamp}.png`;
+            await this.writeFileAsync(this.name, storagePath, fileData);
+            await this.writeFileAsync(this.name, uniquePath, fileData);
+            this.lastStableCover[ip] = `/${this.name}/${uniquePath}`;
+            await this.setState({ device: 'root', channel: ip, state: 'current_cover' }, { val: `/${this.name}/${storagePath}?${stamp}`, ack: true });
+            await this.setState({ device: 'root', channel: ip, state: 'current_art' }, { val: this.lastStableCover[ip], ack: true });
+        }
+    }
+    /** Normalize browse results from sonos-discovery (array or dictionary) */
+    toFavoriteList(items) {
+        if (!items) {
+            return [];
+        }
+        if (Array.isArray(items)) {
+            return items;
+        }
+        return Object.keys(items)
+            .map(key => items[key])
+            .filter((item) => Boolean(item));
+    }
+    async takeSonosFavorites(ip, favorites) {
+        let sFavorites = '';
+        const aFavorites = [];
+        const _hFavorites = [];
+        _hFavorites.push('<table class="sonosFavoriteTable">');
+        this.toFavoriteList(favorites).forEach((favorite, index) => {
+            const title = favorite.title;
+            if (title) {
+                sFavorites += (sFavorites ? ', ' : '') + title;
+                aFavorites.push(title);
+                _hFavorites.push(`<tr class="sonosFavoriteRow" onclick="vis.setValue('${this.namespace}.root.${ip}.favorites_set', '${title}')"><td class="sonosFavoriteNumber">${index + 1}</td><td class="sonosFavoriteCover"><img src="${favorite.albumArtUri || ''}"></td><td class="sonosFavoriteTitle">${title}</td></tr>`);
+            }
+        });
+        _hFavorites.push('</table>');
+        await this.setState({ device: 'root', channel: ip, state: 'favorites_list' }, { val: sFavorites, ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'favorites_list_array' }, { val: JSON.stringify(aFavorites), ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'favorites_list_html' }, { val: _hFavorites.join(''), ack: true });
+    }
+    /** Read the favorites from sonos and write them to all known players */
+    async updateFavorites() {
+        if (!this.discovery) {
+            return;
+        }
+        const favorites = await this.discovery.getFavorites();
+        const arts = new Map();
+        for (const fav of this.toFavoriteList(favorites)) {
+            const title = String(fav.title || '')
+                .trim()
+                .toLowerCase();
+            if (title && fav.albumArtUri) {
+                arts.set(title, fav.albumArtUri);
+            }
+        }
+        // Go through all players
+        for (const player of this.discovery.players) {
+            if (!player) {
+                continue;
+            }
+            player._address = player._address || getIp(player);
+            const ip = player._address;
+            if (ip && this.channels[ip]) {
+                await this.takeSonosFavorites(ip, favorites);
+            }
+        }
+        await this.repairAllRecentCovers(arts);
+    }
+    async takeSonosPlaylists(ip, playlists) {
+        const player = this.channels[ip]?.player ||
+            (this.channels[ip]?.uuid ? this.discovery?.getPlayerByUUID(this.channels[ip].uuid) : undefined);
+        const base = String(player?.baseUrl || '').replace(/\/$/, '');
+        const absCover = (cover) => {
+            const value = String(cover || '').trim();
+            if (!value) {
+                return '';
+            }
+            if (/^https?:\/\//i.test(value)) {
+                return value;
+            }
+            return `${base}${value.startsWith('/') ? '' : '/'}${value}`;
+        };
+        const rows = this.toFavoriteList(playlists)
+            .map(item => ({
+            title: String(item.title || '').trim(),
+            cover: absCover(item.albumArtUri || ''),
+        }))
+            .filter(item => item.title);
+        const names = rows.map(item => item.title);
+        await this.setState({ device: 'root', channel: ip, state: 'playlist_list' }, { val: names.join(', '), ack: true });
+        await this.setState({ device: 'root', channel: ip, state: 'playlist_list_array' }, { val: JSON.stringify(rows), ack: true });
+    }
+    /** Read Sonos playlists and write them to all known players */
+    async updatePlaylists() {
+        if (!this.discovery?.getPlaylists) {
+            return;
+        }
+        const playlists = await this.discovery.getPlaylists();
+        for (const player of this.discovery.players) {
+            if (!player) {
+                continue;
+            }
+            player._address = player._address || getIp(player);
+            const ip = player._address;
+            if (ip && this.channels[ip]) {
+                await this.takeSonosPlaylists(ip, playlists);
+            }
+        }
+    }
+    /** Refresh favorites and playlists; errors are logged and do not abort the other list */
+    async updateMediaLists() {
+        try {
+            await this.updateFavorites();
+        }
+        catch (err) {
+            this.log.error(`Cannot getFavorites: ${err}`);
+        }
+        try {
+            await this.updatePlaylists();
+            this.playlistsLoaded = true;
+        }
+        catch (err) {
+            this.log.error(`Cannot getPlaylists: ${err}`);
+        }
+    }
+    async processSonosEvents(event, data) {
+        if (!this.discovery) {
+            return;
+        }
+        if (event === 'topology-change') {
+            await this.processTopologyChange(data);
+        }
+        else if (event === 'transport-state') {
+            const ip = this.getIpOfPlayer(data.uuid);
+            if (ip) {
+                this.channels[ip].uuid = data.uuid;
+                await this.takeSonosState(ip, data.state);
+            }
+        }
+        else if (event === 'group-volume') {
+            const source = this.discovery.getPlayerByUUID(data.uuid);
+            const masterUuid = (source && isGroupMember(source) && source.coordinator ? source.coordinator : source)
+                ?.uuid;
+            for (const player of this.discovery.players) {
+                const itemMaster = isGroupMember(player) && player.coordinator ? player.coordinator : player;
+                if (masterUuid && itemMaster.uuid !== masterUuid) {
+                    continue;
+                }
+                if (!masterUuid && player.roomName !== data.roomName) {
+                    continue;
+                }
+                const ip = this.getIpOfPlayer(player.uuid);
+                if (ip) {
+                    this.channels[ip].uuid = player.uuid;
+                    await this.setState({ device: 'root', channel: ip, state: 'group_volume' }, { val: data.newVolume, ack: true });
+                    this.log.debug(`group-volume: Volume for ${player.baseUrl}: ${data.newVolume}`);
+                }
+            }
+        }
+        else if (event === 'group-mute') {
+            const player = this.discovery.getPlayerByUUID(data.uuid);
+            const ip = this.getIpOfPlayer(data.uuid);
+            if (player && ip) {
+                this.channels[ip].uuid = data.uuid;
+                await this.setState({ device: 'root', channel: ip, state: 'muted' }, { val: data.newMute, ack: true });
+                player._isMuted = data.newMute;
+                this.log.debug(`mute: Mute for ${player.baseUrl}: ${data.newMute}`);
+                await this.setState({ device: 'root', channel: ip, state: 'group_muted' }, { val: player.groupState.mute, ack: true });
+                this.log.debug(`group_muted: groupMuted for ${player.baseUrl}: ${player.groupState.mute}`);
+            }
+        }
+        else if (event === 'volume') {
+            const player = this.discovery.getPlayerByUUID(data.uuid);
+            const ip = this.getIpOfPlayer(data.uuid);
+            if (player && ip) {
+                this.channels[ip].uuid = data.uuid;
+                await this.setState({ device: 'root', channel: ip, state: 'volume' }, { val: data.newVolume, ack: true });
+                player._volume = data.newVolume;
+                this.log.debug(`volume: Volume for ${player.baseUrl}: ${data.newVolume}`);
+            }
+        }
+        else if (event === 'treble' || event === 'bass') {
+            // node-sonos-discovery is not emitting any events on treble/bass changes yet, so it is not
+            // possible to get the externally set values, yet.
+        }
+        else if (event === 'mute') {
+            const player = this.discovery.getPlayerByUUID(data.uuid);
+            const ip = this.getIpOfPlayer(data.uuid);
+            if (player && ip) {
+                this.channels[ip].uuid = data.uuid;
+                await this.setState({ device: 'root', channel: ip, state: 'muted' }, { val: data.newMute, ack: true });
+                player._isMuted = data.newMute;
+                this.log.debug(`mute: Mute for ${player.baseUrl}: ${data.newMute}`);
+            }
+        }
+        else if (event === 'favorites') {
+            await this.updateMediaLists();
+        }
+        else if (event === 'queue') {
+            const player = this.discovery.getPlayerByUUID(data.uuid);
+            const ip = this.getIpOfPlayer(data.uuid);
+            if (player && ip) {
+                this.channels[ip].uuid = data.uuid;
+                await this.takeSonosQueue(ip, player, data.queue);
+            }
+            if (player) {
+                await this.updateMediaLists();
+            }
+        }
+        else {
+            this.log.debug(`${event} ${typeof data === 'object' ? JSON.stringify(data) : data}`);
+        }
+    }
+    async processTopologyChange(data) {
+        if (typeof data.length === 'undefined') {
+            const ip = this.getIpOfPlayer(data.uuid);
+            if (ip) {
+                this.channels[ip].uuid = data.uuid;
+                await this.setState({ device: 'root', channel: ip, state: 'alive' }, { val: true, ack: true });
+            }
+            return;
+        }
+        for (const group of data) {
+            const ip = this.getIpOfPlayer(group.uuid);
+            if (ip) {
+                this.channels[ip].uuid = group.uuid;
+                await this.setState({ device: 'root', channel: ip, state: 'alive' }, { val: true, ack: true });
+            }
+            const members = [];
+            const membersChannels = [];
+            for (const groupMember of group.members) {
+                const memberIp = this.getIpOfPlayer(groupMember.uuid);
+                if (memberIp) {
+                    this.channels[memberIp].uuid = groupMember.uuid;
+                    membersChannels.push(memberIp);
+                    await this.setState({ device: 'root', channel: memberIp, state: 'coordinator' }, { val: ip, ack: true });
+                }
+                if (groupMember.roomName) {
+                    members.push(groupMember.roomName);
+                }
+            }
+            if (ip && members.length) {
+                await this.setState({ device: 'root', channel: ip, state: 'members' }, { val: members.join(','), ack: true });
+            }
+            if (ip && membersChannels.length) {
+                await this.setState({ device: 'root', channel: ip, state: 'membersChannels' }, { val: membersChannels.join(','), ack: true });
+                await this.syncGroupPlayback(ip);
+            }
+        }
+        if (!this.playlistsLoaded && this.discovery?.players?.length) {
+            await this.updateMediaLists();
+        }
+        this.scheduleHomeTheaterRefresh();
+    }
+    async takeSonosQueue(ip, player, queue) {
+        const _text = [];
+        const _html = [];
+        _html.push('<table class="sonosQueueTable">');
+        for (let q = 0; q < queue.length; q++) {
+            _text.push(`${queue[q].artist} - ${queue[q].title}`);
+            _html.push(`
+                        <tr class="sonosQueueRow" onclick="vis.setValue('${this.namespace}.root.${player._address}.current_track_number', ${q + 1})">
+                        <td class="sonosQueueTrackNumber">${q + 1}</td>
+                        <td class="sonosQueueTrackCover"><img src="${player.baseUrl}${queue[q].albumArtUri}"></td>
+                        <td class="sonosQueueTrackArtist">${queue[q].artist}</td>
+                        <td class="sonosQueueTrackAlbum">${queue[q].album}</td>
+                        <td class="sonosQueueTrackTitle">${queue[q].title}</td>
+                        </tr>
+                        `);
+        }
+        _html.push('</table>');
+        const qtext = _text.join(', ');
+        const qhtml = _html.join('');
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'queue' }, qtext);
+        this.log.debug(`queue for ${player.baseUrl}: ${qtext}`);
+        await this.writeIfChanged({ device: 'root', channel: ip, state: 'queue_html' }, qhtml);
+        this.log.debug(`queue for ${player.baseUrl}: ${qhtml}`);
+    }
+    /**
+     * Find the IP address of a known player and ensure, that a channel for it exists
+     *
+     * @param uuid UUID of the player
+     * @returns the IP address (with underscores) or null if the player or the channel is unknown
+     */
+    getIpOfPlayer(uuid) {
+        const player = this.discovery?.getPlayerByUUID(uuid);
+        if (!player) {
+            return null;
+        }
+        player._address = player._address || getIp(player);
+        const ip = player._address;
+        return ip && this.channels[ip] ? ip : null;
+    }
+    /**
+     * Update queue: highlight current track in html-queue
+     *
+     * @param playerIp IP address (with underscores) of the player
+     * @param trackNumber number of the current track
+     */
+    async updateHtmlQueue(playerIp, trackNumber) {
+        // Get current html-queue
+        const playerDp = `${this.namespace}.root.${playerIp}`;
+        const state = await this.getStateAsync(`${playerDp}.queue_html`);
+        if (!state?.val) {
+            this.log.debug(`Update html-queue for ${playerIp}: html-queue is empty`);
+            return;
+        }
+        this.log.debug(`Update html-queue for ${playerIp}: current html-queue is ${state.val}`);
+        // Remove old highlighting
+        let queue = state.val.replace('class="sonosQueueRow currentTrack" id="currentTrack"', 'class="sonosQueueRow"');
+        // Get current track number
+        this.log.debug(`Update html-queue for ${playerIp}: current track number is ${trackNumber}`);
+        // Create RegEx pattern
+        const regexPattern = `<tr class="sonosQueueRow" onclick="vis.setValue\\('sonos.[0-9].root.[0-9]{1,3}_[0-9]{1,3}_[0-9]{1,3}_[0-9]{1,3}.current_track_number', ${trackNumber}\\)">`;
+        this.log.debug(`Update html-queue for ${playerIp}: RegEx pattern is ${regexPattern}`);
+        // Match current track in queue
+        const currentTrack = queue.match(new RegExp(regexPattern, 'gm'));
+        if (!currentTrack) {
+            this.log.debug(`Update html-queue for ${playerIp}: no RegEx match`);
+            return;
+        }
+        this.log.debug(`Update html-queue for ${playerIp}: got match ${currentTrack.toString()}`);
+        // Add id and class to current track
+        const currentTrackHighlight = currentTrack
+            .toString()
+            .replace('class="sonosQueueRow"', 'class="sonosQueueRow currentTrack" id="currentTrack"');
+        this.log.debug(`Update html-queue for ${playerIp}: new html string for current track is ${currentTrackHighlight}`);
+        // Replace html for current track in queue
+        queue = queue.replace(currentTrack.toString(), currentTrackHighlight);
+        this.log.debug(`Update html-queue ${playerIp}: new queue is ${queue}`);
+        // set queue to dp
+        await this.writeIfChanged(`${playerDp}.queue_html`, queue);
+    }
+    async main() {
+        this.config.fadeIn = parseInt(String(this.config.fadeIn), 10) || 0;
+        this.config.fadeOut = parseInt(String(this.config.fadeOut), 10) || 0;
+        await this.ensureQuickstarts();
+        await this.ensureHomeTheaterState();
+        await this.syncConfig();
+        await this.repairAllRecentCovers();
+        this.cacheDir = path.join(utils.getAbsoluteDefaultDataDir(), 'sonosCache') + path.sep;
+        // create directory for cached files
+        if (!fs.existsSync(this.cacheDir)) {
+            fs.mkdirSync(this.cacheDir);
+        }
+        this.discovery = new sonos_discovery_1.default({
+            household: null,
+            log: this.log,
+            cacheDir: this.cacheDir,
+            port: this.config.webserverPort,
+        });
+        // from here the code is mostly from https://github.com/jishi/node-sonos-web-controller/blob/master/server.js
+        const events = {
+            'topology-change': 'topology-change',
+            'transport-state': 'transport-state',
+            'group-volume': 'group-volume',
+            'volume-change': 'volume',
+            'group-mute': 'group-mute',
+            'mute-change': 'mute',
+            favorites: 'favorites',
+            'list-change': 'favorites',
+        };
+        Object.keys(events).forEach(sonosEvent => this.discovery?.on(sonosEvent, data => this.processSonosEvents(events[sonosEvent], data).catch(e => this.log.error(`Cannot process ${sonosEvent}: ${e}`))));
+        this.discovery.on('queue-change', (player) => player
+            .getQueue()
+            .then(queue => {
+            this.queues[player.uuid] = queue;
+            return this.processSonosEvents('queue', { uuid: player.uuid, queue });
+        })
+            .catch(e => this.log.error(`Cannot loadQueue: ${e}`)));
+        this.subscribeStates('*');
+    }
+}
+if (require.main !== module) {
+    // Export the constructor in compact mode
+    module.exports = (options) => new Sonos(options);
+}
+else {
+    // otherwise start the instance directly
+    (() => new Sonos())();
+}
+//# sourceMappingURL=main.js.map

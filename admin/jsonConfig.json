@@ -116,6 +116,65 @@
           ]
         }
       }
+    },
+    "quickstartTab": {
+      "type": "panel",
+      "label": "Quick start",
+      "items": {
+        "_quickstartHelp": {
+          "type": "staticText",
+          "text": "tooltip_quickstarts",
+          "sm": 12
+        },
+        "_quickstartLoad": {
+          "type": "sendTo",
+          "variant": "contained",
+          "command": "quickstartGet",
+          "label": "Load current shortcuts",
+          "useNative": true,
+          "jsonData": "{}",
+          "showProcess": true,
+          "icon": "refresh",
+          "timeout": 10000
+        },
+        "quickstarts": {
+          "newLine": true,
+          "type": "table",
+          "label": "Shortcuts",
+          "items": [
+            {
+              "type": "text",
+              "attr": "title",
+              "width": "18%",
+              "title": "Name"
+            },
+            {
+              "type": "text",
+              "attr": "artist",
+              "width": "16%",
+              "title": "Artist"
+            },
+            {
+              "type": "text",
+              "attr": "uri",
+              "width": "28%",
+              "title": "URI"
+            },
+            {
+              "type": "text",
+              "attr": "favorite",
+              "width": "14%",
+              "title": "Favorite"
+            },
+            {
+              "type": "checkbox",
+              "attr": "tv",
+              "width": "10%",
+              "title": "TV HDMI"
+            }
+          ]
+        }
+      }
     }
   }
 }

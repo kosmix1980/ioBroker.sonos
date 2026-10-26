@@ -295,6 +295,19 @@ export function tvAudioFormat(text: string | undefined): string {
     return '';
 }
 
+/** Album art URL from DIDL / AVTransport metadata (TuneIn often has no track.albumArtUri). */
+export function albumArtFromXml(xml: string | undefined): string {
+    const source = String(xml || '');
+    if (!source) {
+        return '';
+    }
+    const decoded = decodeXml(source);
+    const match =
+        source.match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i) ||
+        decoded.match(/<(?:[\w.-]+:)?albumArtURI\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?albumArtURI>/i);
+    return match ? decodeXml(match[1]).trim() : '';
+}
+
 export function streamContentFromDidl(xml: string | undefined): string {
     const source = String(xml || '');
     if (!source) {
@@ -546,9 +559,167 @@ export async function browseMedia(baseUrl: string, objectId: string): Promise<Me
 }
 
 export function isStreamUri(uri: string): boolean {
-    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls(?:-static)?:|x-sonosprog-http:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(
+    return /^(x-sonosapi-stream:|x-sonosapi-radio:|x-sonosapi-hls:|x-rincon-mp3radio:|x-rincon-stream:|x-sonos-htastream:|pndrradio:|aac:)/i.test(
         uri,
     );
+}
+
+export function isOnDemandUri(uri: string): boolean {
+    return /^(x-file-cifs:|x-sonos-spotify:|x-sonos-http:|x-sonosprog-http:|x-sonos-mms:|x-rincon-queue:|x-rincon-cpcontainer:|x-sonosapi-hls-static:|spotify:|file:)/i.test(
+        String(uri || ''),
+    );
+}
+
+export function isBroadcastDidl(xml: string | undefined): boolean {
+    return /audioBroadcast/i.test(String(xml || ''));
+}
+
+export function isTrackDidl(xml: string | undefined): boolean {
+    return /musicTrack/i.test(String(xml || ''));
+}
+
+/** Recent/queue songs must not follow the TuneIn SetAVTransport path. */
+export function shouldPlayAsTrack(
+    uri: string,
+    metadata?: string,
+    hint?: { title?: string; artist?: string; album?: string; duration?: number },
+): boolean {
+    const playUri = String(uri || '');
+    if (isTvStreamUri(playUri) || isLineInStreamUri(playUri)) {
+        return false;
+    }
+    if (isOnDemandUri(playUri) || isTrackDidl(metadata)) {
+        return true;
+    }
+    if (hint && (Number(hint.duration) > 0 || hint.artist || hint.album)) {
+        return true;
+    }
+    if (isRadioLikeUri(playUri) || isStreamUri(playUri) || isBroadcastDidl(metadata)) {
+        return false;
+    }
+    return Boolean(hint?.title || playUri);
+}
+
+/** `H:MM:SS` / `MM:SS` from GetPositionInfo. */
+export function parseClock(text: string | undefined): number {
+    const value = String(text || '').trim();
+    if (!value || /not[_ ]?implemented/i.test(value)) {
+        return 0;
+    }
+    const parts = value.split(':').map(part => parseInt(part, 10));
+    if (!parts.length || parts.some(part => Number.isNaN(part))) {
+        return 0;
+    }
+    if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    if (parts.length === 2) {
+        return parts[0] * 60 + parts[1];
+    }
+    return parts[0];
+}
+
+function formatClock(seconds: number): string {
+    const total = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(total / 3600);
+    const min = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    const pad = (n: number): string => (n < 10 ? `0${n}` : String(n));
+    return hours ? `${hours}:${pad(min)}:${pad(sec)}` : `${pad(min)}:${pad(sec)}`;
+}
+
+export interface PositionInfo {
+    uri: string;
+    duration: number;
+    elapsed: number;
+    metadata: string;
+    title: string;
+    artist: string;
+    album: string;
+    cover: string;
+}
+
+/** TrackURI / duration / DIDL from GetPositionInfo (escaped or raw). */
+export function parsePositionInfo(xml: string | undefined): PositionInfo {
+    const source = String(xml || '');
+    const uri = tagText(source, 'TrackURI');
+    const duration = parseClock(tagText(source, 'TrackDuration'));
+    const elapsed = parseClock(tagText(source, 'RelTime'));
+    let metadata = tagText(source, 'TrackMetaData');
+    if (metadata === 'NOT_IMPLEMENTED') {
+        metadata = '';
+    }
+    if (/&lt;(?:DIDL-Lite|item)\b/i.test(metadata)) {
+        metadata = decodeXml(metadata);
+    }
+    return {
+        uri,
+        duration,
+        elapsed,
+        metadata,
+        title: tagText(metadata, 'dc:title'),
+        artist: tagText(metadata, 'dc:creator') || tagText(metadata, 'r:albumArtist'),
+        album: tagText(metadata, 'upnp:album'),
+        cover: albumArtFromXml(metadata),
+    };
+}
+
+/** DIDL for a music track so queue / SetAVTransport keep title, artist and art. */
+export function trackDidl(info: {
+    title?: string;
+    artist?: string;
+    album?: string;
+    uri?: string;
+    cover?: string;
+    durationSec?: number;
+    metadata?: string;
+}): string {
+    const existing = String(info.metadata || '');
+    if (existing.includes('DIDL-Lite') && !isBroadcastDidl(existing)) {
+        return existing;
+    }
+    const title = xmlEscape(info.title || 'Track');
+    const artist = xmlEscape(info.artist || '');
+    const album = xmlEscape(info.album || '');
+    const cover = xmlEscape(info.cover || '');
+    const uri = xmlEscape(info.uri || '');
+    const duration = info.durationSec && info.durationSec > 0 ? ` duration="${formatClock(info.durationSec)}"` : '';
+    return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true">${uri ? `<res${duration}>${uri}</res>` : ''}<dc:title>${title}</dc:title>${artist ? `<dc:creator>${artist}</dc:creator>` : ''}${album ? `<upnp:album>${album}</upnp:album>` : ''}${cover ? `<upnp:albumArtURI>${cover}</upnp:albumArtURI>` : ''}<upnp:class>object.item.audioItem.musicTrack</upnp:class></item></DIDL-Lite>`;
+}
+
+export function isRadioLikeUri(uri: string): boolean {
+    const value = String(uri || '');
+    if (isOnDemandUri(value)) {
+        return false;
+    }
+    return (
+        isStreamUri(value) || /(?:tunein|radiotime)/i.test(value) || /^x-sonosapi-(?:stream|radio|hls):/i.test(value)
+    );
+}
+
+/** Public http(s) radio streams need the Sonos mp3radio wrapper; LAN files stay as-is. */
+export function isLanHttpUri(uri: string): boolean {
+    try {
+        const host = new URL(uri).hostname;
+        return /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?(?:fe80|fc|fd))/i.test(host);
+    } catch {
+        return false;
+    }
+}
+
+/** TuneIn often stores the decoded http stream as currentTrack.uri. */
+export function wrapHttpRadioUri(uri: string): string {
+    const value = String(uri || '').trim();
+    if (/^https?:\/\//i.test(value) && !isLanHttpUri(value)) {
+        return `x-rincon-mp3radio:${value}`;
+    }
+    return value;
+}
+
+/** Minimal DIDL so TuneIn / radio SetAVTransport does not return HTTP 500. */
+export function radioBroadcastDidl(title: string): string {
+    const name = xmlEscape(title || 'Radio');
+    return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true"><dc:title>${name}</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">SA_RINCON65031_</desc></item></DIDL-Lite>`;
 }
 
 /** URIs that the player resolves itself (radio, SMAPI containers) — use setAVTransport, not the queue. */
